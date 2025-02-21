@@ -20,6 +20,8 @@ from contextlib import asynccontextmanager
 from config import (
     CORS_ORIGINS,
     PLAYLISTS_ROOT,
+    PLAYLISTS_FOLDERS,
+    PLAYLISTS_MYLISTS,
     MUSIC_ROOT,
     DB_PATH
 )
@@ -461,83 +463,134 @@ async def test():
 async def get_playlists():
     """Playlist ağacını getir"""
     try:
-        async def build_playlist_tree(dir_path: str) -> List[Dict]:
+        async def build_playlist_tree(dir_path: str, is_mylists: bool = False) -> List[Dict]:
             items = [item for item in os.scandir(dir_path) if not item.name.startswith(".")]
             result = []
 
-            folders = [item for item in items if item.is_dir() or item.name.endswith(".subfolders")]
-            files = [item for item in items if item.name.endswith(".vdjfolder")]
-
-            for folder in folders:
-                if folder.name == "My Library.subfolders":
-                    continue
-
-                full_path = str(Path(dir_path) / folder.name)
-                is_subfolder = folder.name.endswith(".subfolders")
-
-                if is_subfolder:
-                    children = await build_playlist_tree(full_path)
-                    if children:
-                        result.append({
-                            "id": str(Path(full_path).as_posix().encode("utf-8").hex()),
-                            "name": folder.name.replace(".subfolders", ""),
-                            "path": full_path,
-                            "type": "folder",
-                            "children": children,
-                        })
-
-            for file in files:
-                full_path = str(Path(dir_path) / file.name)
-                try:
-                    async with aiofiles.open(full_path, "r", encoding="utf-8") as f:
-                        content = (await f.read()).strip()
-
-                    if not content:
-                        logging.warning(f"Boş playlist dosyası: {full_path}")
-                        continue
-
+            if is_mylists:
+                # MyLists klasörü için düz liste oluştur
+                files = [item for item in items if item.name.endswith(".vdjfolder")]
+                for file in files:
+                    full_path = str(Path(dir_path) / file.name)
                     try:
-                        xml_dict = xmltodict.parse(content)
-                    except Exception as err:
-                        raise HTTPException(
-                            status_code=400,
-                            detail={
-                                "success": False,
-                                "error": "XML parse hatası",
-                                "details": str(err),
-                            },
-                        ) from err
+                        async with aiofiles.open(full_path, "r", encoding="utf-8") as f:
+                            content = (await f.read()).strip()
 
-                    if xml_dict is None:
-                        logging.warning(f"Geçersiz XML içeriği: {full_path}")
+                        if not content:
+                            logging.warning(f"Boş playlist dosyası: {full_path}")
+                            continue
+
+                        try:
+                            xml_dict = xmltodict.parse(content)
+                        except Exception as err:
+                            logging.warning(f"XML parse hatası: {full_path}")
+                            continue
+
+                        songs = xml_dict.get("VirtualFolder", {}).get("song", [])
+                        if songs:
+                            if not isinstance(songs, list):
+                                songs = [songs]
+
+                            result.append({
+                                "id": str(Path(full_path).as_posix().encode("utf-8").hex()),
+                                "name": file.name.replace(".vdjfolder", ""),
+                                "path": full_path,
+                                "type": "playlist",
+                                "songCount": len(songs),
+                            })
+                    except Exception as e:
+                        logging.error(f"Playlist dosyası okunamadı: {full_path}", exc_info=e)
+            else:
+                # Folders klasörü için hiyerarşik yapı oluştur
+                folders = [item for item in items if item.is_dir() or item.name.endswith(".subfolders")]
+                files = [item for item in items if item.name.endswith(".vdjfolder")]
+
+                for folder in folders:
+                    if folder.name == "My Library.subfolders":
                         continue
 
-                    songs = xml_dict.get("VirtualFolder", {}).get("song", [])
-                    if songs:
-                        if not isinstance(songs, list):
-                            songs = [songs]
+                    full_path = str(Path(dir_path) / folder.name)
+                    is_subfolder = folder.name.endswith(".subfolders")
 
-                        result.append({
-                            "id": str(Path(full_path).as_posix().encode("utf-8").hex()),
-                            "name": file.name.replace(".vdjfolder", ""),
-                            "path": full_path,
-                            "type": "playlist",
-                            "songCount": len(songs),
-                        })
-                except Exception as e:
-                    logging.error(f"Playlist dosyası okunamadı: {full_path}", exc_info=e)
+                    if is_subfolder:
+                        children = await build_playlist_tree(full_path)
+                        if children:
+                            result.append({
+                                "id": str(Path(full_path).as_posix().encode("utf-8").hex()),
+                                "name": folder.name.replace(".subfolders", ""),
+                                "path": full_path,
+                                "type": "folder",
+                                "children": children,
+                            })
+
+                for file in files:
+                    full_path = str(Path(dir_path) / file.name)
+                    try:
+                        async with aiofiles.open(full_path, "r", encoding="utf-8") as f:
+                            content = (await f.read()).strip()
+
+                        if not content:
+                            logging.warning(f"Boş playlist dosyası: {full_path}")
+                            continue
+
+                        try:
+                            xml_dict = xmltodict.parse(content)
+                        except Exception as err:
+                            logging.warning(f"XML parse hatası: {full_path}")
+                            continue
+
+                        songs = xml_dict.get("VirtualFolder", {}).get("song", [])
+                        if songs:
+                            if not isinstance(songs, list):
+                                songs = [songs]
+
+                            result.append({
+                                "id": str(Path(full_path).as_posix().encode("utf-8").hex()),
+                                "name": file.name.replace(".vdjfolder", ""),
+                                "path": full_path,
+                                "type": "playlist",
+                                "songCount": len(songs),
+                            })
+                    except Exception as e:
+                        logging.error(f"Playlist dosyası okunamadı: {full_path}", exc_info=e)
 
             return sorted(result, key=lambda x: (0 if x["type"] == "folder" else 1, x["name"].lower()))
 
-        tree = await build_playlist_tree(PLAYLISTS_ROOT)
+        # Her iki klasörden de playlist'leri al
+        folders_tree = await build_playlist_tree(PLAYLISTS_FOLDERS)
+        mylists_tree = await build_playlist_tree(PLAYLISTS_MYLISTS, True)
 
+        # İki ağacı birleştir
+        combined_tree = []
+        
+        # Folders klasörü varsa ekle
+        if os.path.exists(PLAYLISTS_FOLDERS) and folders_tree:
+            combined_tree.append({
+                "id": str(Path(PLAYLISTS_FOLDERS).as_posix().encode("utf-8").hex()),
+                "name": "Folders",
+                "path": PLAYLISTS_FOLDERS,
+                "type": "folder",
+                "children": folders_tree
+            })
+            
+        # MyLists klasörü varsa ekle
+        if os.path.exists(PLAYLISTS_MYLISTS) and mylists_tree:
+            combined_tree.append({
+                "id": str(Path(PLAYLISTS_MYLISTS).as_posix().encode("utf-8").hex()),
+                "name": "MyLists",
+                "path": PLAYLISTS_MYLISTS,
+                "type": "folder",
+                "children": mylists_tree
+            })
+
+        # İstatistikleri hesapla
         stats = {
-            "totalNodes": count_nodes(tree),
-            "folders": count_by_type(tree, "folder"),
-            "playlists": count_by_type(tree, "playlist"),
+            "totalNodes": count_nodes(combined_tree),
+            "folders": count_by_type(combined_tree, "folder"),
+            "playlists": count_by_type(combined_tree, "playlist"),
         }
 
-        return {"success": True, "data": tree, "stats": stats}
+        return {"success": True, "data": combined_tree, "stats": stats}
 
     except Exception as e:
         logging.error("Playlist ağacı oluşturulurken hata:", exc_info=e)
