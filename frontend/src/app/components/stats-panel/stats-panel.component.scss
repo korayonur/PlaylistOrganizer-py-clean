@@ -1,0 +1,88 @@
+.stats {
+  grid-area: stats;
+  background: var(--secondary-color);
+  padding: var(--spacing-md);
+  display: flex;
+  gap: var(--spacing-xl);
+  border-bottom: 1px solid var(--border-color);
+
+  &.loading {
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  .repair-button {
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .repair-icon {
+      display: inline-block;
+
+      @keyframes spin {
+        from {
+          transform: rotate(0deg);
+        }
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      &.spinning {
+        animation: spin 1s linear infinite;
+      }
+    }
+  }
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.stat-value {
+  font-size: var(--font-size-large);
+  font-weight: bold;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  min-width: 100px;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: var(--font-size-small);
+  color: var(--border-color);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.repair-button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--warning-color);
+  color: var(--text-color);
+  border: none;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all var(--transition-fast);
+  margin-left: auto;
+
+  &:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+.repair-icon {
+  font-size: 1.2em;
+}

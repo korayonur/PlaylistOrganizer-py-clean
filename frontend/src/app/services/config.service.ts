@@ -1,0 +1,70 @@
+import { Injectable, signal } from "@angular/core";
+import { AppConfig, DEFAULT_CONFIG } from "../shared/config/app.config";
+
+@Injectable({
+  providedIn: "root",
+})
+export class ConfigService {
+  private readonly config = signal<AppConfig>(DEFAULT_CONFIG);
+
+  constructor() {
+    this.loadConfig();
+  }
+
+  private loadConfig(): void {
+    try {
+      const savedConfig = localStorage.getItem("app_config");
+      if (savedConfig) {
+        this.config.set({ ...DEFAULT_CONFIG, ...JSON.parse(savedConfig) });
+      }
+    } catch (error) {
+      console.error("Ayarlar yüklenirken hata:", error);
+    }
+  }
+
+  saveConfig(newConfig: Partial<AppConfig>): void {
+    try {
+      const updatedConfig = { ...this.config(), ...newConfig };
+      this.config.set(updatedConfig);
+      localStorage.setItem("app_config", JSON.stringify(updatedConfig));
+    } catch (error) {
+      console.error("Ayarlar kaydedilirken hata:", error);
+    }
+  }
+
+  getConfig(): AppConfig {
+    return this.config();
+  }
+
+  getMusicFolder(): string {
+    return this.expandPath(this.config().paths.musicFolder);
+  }
+
+  getPlaylistFolder(): string {
+    return this.expandPath(this.config().paths.playlistFolder);
+  }
+
+  private expandPath(path: string): string {
+    // ~ karakterini home dizini ile değiştir
+    if (path.startsWith("~")) {
+      return path.replace("~", this.getHomeDir());
+    }
+    return path;
+  }
+
+  private getHomeDir(): string {
+    // İşletim sistemine göre home dizinini belirle
+    if (process.platform === "win32") {
+      return process.env["USERPROFILE"] || "C:\\Users\\Default";
+    }
+    return process.env["HOME"] || "/home/user";
+  }
+
+  getSupportedAudioFormats(): string[] {
+    return this.config().supportedFormats.audio;
+  }
+
+  getSupportedPlaylistFormats(): string[] {
+    return this.config().supportedFormats.playlist;
+  }
+}

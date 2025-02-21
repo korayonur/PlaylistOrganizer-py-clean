@@ -1,0 +1,25 @@
+<div class="app">
+  <!-- Sol panel - Playlist ağacı -->
+  <div class="sidebar">
+    <app-playlist-tree (nodeSelect)="handlePlaylistSelect($event)"> </app-playlist-tree>
+  </div>
+
+  <!-- İstatistikler -->
+  <div class="stats">
+    <app-stats-panel [songs]="songs()" [loading]="loading()" (repair)="repairMissingSongs()">
+    </app-stats-panel>
+  </div>
+
+  <!-- Ana içerik - Şarkı listesi -->
+  <div class="main">
+    @if (error()) {
+      <div class="error-message">
+        {{ error() }}
+      </div>
+    }
+    @if (loading()) {
+      <div class="loading"><i class="fas fa-spinner fa-spin"></i> Yükleniyor...</div>
+    }
+    <app-song-grid [songs]="songs()" [isLoading]="loading()"> </app-song-grid>
+  </div>
+</div>

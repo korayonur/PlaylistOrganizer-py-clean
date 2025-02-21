@@ -1,0 +1,255 @@
+<!-- Arama Diyalogu -->
+<mat-dialog-content class="dialog-container">
+  <!-- Başlık -->
+  <div class="dialog-title">
+    <div class="title-content">
+      <div class="playlist-info">
+        <h2>{{ getPlaylistName() }}</h2>
+        <span class="category">{{ getPlaylistCategory() }}</span>
+      </div>
+    </div>
+    <button mat-icon-button (click)="close()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- İçerik -->
+  <div class="dialog-content">
+    <!-- Toplu İşlem Formu -->
+    <div class="bulk-actions-form">
+      <div class="action-buttons">
+        <button mat-stroked-button color="primary" (click)="selectAll()">
+          <mat-icon>select_all</mat-icon>
+          Tümünü Seç
+        </button>
+        <button mat-stroked-button color="warn" (click)="clearSelection()">
+          <mat-icon>clear_all</mat-icon>
+          Seçimi Temizle
+        </button>
+        <button mat-raised-button color="accent" [disabled]="!hasSelectedItems()" (click)="saveSelected()">
+          <mat-icon>save</mat-icon>
+          Seçilenleri Kaydet
+        </button>
+      </div>
+      <div class="selection-info" *ngIf="hasSelectedItems()">
+        {{ getSelectedCount() }} öğe seçildi
+      </div>
+    </div>
+
+    <!-- Yükleniyor göstergesi -->
+    <div class="loading-container" *ngIf="isSearching">
+      <mat-progress-bar mode="indeterminate" color="primary"></mat-progress-bar>
+      <p>Dosyalar aranıyor ve eşleştiriliyor...</p>
+    </div>
+
+    <!-- Hata mesajı -->
+    <div class="error-container" *ngIf="error">
+      <mat-icon>error_outline</mat-icon>
+      <p>{{ error }}</p>
+    </div>
+
+    <!-- Sonuç istatistikleri -->
+    <div class="stats-container" *ngIf="!isSearching && !error && searchResults">
+      <!-- Ana İstatistikler -->
+      <div class="stats-section">
+        <h3>Genel Bilgiler</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value">{{ generalStats.total }}</div>
+            <div class="stat-label">Toplam Dosya</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value success">{{ generalStats.processed }}</div>
+            <div class="stat-label">İşlenen</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ generalStats.matches }}</div>
+            <div class="stat-label">Eşleşme</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ generalStats.notFound }}</div>
+            <div class="stat-label">Bulunamayan</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performans Metrikleri -->
+      <div class="stats-section">
+        <h3>Performans Metrikleri</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value">{{ getPerformanceMetrics().totalTime }}ms</div>
+            <div class="stat-label">Toplam Süre</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">{{ getPerformanceMetrics().averageTime }}ms</div>
+            <div class="stat-label">Ortalama Süre</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value">%{{ getPerformanceMetrics().efficiency.toFixed(1) }}</div>
+            <div class="stat-label">Verimlilik</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Eşleşme Detayları -->
+      <div class="match-details">
+        <div class="match-details-header">
+          <h2>Eşleşme Detayları</h2>
+        </div>
+
+        <div class="match-cards">
+          <!-- Tam Yol Eşleşme -->
+          <div class="match-card" 
+               [class.active]="isFilterActive('tamYolEsleme')" 
+               (click)="filterResults('tamYolEsleme')">
+            <div class="header">
+              <mat-icon class="group-icon">check_circle</mat-icon>
+              <span>Tam Yol Eşleşme</span>
+              <mat-checkbox 
+                class="select-all-button" 
+                [checked]="isGroupSelected('tamYolEsleme')"
+                (click)="toggleGroupSelection('tamYolEsleme', $event)"
+                [matTooltip]="isGroupSelected('tamYolEsleme') ? 'Seçimi Kaldır' : 'Tümünü Seç'">
+              </mat-checkbox>
+            </div>
+            <div class="stats">
+              <div>{{stats?.matchDetails?.tamYolEsleme?.count || 0}} Dosya</div>
+              <div>{{stats?.matchDetails?.tamYolEsleme?.time || 0}} ms</div>
+            </div>
+            <div class="description">{{stats?.matchDetails?.tamYolEsleme?.algoritmaYontemi}}</div>
+          </div>
+
+          <!-- Aynı Klasör Farklı Uzantı -->
+          <div class="match-card" 
+               [class.active]="isFilterActive('ayniKlasorFarkliUzanti')" 
+               (click)="filterResults('ayniKlasorFarkliUzanti')">
+            <div class="header">
+              <mat-icon class="group-icon">extension</mat-icon>
+              <span>Aynı Klasör Farklı Uzantı</span>
+              <mat-checkbox 
+                class="select-all-button" 
+                [checked]="isGroupSelected('ayniKlasorFarkliUzanti')"
+                [disabled]="!stats?.matchDetails?.ayniKlasorFarkliUzanti?.count"
+                (click)="toggleGroupSelection('ayniKlasorFarkliUzanti', $event)"
+                [matTooltip]="isGroupSelected('ayniKlasorFarkliUzanti') ? 'Seçimi Kaldır' : 'Tümünü Seç'">
+              </mat-checkbox>
+            </div>
+            <div class="stats">
+              <div>{{stats?.matchDetails?.ayniKlasorFarkliUzanti?.count || 0}} Dosya</div>
+              <div>{{stats?.matchDetails?.ayniKlasorFarkliUzanti?.time || 0}} ms</div>
+            </div>
+            <div class="description">{{stats?.matchDetails?.ayniKlasorFarkliUzanti?.algoritmaYontemi}}</div>
+          </div>
+
+          <!-- Farklı Klasör -->
+          <div class="match-card" 
+               [class.active]="isFilterActive('farkliKlasor')" 
+               (click)="filterResults('farkliKlasor')">
+            <div class="header">
+              <mat-icon class="group-icon">folder</mat-icon>
+              <span>Farklı Klasör</span>
+              <mat-checkbox 
+                class="select-all-button" 
+                [checked]="isGroupSelected('farkliKlasor')"
+                [disabled]="!stats?.matchDetails?.farkliKlasor?.count"
+                (click)="toggleGroupSelection('farkliKlasor', $event)"
+                [matTooltip]="isGroupSelected('farkliKlasor') ? 'Seçimi Kaldır' : 'Tümünü Seç'">
+              </mat-checkbox>
+            </div>
+            <div class="stats">
+              <div>Sayı: {{stats?.matchDetails?.farkliKlasor?.count || 0}}</div>
+              <div>Süre: {{stats?.matchDetails?.farkliKlasor?.time || 0}}</div>
+            </div>
+            <div class="description">{{stats?.matchDetails?.farkliKlasor?.algoritmaYontemi}}</div>
+          </div>
+
+          <!-- Farklı Klasör ve Uzantı -->
+          <div class="match-card" 
+               [class.active]="isFilterActive('farkliKlasorveUzanti')" 
+               (click)="filterResults('farkliKlasorveUzanti')">
+            <div class="header">
+              <mat-icon class="group-icon">folder_special</mat-icon>
+              <span>Farklı Klasör ve Uzantı</span>
+              <mat-checkbox 
+                class="select-all-button" 
+                [checked]="isGroupSelected('farkliKlasorveUzanti')"
+                [disabled]="!stats?.matchDetails?.farkliKlasorveUzanti?.count"
+                (click)="toggleGroupSelection('farkliKlasorveUzanti', $event)"
+                [matTooltip]="isGroupSelected('farkliKlasorveUzanti') ? 'Seçimi Kaldır' : 'Tümünü Seç'">
+              </mat-checkbox>
+            </div>
+            <div class="stats">
+              <div>Sayı: {{stats?.matchDetails?.farkliKlasorveUzanti?.count || 0}}</div>
+              <div>Süre: {{stats?.matchDetails?.farkliKlasorveUzanti?.time || 0}}</div>
+            </div>
+            <div class="description">{{stats?.matchDetails?.farkliKlasorveUzanti?.algoritmaYontemi}}</div>
+          </div>
+
+          <!-- Benzer Dosya -->
+          <div class="match-card" 
+               [class.active]="isFilterActive('benzerDosya')" 
+               (click)="filterResults('benzerDosya')">
+            <div class="header">
+              <mat-icon class="group-icon">find_in_page</mat-icon>
+              <span>Benzer Dosya</span>
+              <mat-checkbox 
+                class="select-all-button" 
+                [checked]="isGroupSelected('benzerDosya')"
+                [disabled]="!stats?.matchDetails?.benzerDosya?.count"
+                (click)="toggleGroupSelection('benzerDosya', $event)"
+                [matTooltip]="isGroupSelected('benzerDosya') ? 'Seçimi Kaldır' : 'Tümünü Seç'">
+              </mat-checkbox>
+            </div>
+            <div class="stats">
+              <div>Sayı: {{stats?.matchDetails?.benzerDosya?.count || 0}}</div>
+              <div>Süre: {{stats?.matchDetails?.benzerDosya?.time || 0}}</div>
+            </div>
+            <div class="description">{{stats?.matchDetails?.benzerDosya?.algoritmaYontemi}}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sonuç listesi -->
+      <ng-container *ngIf="displayResults.length > 0">
+        <div class="result-list">
+          <div *ngFor="let result of displayResults; trackBy: trackByPath" class="result-item">
+            <div class="search-result-item">
+              <!-- Seçim ve Durum -->
+              <div class="result-header">
+                <div class="left-section">
+                  <mat-checkbox 
+                    *ngIf="result.found"
+                    [checked]="isSelected(result)"
+                    (change)="toggleSelection(result)"
+                    color="primary">
+                  </mat-checkbox>
+                  <span class="status-badge" [ngClass]="getMatchStatus(result)">
+                    <mat-icon>{{ getMatchIcon(result) }}</mat-icon>
+                    {{ getMatchStatusText(result) }}
+                  </span>
+                </div>
+                <span class="match-count" *ngIf="result.found">
+                  {{ result.algoritmaYontemi }}
+                </span>
+              </div>
+
+              <!-- Dosya Yolları -->
+              <div class="path-container">
+                <div class="path-info">
+                  <span class="path-label">Orijinal Yol</span>
+                  <code class="path-text">{{ result.originalPath }}</code>
+                </div>
+                <div class="path-info" *ngIf="result.found">
+                  <span class="path-label">Bulunan Yol</span>
+                  <code class="path-text">{{ result.foundPath }}</code>
+                  <div class="process-time">İşlem Süresi: {{ result.processTime }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+  </div>
+</mat-dialog-content>

@@ -1,0 +1,79 @@
+<div class="playlist-tree">
+  <!-- Arama Kutusu -->
+  <div class="search-container">
+    <input
+      type="text"
+      [ngModel]="searchQuery()"
+      (ngModelChange)="searchQuery.set($event); handleSearch()"
+      placeholder="Playlist ara..."
+      class="search-input"
+      aria-label="Playlist arama kutusu"
+    />
+  </div>
+
+  <!-- Yükleniyor -->
+  <div *ngIf="loading()" class="loading">
+    <span class="material-icons spin">refresh</span> Playlistler yükleniyor...
+  </div>
+
+  <!-- Hata -->
+  <div *ngIf="error()" class="error">
+    {{ error() }}
+  </div>
+
+  <!-- Ağaç Yapısı -->
+  <div class="tree-container" *ngIf="!loading() && !error()">
+    <ng-container *ngTemplateOutlet="treeTemplate; context: { nodes: rootNodes() }"> </ng-container>
+  </div>
+
+  <!-- Ağaç şablonu -->
+  <ng-template #treeTemplate let-nodes="nodes">
+    <ul class="tree-list" role="tree">
+      <li
+        *ngFor="let node of nodes"
+        class="tree-node"
+        [class.selected]="node.isSelected"
+        role="treeitem"
+        [attr.aria-expanded]="node.type === 'folder' ? node.isExpanded : undefined"
+        [attr.aria-selected]="node.isSelected"
+      >
+        <!-- Node içeriği -->
+        <div
+          class="node-content"
+          [class.selected]="node.isSelected"
+          (click)="selectNode(node.id)"
+          (keydown.enter)="selectNode(node.id)"
+          (keydown.space)="selectNode(node.id)"
+          tabindex="0"
+        >
+          <!-- Node ikonu -->
+          <span class="icon">{{ getNodeIcon(node) }}</span>
+
+          <!-- Node ismi -->
+          <span class="node-name">{{ node.name }}</span>
+
+          <!-- Şarkı/Dosya sayısı -->
+          <span *ngIf="node.type === 'folder'" class="count">
+            {{ node.children?.length || 0 }}
+          </span>
+          <span *ngIf="node.type === 'playlist'" class="count">
+            {{ node.songCount || 0 }}
+          </span>
+        </div>
+
+        <!-- Alt elemanlar -->
+        <ng-container *ngIf="node.type === 'folder' && node.isExpanded">
+          <ng-container *ngTemplateOutlet="treeTemplate; context: { nodes: node.children }">
+          </ng-container>
+        </ng-container>
+      </li>
+    </ul>
+  </ng-template>
+
+  <!-- Boş Durum -->
+  <div *ngIf="!loading() && !error() && rootNodes().length === 0" class="empty-state">
+    <span class="icon">📂</span>
+    <p class="message">Henüz playlist bulunamadı</p>
+    <p class="sub-message">Playlist eklemek için VirtualDJ'i kullanın</p>
+  </div>
+</div>

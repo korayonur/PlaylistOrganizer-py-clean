@@ -1,0 +1,62 @@
+[tool.poetry]
+name = "playlist-organizer"
+version = "0.1.0"
+description = "Playlist Organizer Python Backend"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.109.2"
+uvicorn = "^0.27.1"
+python-multipart = "^0.0.9"
+xmltodict = "^0.13.0"
+aiofiles = "^23.2.1"
+python-Levenshtein = "^0.25.0"
+strsim = "^0.0.3"
+loguru = "^0.7.2"
+python-magic = "^0.4.27"
+rapidfuzz = "^3.6.1"
+pywebview = "^4.4.1"
+requests = "^2.32.3"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.1.1"
+ruff = "^0.2.1"
+mypy = "^1.8.0"
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.3"
+pytest-cov = "^4.1.0"
+types-aiofiles = "^24.1.0.20241221"
+types-xmltodict = "^0.14.0.20241009"
+types-sqlalchemy = "^1.4.53.38"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "B", "I"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=py --cov-report=term-missing"
+asyncio_mode = "auto" 

@@ -1,0 +1,37 @@
+<div class="stats" [class.loading]="isLoading">
+  <div class="stat-item">
+    <div class="stat-value" style="background: var(--stat-total-bg)">
+      {{ totalSongs }}
+    </div>
+    <div class="stat-label">Toplam Şarkı</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value" style="background: var(--stat-found-bg)">
+      {{ foundSongs }}
+    </div>
+    <div class="stat-label">Bulunan</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value" style="background: var(--stat-missing-bg)">
+      {{ missingSongs }}
+    </div>
+    <div class="stat-label">Eksik</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-value" style="background: var(--stat-duration-bg)">
+      {{ formatDuration(totalDuration) }}
+    </div>
+    <div class="stat-label">Toplam Süre</div>
+  </div>
+
+  <!-- Eksik Şarkıları Düzelt Butonu -->
+  <button
+    *ngIf="missingSongs > 0"
+    class="repair-button"
+    (click)="repair.emit()"
+    [disabled]="isLoading"
+  >
+    <span class="repair-icon">{{ isLoading ? "🔄" : "🔧" }}</span>
+    {{ isLoading ? "İşleniyor..." : "Eksik Şarkıları Düzelt" }}
+  </button>
+</div>

@@ -1,0 +1,210 @@
+project: PlaylistOrganizer
+version: "1.0"
+
+development_environment:
+  debug:
+    enabled: true
+    force_color: true
+  env_vars:
+    FORCE_COLOR: "1"
+    PYTHONPATH: "/Users/koray/projects/PlaylistOrganizer-py/py"
+
+  code_modification_rules:
+    require_user_approval: true
+    rules:
+      - "Çalışan kodu kullanıcı onayı olmadan değiştirme"
+      - "Hata durumunda önce kullanıcıya bildir ve onay bekle"
+      - "Birden fazla çözüm varsa, kullanıcıya seçenekleri sun"
+      - "Kod değişikliği öncesi mevcut durumu analiz et"
+      - "Çalışan bir özelliği kullanıcı onayı olmadan kapatma"
+      - "Her değişiklik öncesi detaylı rapor sun ve kullanıcı onayı bekle"
+      - "Değişiklik önerilerini adım adım açıkla ve her adım için onay al"
+
+  directory_rules:
+    frontend:
+      path: "/Users/koray/projects/PlaylistOrganizer-py/frontend"
+      required_files: ["package.json", "angular.json"]
+      startup_checks:
+        - type: "exists"
+          path: "/Users/koray/projects/PlaylistOrganizer-py/frontend"
+          message: "Frontend klasörü bulunamadı"
+        - type: "file_exists"
+          path: "/Users/koray/projects/PlaylistOrganizer-py/frontend/package.json"
+          message: "package.json dosyası bulunamadı"
+        - type: "file_exists"
+          path: "/Users/koray/projects/PlaylistOrganizer-py/frontend/angular.json"
+          message: "angular.json dosyası bulunamadı"
+      commands:
+        serve: "cd /Users/koray/projects/PlaylistOrganizer-py/frontend && ng serve"
+        build: "cd /Users/koray/projects/PlaylistOrganizer-py/frontend && ng build"
+        test: "cd /Users/koray/projects/PlaylistOrganizer-py/frontend && ng test"
+    
+    backend:
+      path: "/Users/koray/projects/PlaylistOrganizer-py/py"
+      required_files: ["pyproject.toml", "__main__.py", "apiserver.py"]
+      virtual_env: "/Users/koray/projects/PlaylistOrganizer-py/py/.venv"
+      startup_checks:
+        - type: "exists"
+          path: "/Users/koray/projects/PlaylistOrganizer-py/py"
+          message: "Backend klasörü bulunamadı"
+        - type: "file_exists"
+          path: "/Users/koray/projects/PlaylistOrganizer-py/py/pyproject.toml"
+          message: "pyproject.toml dosyası bulunamadı"
+        - type: "file_exists"
+          path: "/Users/koray/projects/PlaylistOrganizer-py/py/__main__.py"
+          message: "Main dosyası bulunamadı"
+        - type: "venv_exists"
+          path: "/Users/koray/projects/PlaylistOrganizer-py/py/.venv"
+          message: "Virtual environment bulunamadı"
+      commands:
+        activate_venv: "source /Users/koray/projects/PlaylistOrganizer-py/py/.venv/bin/activate"
+        run_api: "cd /Users/koray/projects/PlaylistOrganizer-py/py && source .venv/bin/activate && python apiserver.py"
+        run_desktop: "cd /Users/koray/projects/PlaylistOrganizer-py/py && source .venv/bin/activate && python __main__.py"
+
+  execution_rules:
+    pre_run_checks: true
+    rules:
+      - "Her komut için tam yol (absolute path) kullan"
+      - "Komut çalıştırmadan önce gerekli klasörün varlığını kontrol et"
+      - "Virtual environment aktif değilse önce aktive et"
+      - "Gerekli dosyaların varlığını kontrol et"
+      - "Port çakışmalarını kontrol et"
+      - "Hatalı klasörde çalıştırma girişiminde kullanıcıyı uyar"
+      - "Çalıştırma öncesi bağımlılıkların yüklü olduğunu doğrula"
+      - "Göreceli yol (relative path) kullanımını yasakla"
+      - "Her komut için çalışma dizinini (working directory) tam yol olarak belirt"
+      - "Komut çalıştırmadan önce dizin değişikliği (cd) yerine tam yol kullan"
+
+ide_settings:
+  exclude_patterns:
+    - "**/__pycache__/**"
+    - "**/.pytest_cache/**"
+    - "**/build/**"
+    - "**/dist/**"
+    - "**/*.pyc"
+    - "**/*.pyo"
+    - "**/venv/**"
+    - "**/.env/**"
+    - "**/.coverage"
+    - "**/.mypy_cache/**"
+
+automatic_checks:
+  steps:
+    format:
+      command: "poetry run black ."
+      description: "Kod formatlaması"
+    lint:
+      command: "poetry run ruff check ."
+      description: "Lint kontrolü"
+    type_check:
+      command: "poetry run mypy ."
+      description: "Type kontrolü"
+    test:
+      command: "poetry run pytest"
+      description: "Unit testler"
+      pre_conditions:
+        - check: "format"
+        - check: "lint"
+        - check: "type_check"
+      error_handling:
+        stop_on_failure: true
+        message: "Testler çalıştırılmadan önce kod kalitesi kontrolleri başarıyla tamamlanmalıdır."
+    build:
+      command: "poetry run pyinstaller playlist_organizer.spec"
+      description: "Uygulama build"
+
+git_management:
+  auto_commit:
+    enabled: true
+    critical_changes:
+      - type: "feat"
+        paths: ["py/**/*.py"]
+        message_template: "feat: {description}"
+      - type: "fix"
+        paths: ["py/**/*.py"]
+        message_template: "fix: {description}"
+      - type: "refactor"
+        paths: ["py/**/*.py"]
+        message_template: "refactor: {description}"
+      - type: "test"
+        paths: ["tests/**/*.py"]
+        message_template: "test: {description}"
+    
+  commit_types:
+    - type: "feat"
+      description: "Yeni özellik"
+      emoji: "✨"
+    - type: "fix"
+      description: "Hata düzeltmesi"
+      emoji: "🐛"
+    - type: "refactor"
+      description: "Kod iyileştirmesi"
+      emoji: "♻️"
+    - type: "test"
+      description: "Test ekleme/düzenleme"
+      emoji: "✅"
+    - type: "docs"
+      description: "Dokümantasyon"
+      emoji: "📝"
+    - type: "style"
+      description: "Stil düzenlemesi"
+      emoji: "💄"
+    - type: "perf"
+      description: "Performans iyileştirmesi"
+      emoji: "⚡️"
+  
+  commit_commands:
+    quick_commit: 'git add . && git commit -m "{type}{emoji}: {message}"'
+    staged_commit: 'git commit -m "{type}{emoji}: {message}"'
+    push: "git push origin {branch}"
+
+development_rules:
+  language:
+    default: "tr-TR"
+    technical_terms: "en-US"
+    variable_names: "en-US"
+    function_names: "en-US"
+    comments: "tr-TR"
+    agent_response: "tr-TR"
+    force_turkish_response: true
+
+  architecture:
+    patterns:
+      - "Domain Driven Design"
+      - "Clean Architecture"
+      - "SOLID Principles"
+    
+    structure:
+      - domain:
+          - entities
+          - value_objects
+          - repositories
+          - services
+      - application:
+          - use_cases
+          - interfaces
+          - services
+      - infrastructure:
+          - persistence
+          - external_services
+      - presentation:
+          - gui
+          - viewmodels
+          - views
+    
+    dependencies:
+      - poetry: "Paket yönetimi"
+      - pydantic: "Veri doğrulama"
+      - sqlalchemy: "ORM"
+      - pytest: "Test framework"
+      - asyncio: "Asenkron işlemler"
+      - aiofiles: "Asenkron dosya işlemleri"
+      - loguru: "Loglama"
+    
+    best_practices:
+      - "Type hints kullanımı"
+      - "Dependency injection"
+      - "Repository pattern"
+      - "Unit of work pattern"
+      - "Command query separation"
+      - "Event driven architecture"

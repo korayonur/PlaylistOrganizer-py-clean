@@ -1,0 +1,136 @@
+<!-- Şarkı listesi -->
+<div class="song-grid">
+  <!-- Yükleniyor -->
+  <div *ngIf="loading()" class="loading-indicator">
+    <span class="material-icons spin">refresh</span> Playlist içeriği yükleniyor...
+  </div>
+
+  <!-- Tablo -->
+  <div class="table-container" *ngIf="songs && songs.length > 0">
+    <table>
+      <thead>
+        <tr>
+          <th class="status-col">Durum</th>
+          <th>Dosya Yolu</th>
+          <th *ngIf="hasUpdatedSongs()" class="actions-col">İşlemler</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          *ngFor="let song of songs"
+          [class.missing]="!song.isFileExists"
+          [class.updated]="song.status === 'updated'"
+        >
+          <td class="status-col">
+            <div class="status-container">
+              <!-- Dosya durumu -->
+              <span
+                class="status-icon"
+                [class.exists]="song.isFileExists"
+                [class.missing]="!song.isFileExists"
+                [class.updated]="song.status === 'updated'"
+              >
+                <span class="material-icons">
+                  {{ getStatusIcon(song) }}
+                </span>
+              </span>
+
+              <!-- Oynatma/Arama ikonları -->
+              @if (song.isFileExists) {
+                <button
+                  class="status-icon"
+                  [class.playing]="isPlaying(song)"
+                  (click)="togglePlay(song)"
+                  [attr.aria-label]="isPlaying(song) ? 'Durdur' : 'Oynat'"
+                  tabindex="0"
+                >
+                  <span class="material-icons">
+                    {{ isPlaying(song) ? "pause_circle" : "play_circle" }}
+                  </span>
+                </button>
+              } @else {
+                <button
+                  class="status-icon search"
+                  [class.searching]="song.isSearching"
+                  [disabled]="song.isSearching"
+                  (click)="searchSimilarFiles(song)"
+                  aria-label="Alternatif Ara"
+                  tabindex="0"
+                >
+                  <span class="material-icons">{{ song.isSearching ? "refresh" : "search" }}</span>
+                </button>
+              }
+            </div>
+          </td>
+          <td class="path-col">
+            <div class="path-container">
+              <!-- Mevcut/Yeni Yol -->
+              <div class="path-info">
+                <div class="path-row">
+                  <span [class.missing-text]="!song.isFileExists">
+                    {{ song.status === "updated" ? song.newPath : song.filePath }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Orijinal Yol (güncellenmişse) -->
+              @if (song.status === "updated" && song.originalPath) {
+                <span class="original-path">
+                  {{ song.originalPath }}
+                </span>
+              }
+
+              <!-- Benzer Dosyalar Tablosu -->
+              @if (!song.isFileExists && song.similarFiles && song.similarFiles.length > 0) {
+                <div class="similar-files">
+                  <div class="similar-files-table">
+                    @for (file of song.similarFiles; track file.path) {
+                      <div class="similar-file-row">
+                        <div class="file-info">
+                          <span class="file-path">{{ file.path }}</span>
+                          <div class="file-meta">
+                            <span class="similarity">{{ file.similarity }}%</span>
+                          </div>
+                        </div>
+                        <div class="file-actions">
+                          <button
+                            class="action-btn accept"
+                            (click)="onSelectSimilarFile(song, file)"
+                            title="Bu dosyayı kullan"
+                          >
+                            <span class="material-icons">check_circle</span>
+                          </button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </td>
+          <!-- İşlem Butonları -->
+          @if (song.status === "updated") {
+            <td class="actions-col">
+              <div class="actions">
+                <button
+                  class="action-btn accept"
+                  (click)="onAccept(song)"
+                  title="Değişikliği Kabul Et"
+                >
+                  <span class="material-icons">check</span>
+                </button>
+                <button
+                  class="action-btn reject"
+                  (click)="onReject(song)"
+                  title="Değişikliği Reddet"
+                >
+                  <span class="material-icons">close</span>
+                </button>
+              </div>
+            </td>
+          }
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>

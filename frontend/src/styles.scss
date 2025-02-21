@@ -1,0 +1,326 @@
+/* You can add global styles to this file, and also import other style files */
+
+/* Tema değişkenleri */
+:root {
+  /* Koyu tema renkleri */
+  --surface-rgb: 30, 35, 41;
+  --surface-color: rgb(var(--surface-rgb));
+  --surface-ground: #1a1d21;
+  --surface-card: #1e2329;
+  --surface-hover: #2b2f36;
+  --border-color: #2f353d;
+
+  --text-color: #e6e8ea;
+  --text-color-secondary: #848e9c;
+
+  --primary-rgb: 59, 130, 246;
+  --primary-color: rgb(var(--primary-rgb));
+  --primary-color-dark: #2563eb;
+
+  --success-rgb: 34, 197, 94;
+  --success-color: rgb(var(--success-rgb));
+  --success-light: rgba(34, 197, 94, 0.15);
+
+  --warning-rgb: 245, 158, 11;
+  --warning-color: rgb(var(--warning-rgb));
+  --warning-light: rgba(245, 158, 11, 0.15);
+
+  --error-rgb: 239, 68, 68;
+  --error-color: rgb(var(--error-rgb));
+  --error-light: rgba(239, 68, 68, 0.15);
+
+  /* Yazı Tipleri */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-size-small: 0.75rem;
+  --font-size-base: 0.875rem;
+  --font-size-large: 1rem;
+  --font-size-xl: 1.125rem;
+  --font-size-xxl: 1.25rem;
+
+  /* Boşluklar */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
+  /* Border Radius */
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.5rem;
+  --border-radius-lg: 1rem;
+
+  /* Geçişler */
+  --transition-fast: 0.2s ease;
+
+  --accent-color: #2196f3;
+  --accent-color-dark: #1976d2;
+  --accent-color-light: #64b5f6;
+  --text-on-accent: #ffffff;
+  
+  --surface-hover: rgba(255, 255, 255, 0.1);
+  --surface-color-light: rgba(255, 255, 255, 0.05);
+}
+
+/* Temel stiller */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-base);
+  color: var(--text-color);
+  background-color: var(--surface-ground);
+  line-height: 1.5;
+}
+
+/* Genel yardımcı sınıflar */
+.text-danger {
+  color: var(--error-color);
+  font-size: var(--font-size-small);
+}
+
+.text-success {
+  color: var(--success-color);
+  font-size: var(--font-size-small);
+}
+
+.text-warning {
+  color: var(--warning-color);
+  font-size: var(--font-size-small);
+}
+
+.text-accent {
+  color: var(--primary-color);
+  font-size: var(--font-size-small);
+}
+
+.bg-primary {
+  background-color: var(--primary-color);
+}
+
+.bg-secondary {
+  background-color: var(--surface-card);
+}
+
+.shadow-sm {
+  box-shadow: var(--shadow-sm);
+}
+
+.shadow-md {
+  box-shadow: var(--shadow-md);
+}
+
+.shadow-lg {
+  box-shadow: var(--shadow-lg);
+}
+
+.rounded-sm {
+  border-radius: var(--border-radius-sm);
+}
+
+.rounded-md {
+  border-radius: var(--border-radius-md);
+}
+
+.rounded-lg {
+  border-radius: var(--border-radius-lg);
+}
+
+/* Buton stilleri */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: none;
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-small);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    opacity: 0.85;
+    filter: brightness(110%);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+}
+
+.btn-primary {
+  background-color: var(--primary-color);
+  color: var(--text-color);
+}
+
+.btn-danger {
+  background-color: var(--error-color);
+  color: var(--text-color);
+}
+
+.btn-success {
+  background-color: var(--success-color);
+  color: var(--text-color);
+}
+
+/* Form elemanları */
+input,
+select,
+textarea {
+  padding: var(--spacing-sm);
+  background-color: var(--surface-card);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-md);
+  transition: border-color var(--transition-fast);
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background-color: rgba(42, 48, 56, 0.8);
+  }
+}
+
+/* Kart stilleri */
+.card {
+  background-color: var(--surface-card);
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border-color);
+}
+
+/* Scrollbar Stilleri */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: var(--border-radius-sm);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--border-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Global stiller */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  background-color: var(--surface-ground);
+  color: var(--text-color);
+  line-height: 1.5;
+  font-size: var(--font-size-base);
+}
+
+/* Buton stilleri */
+button {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+}
+
+/* Loading animasyonu */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Error mesajı */
+.error-message {
+  color: var(--error-color);
+  background: var(--error-light);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-md);
+  margin: var(--spacing-md) 0;
+}
+
+/* Material Dialog Override */
+.mat-mdc-dialog-container {
+  --mdc-dialog-container-color: var(--surface-card) !important;
+  --mdc-dialog-with-divider-divider-color: var(--border-color) !important;
+  --mdc-dialog-subhead-color: var(--text-color) !important;
+  --mdc-dialog-supporting-text-color: var(--text-color-secondary) !important;
+
+  .mdc-dialog__surface {
+    background-color: var(--surface-card) !important;
+    color: var(--text-color) !important;
+  }
+
+  .mdc-dialog__content {
+    color: var(--text-color) !important;
+  }
+}
+
+/* Modern Dialog */
+.modern-dialog {
+  .mat-mdc-dialog-container {
+    padding: 0 !important;
+    border-radius: var(--border-radius-lg) !important;
+    overflow: hidden !important;
+
+    .mdc-dialog__surface {
+      overflow: hidden !important;
+    }
+
+    .mat-mdc-dialog-content {
+      margin: 0 !important;
+      padding: 0 !important;
+      max-height: none !important;
+    }
+  }
+}
+
+/* Multisearch Dialog */
+.multisearch-dialog-panel {
+  .mat-mdc-dialog-container {
+    background-color: var(--surface-ground) !important;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 0.5rem;
+  height: 0.5rem;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-ground);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: var(--border-radius-sm);
+
+  &:hover {
+    background: var(--text-color-secondary);
+  }
+}

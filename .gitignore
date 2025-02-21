@@ -1,0 +1,144 @@
+# Derlenmiş çıktılar
+/dist
+/tmp
+/out-tsc
+/bazel-out
+
+# Node
+/node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# IDEs ve editörler
+.idea/
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Yedekler ve geçici dosyalar
+/backup
+*.bak
+*.swp
+*.swo
+*~
+
+# Sistem dosyaları
+.DS_Store
+Thumbs.db
+
+# Debug ve log dosyaları
+logs/*
+!logs/.gitkeep
+*.log
+debug.log*
+
+# Test ve coverage
+/coverage
+/libpeerconnection.log
+testem.log
+
+# Angular özel
+.angular/
+.angular/cache/
+frontend/angular/cache/
+frontend/.angular/cache/
+*.pack
+*.pack.old
+frontend/**/*.pack
+frontend/**/*.pack.old
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/package-lock.json
+
+# Docs ve geçici markdown dosyalar
+docs/
+*.md
+!README.md
+
+# VS Code
+.vscode/
+*.code-workspace
+launch.json
+tasks.json
+extensions.json
+
+# Ortam değişkenleri ve gizli bilgiler
+.env
+.env.*
+!.env.example
+
+# Derleme ve paket dosyaları
+*.tgz
+*.zip
+*.tar.gz
+
+# Proje özel
+/server/node_modules
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+py/.venv/
+
+# Project specific
+py/musicfiles.db.json
+py/resources/web/*
+!py/resources/web/.gitkeep
+py/server_backup/
+py/build/
+py/dist/
+
+# Logs
+*.log
+logs/
+
+# Cache ve geçici dosyalar
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.coverage
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.Python
+**/*.so
