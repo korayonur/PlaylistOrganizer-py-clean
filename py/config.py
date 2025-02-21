@@ -9,7 +9,7 @@ from pathlib import Path
 IS_DEVELOPMENT = os.getenv("PLAYLIST_ORGANIZER_ENV", "production").lower() == "development"
 
 # API Port ayarları
-API_PORT = 3000 if IS_DEVELOPMENT else 5000
+API_PORT = 5000 if IS_DEVELOPMENT else 3000
 API_HOST = "localhost"
 
 # Frontend URL'leri

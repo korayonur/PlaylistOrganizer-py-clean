@@ -103,11 +103,25 @@ export class PlaylistTreeComponent {
   // rootNodes'u computed signal olarak tanımla
   rootNodes = computed(() => {
     const map = this.playlists();
-    return Object.values(map).filter((node) => {
-      const pathParts = node.path.split("/");
-      const foldersIndex = pathParts.indexOf("Folders");
-      return foldersIndex !== -1 && pathParts.length === foldersIndex + 2;
-    });
+    const nodes = Object.values(map);
+
+    // Folders ve MyLists node'larını bul
+    const foldersNode = nodes.find(node => node.name === "Folders");
+    const myListsNode = nodes.find(node => node.name === "MyLists");
+
+    let rootNodes: TreeNode[] = [];
+
+    // Folders'ın içeriğini al
+    if (foldersNode && foldersNode.children) {
+      rootNodes = [...foldersNode.children];
+    }
+
+    // MyLists'i ekle
+    if (myListsNode) {
+      rootNodes.push(myListsNode);
+    }
+
+    return rootNodes;
   });
 
   @Output() nodeSelect = new EventEmitter<TreeNode>();
