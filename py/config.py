@@ -16,8 +16,13 @@ API_HOST = "localhost"
 FRONTEND_DEV_URL = f"http://localhost:4200"  # Angular dev server
 FRONTEND_PROD_URL = f"http://{API_HOST}:{API_PORT}"  # Production/Embedded
 
+# VirtualDJ playlist klasörleri
+VIRTUALDJ_ROOT = "/Users/koray/Library/Application Support/VirtualDJ"
+PLAYLISTS_FOLDERS = os.path.join(VIRTUALDJ_ROOT, "Folders")  # VirtualDJ klasör yapısı
+PLAYLISTS_MYLISTS = os.path.join(VIRTUALDJ_ROOT, "MyLists")  # VirtualDJ playlist dosyaları
+
 # Sabit yollar
-PLAYLISTS_ROOT = "/Users/koray/Library/Application Support/VirtualDJ/Folders"
+PLAYLISTS_ROOT = PLAYLISTS_FOLDERS  # Geriye uyumluluk için
 MUSIC_ROOT = "/Users/koray/Music/KorayMusics"
 DB_PATH = Path(__file__).parent / "musicfiles.db.json"
 
