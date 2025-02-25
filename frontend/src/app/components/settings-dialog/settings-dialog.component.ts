@@ -6,6 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
@@ -14,6 +15,12 @@ export interface Settings {
   music_folder: string;
   virtualdj_root: string;
   last_updated?: string;
+}
+
+interface IndexingResult {
+  status: 'success' | 'error';
+  message: string;
+  data?: any;
 }
 
 @Component({
@@ -27,6 +34,7 @@ export interface Settings {
     MatInputModule,
     MatButtonModule,
     MatIconModule,
+    MatProgressBarModule,
     MatSnackBarModule
   ],
   templateUrl: './settings-dialog.component.html',
@@ -38,7 +46,9 @@ export class SettingsDialogComponent implements OnInit {
     virtualdj_root: ''
   };
   isLoading = false;
+  isIndexing = false;
   errorMessage = '';
+  indexingResult: IndexingResult | null = null;
   private apiUrl = environment.apiUrl;
 
   constructor(
@@ -63,6 +73,45 @@ export class SettingsDialogComponent implements OnInit {
         console.error('Ayarlar yüklenirken hata oluştu:', error);
         this.errorMessage = 'Ayarlar yüklenirken bir hata oluştu. Lütfen tekrar deneyin.';
         this.isLoading = false;
+      }
+    });
+  }
+
+  indexDatabase(): void {
+    this.isIndexing = true;
+    this.indexingResult = null;
+    
+    this.http.post<any>(`${this.apiUrl}/index/create`, {}).subscribe({
+      next: (response) => {
+        this.isIndexing = false;
+        
+        if (response.status === 'success') {
+          this.indexingResult = {
+            status: 'success',
+            message: `İndeksleme başarılı! ${response.data.totalFiles} dosya indekslendi.`,
+            data: response.data
+          };
+          
+          this.snackBar.open('Veritabanı başarıyla indekslendi', 'Tamam', {
+            duration: 3000
+          });
+        } else {
+          this.indexingResult = {
+            status: 'error',
+            message: 'İndeksleme sırasında bir sorun oluştu.',
+            data: response
+          };
+        }
+      },
+      error: (error) => {
+        this.isIndexing = false;
+        console.error('İndeksleme sırasında hata oluştu:', error);
+        
+        this.indexingResult = {
+          status: 'error',
+          message: error.error?.detail?.message || 'İndeksleme sırasında bir hata oluştu. Lütfen tekrar deneyin.',
+          data: error
+        };
       }
     });
   }

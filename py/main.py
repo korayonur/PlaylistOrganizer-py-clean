@@ -14,8 +14,7 @@ import requests
 import webview
 import uvicorn
 import webbrowser
-import subprocess
-from threading import Thread, Event
+from threading import Event
 from pathlib import Path
 from multiprocessing import Process, freeze_support
 from config import (
@@ -26,7 +25,6 @@ from config import (
     FRONTEND_PROD_URL,
     LOG_LEVEL,
     APP_NAME,
-    APP_WINDOW_SIZE,
     WHATSAPP_CONTACT,
     DEFAULT_LANGUAGE,
     FRONTEND_URL,
@@ -77,7 +75,6 @@ def run_backend():
         logger.info("=" * 50)
         logger.info("API Başlatılıyor")
         logger.info(f"Çalışma Modu: {'Development' if IS_DEVELOPMENT else 'Production'}")
-        logger.info(f"Entegrasyon: {'Bağımsız API' if IS_DEVELOPMENT else 'Masaüstü ile Birleşik'}")
         logger.info(f"API Endpoint: http://{API_HOST}:{API_PORT}")
         logger.info(f"Log Seviyesi: {LOG_LEVEL}")
 
@@ -115,8 +112,6 @@ class PlaylistOrganizer:
         """Uygulama başlatılıyor"""
         self.api_process = None
         self.window = None
-        self.api_ready = Event()
-        self.current_language = DEFAULT_LANGUAGE
     
     def run(self):
         """Uygulamayı çalıştır"""
@@ -164,29 +159,12 @@ class PlaylistOrganizer:
             # Uygulama modunu logla
             logger.info("=" * 50)
             logger.info("Masaüstü Uygulaması Başlatıldı")
-            logger.info(f"Çalışma Modu: {'Geliştirme' if IS_DEVELOPMENT else 'Üretim'}")
-            logger.info(f"Entegrasyon: API ile Birleşik")
             logger.info(f"Frontend URL: {FRONTEND_URL}")
             logger.info(f"API Port: {API_PORT}")
             logger.info("=" * 50)
             
             # Menüyü oluştur
             menu_items = self.create_custom_menu()
-            logger.debug(f"Oluşturulan menü öğeleri: {menu_items}")
-            
-            # macOS için özel ayarlar
-            if sys.platform == 'darwin':
-                try:
-                    # macOS'ta varsayılan menüleri gizle
-                    import objc
-                    from Foundation import NSBundle
-                    bundle = NSBundle.mainBundle()
-                    info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
-                    info['NSRequiresAquaSystemAppearance'] = False
-                    logger.info("macOS için varsayılan menü gizleme ayarları yapıldı")
-                except Exception as e:
-                    logger.error(f"macOS menü ayarları yapılırken hata: {e}")
-                    logger.exception("macOS menü ayarları hatası detayları:")
             
             # Pencereyi oluştur
             self.window = webview.create_window(
@@ -219,20 +197,6 @@ class PlaylistOrganizer:
             
             # Menu ve MenuAction sınıflarını import et
             from webview.menu import Menu, MenuAction, MenuSeparator
-            
-            # Çeviri anahtarlarını kontrol et ve logla
-            menu_keys = [
-                'menu.about', 'menu.quit', 'menu.language',
-                'menu.language.turkish', 'menu.language.english',
-                'menu.contact', 'menu.contact.whatsapp', 'menu.contact.report'
-            ]
-            
-            for key in menu_keys:
-                text = get_text(key)
-                if text == key:  # Çeviri bulunamadı
-                    logger.warning(f"Çeviri anahtarı bulunamadı: {key}")
-                else:
-                    logger.debug(f"Çeviri: {key} -> {text}")
             
             # Ana menü
             menu_items = [
@@ -296,11 +260,6 @@ class PlaylistOrganizer:
         """Dili değiştir"""
         try:
             if set_language(lang):
-                self.current_language = lang
-                
-                # Menüyü yeniden oluştur
-                menu_items = self.create_custom_menu()
-                
                 # Kullanıcıya bilgi ver
                 if webview.windows and len(webview.windows) > 0:
                     webview.windows[0].create_confirmation_dialog(
@@ -315,6 +274,38 @@ class PlaylistOrganizer:
         except Exception as e:
             logger.error(f"Dil değiştirilirken hata: {e}")
             logger.exception("Dil değiştirme hatası detayları:")
+    
+    def open_whatsapp(self):
+        """WhatsApp'ı aç"""
+        try:
+            # WhatsApp web URL'sini oluştur
+            whatsapp_url = f"https://wa.me/{WHATSAPP_CONTACT}"
+            
+            # URL'yi varsayılan tarayıcıda aç
+            webbrowser.open(whatsapp_url)
+            
+            logger.info(f"WhatsApp açıldı: {whatsapp_url}")
+        except Exception as e:
+            logger.error(f"WhatsApp açılırken hata: {e}")
+            logger.exception("WhatsApp açma hatası detayları:")
+            if webview.windows and len(webview.windows) > 0:
+                webview.windows[0].create_confirmation_dialog(
+                    get_text('dialog.contact.title'),
+                    get_text('dialog.contact.error').format(str(e))
+                )
+    
+    def toggle_fullscreen(self):
+        """Tam ekran modunu aç/kapat"""
+        try:
+            if webview.windows and len(webview.windows) > 0:
+                window = webview.windows[0]
+                window.toggle_fullscreen()
+                logger.info("Tam ekran modu değiştirildi")
+            else:
+                logger.error("Pencere bulunamadı, tam ekran değiştirilemiyor")
+        except Exception as e:
+            logger.error(f"Tam ekran değiştirilirken hata: {e}")
+            logger.exception("Tam ekran hatası detayları:")
     
     def show_report_form(self):
         """Rapor formunu göster"""
@@ -370,41 +361,6 @@ class PlaylistOrganizer:
                     get_text('dialog.report.title'),
                     get_text('dialog.report.error').format(str(e))
                 )
-    
-    def open_whatsapp(self):
-        """WhatsApp'ı aç"""
-        try:
-            # WhatsApp web URL'sini oluştur
-            whatsapp_url = f"https://wa.me/{WHATSAPP_CONTACT}"
-            
-            # URL'yi varsayılan tarayıcıda aç
-            webbrowser.open(whatsapp_url)
-            
-            logger.info(f"WhatsApp açıldı: {whatsapp_url}")
-        except Exception as e:
-            logger.error(f"WhatsApp açılırken hata: {e}")
-            logger.exception("WhatsApp açma hatası detayları:")
-            if webview.windows and len(webview.windows) > 0:
-                webview.windows[0].create_confirmation_dialog(
-                    get_text('dialog.contact.title'),
-                    get_text('dialog.contact.error').format(str(e))
-                )
-    
-    def toggle_fullscreen(self):
-        """Tam ekran modunu aç/kapat"""
-        try:
-            if webview.windows and len(webview.windows) > 0:
-                window = webview.windows[0]
-                # Mevcut tam ekran durumunu kontrol et
-                # Not: PyWebView'da doğrudan tam ekran durumunu kontrol etme yöntemi yok
-                # Bu nedenle toggle işlemi yapıyoruz
-                window.toggle_fullscreen()
-                logger.info("Tam ekran modu değiştirildi")
-            else:
-                logger.error("Pencere bulunamadı, tam ekran değiştirilemiyor")
-        except Exception as e:
-            logger.error(f"Tam ekran değiştirilirken hata: {e}")
-            logger.exception("Tam ekran hatası detayları:")
     
     def cleanup(self):
         """Temizlik işlemleri"""

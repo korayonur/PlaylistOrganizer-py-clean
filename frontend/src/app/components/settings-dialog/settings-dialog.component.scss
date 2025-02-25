@@ -30,6 +30,31 @@
   margin-bottom: 16px;
 }
 
+.database-actions {
+  margin-top: 24px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.indexing-result {
+  margin-top: 12px;
+}
+
+.success-text {
+  color: var(--success-color, #28a745);
+}
+
+.error-text {
+  color: var(--danger-color, #dc3545);
+}
+
+mat-progress-bar {
+  margin-top: 12px;
+}
+
 mat-dialog-actions {
   padding: 16px 0;
 }

@@ -26,16 +26,33 @@
       <div *ngIf="settings.last_updated" class="last-updated">
         <small>Son güncelleme: {{ settings.last_updated | date:'medium' }}</small>
       </div>
+      
+      <div class="database-actions">
+        <button 
+          mat-raised-button 
+          color="accent" 
+          (click)="indexDatabase()" 
+          [disabled]="isIndexing">
+          <mat-icon>sync</mat-icon>
+          {{ isIndexing ? 'İndeksleniyor...' : 'Veritabanı İndeksle' }}
+        </button>
+        <mat-progress-bar *ngIf="isIndexing" mode="indeterminate"></mat-progress-bar>
+        <div *ngIf="indexingResult" class="indexing-result">
+          <p [ngClass]="indexingResult.status === 'success' ? 'success-text' : 'error-text'">
+            {{ indexingResult.message }}
+          </p>
+        </div>
+      </div>
     </form>
   </div>
   
   <div mat-dialog-actions align="end">
-    <button mat-button (click)="cancel()" [disabled]="isLoading">İptal</button>
+    <button mat-button (click)="cancel()" [disabled]="isLoading || isIndexing">İptal</button>
     <button 
       mat-raised-button 
       color="primary" 
       (click)="saveSettings()" 
-      [disabled]="isLoading || !settings.music_folder || !settings.virtualdj_root">
+      [disabled]="isLoading || isIndexing || !settings.music_folder || !settings.virtualdj_root">
       {{ isLoading ? 'Kaydediliyor...' : 'Kaydet' }}
     </button>
   </div>
