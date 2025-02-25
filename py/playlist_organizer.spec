@@ -4,10 +4,11 @@ import sys
 from PyInstaller.utils.hooks import collect_dynamic_libs, collect_all, collect_submodules
 
 # Gerekli dosyaların yollarını belirle
-base_dir = os.path.dirname(os.path.abspath('__main__.py'))
+base_dir = os.path.abspath('.')
 resources_dir = os.path.join(base_dir, 'resources')
 config_file = os.path.join(base_dir, 'config.py')
 apiserver_file = os.path.join(base_dir, 'apiserver.py')
+main_file = os.path.join(base_dir, 'main.py')
 
 # Python modülleri
 domain_dir = os.path.join(base_dir, 'domain')
@@ -67,8 +68,32 @@ pkg_resources_submodules = collect_submodules('pkg_resources')
 # psutil için tüm alt modülleri topla
 psutil_submodules = collect_submodules('psutil')
 
+# webview için tüm alt modülleri topla
+webview_submodules = collect_submodules('webview')
+
+# fastapi için tüm alt modülleri topla
+fastapi_submodules = collect_submodules('fastapi')
+
+# uvicorn için tüm alt modülleri topla
+uvicorn_submodules = collect_submodules('uvicorn')
+
+# starlette için tüm alt modülleri topla
+starlette_submodules = collect_submodules('starlette')
+
+# Multiprocessing için gerekli modüller
+multiprocessing_modules = [
+    'multiprocessing',
+    'multiprocessing.synchronize',
+    'multiprocessing.popen_spawn_posix',
+    'multiprocessing.popen_fork',
+    'multiprocessing.popen_forkserver',
+    'multiprocessing.popen_spawn_win32',
+    'multiprocessing.spawn',
+    'multiprocessing.semaphore_tracker',
+]
+
 a = Analysis(
-    ['__main__.py'],
+    [main_file],
     pathex=[base_dir],
     binaries=binaries,
     datas=[
@@ -119,13 +144,25 @@ a = Analysis(
         'psutil._psutil_posix',
         'psutil._psutil_osx',
         'psutil._psutil_darwin',
-    ] + pkg_resources_submodules + psutil_submodules + all_modules,
+        'webview',
+        'webview.platforms.cocoa',
+        'requests',
+        'urllib3',
+        'charset_normalizer',
+        'idna',
+        'certifi',
+        'python-Levenshtein',
+        'strsim',
+        'python-magic',
+        'rapidfuzz',
+        'python-multipart',
+    ] + pkg_resources_submodules + psutil_submodules + webview_submodules + fastapi_submodules + uvicorn_submodules + starlette_submodules + all_modules + multiprocessing_modules,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
-    optimize=0,
+    optimize=2,  # Optimize bytecode
 )
 
 pyz = PYZ(a.pure)
@@ -133,31 +170,36 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
-    name='playlist_organizer',
-    debug=True,
+    exclude_binaries=True,
+    name='PlaylistOrganizer',
+    debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True,
+    console=False,
     disable_windowed_traceback=False,
-    argv_emulation=True,
+    argv_emulation=False,
     target_arch='arm64',
     codesign_identity=None,
     entitlements_file=None,
     icon=None,
-    version='1.0.0',
-    manifest=None,
-    resources=[],
-    exe_name='Playlist Organizer'
 )
 
-app = BUNDLE(
+# Collect all files into a directory
+coll = COLLECT(
     exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='PlaylistOrganizer',
+)
+
+# Create a Mac application bundle
+app = BUNDLE(
+    coll,
     name='PlaylistOrganizer.app',
     icon=None,
     bundle_identifier='com.playlistorganizer.app',
@@ -171,9 +213,19 @@ app = BUNDLE(
         'LSEnvironment': {
             'PATH': '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
         },
-        'CFBundleExecutable': 'Playlist Organizer',
-        'CFBundleIdentifier': 'com.playlistorganizer.app',
-        'CFBundlePackageType': 'APPL',
-        'LSMinimumSystemVersion': '10.10.0',
+        'NSPrincipalClass': 'NSApplication',
+        'NSAppleScriptEnabled': False,
+        'CFBundleDocumentTypes': [],
+        'LSMinimumSystemVersion': '11.0.0',  # macOS Big Sur ve üzeri için
+        'LSApplicationCategoryType': 'public.app-category.utilities',
+        'NSRequiresAquaSystemAppearance': False,  # Dark mode desteği
+        'NSAppTransportSecurity': {
+            'NSAllowsArbitraryLoads': True
+        },
+        # Multiprocessing için gerekli ayarlar
+        'PyRuntimeLocations': [
+            '@executable_path/../Frameworks/libpython3.11.dylib',
+            '/opt/homebrew/opt/python@3.11/Frameworks/Python.framework/Versions/3.11/Python'
+        ],
     },
-)
+) 

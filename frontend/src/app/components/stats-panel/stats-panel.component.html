@@ -24,14 +24,26 @@
     <div class="stat-label">Toplam Süre</div>
   </div>
 
-  <!-- Eksik Şarkıları Düzelt Butonu -->
-  <button
-    *ngIf="missingSongs > 0"
-    class="repair-button"
-    (click)="repair.emit()"
-    [disabled]="isLoading"
-  >
-    <span class="repair-icon">{{ isLoading ? "🔄" : "🔧" }}</span>
-    {{ isLoading ? "İşleniyor..." : "Eksik Şarkıları Düzelt" }}
-  </button>
+  <div class="action-buttons">
+    <!-- Eksik Şarkıları Düzelt Butonu -->
+    <button
+      *ngIf="missingSongs > 0"
+      class="repair-button"
+      (click)="repair.emit()"
+      [disabled]="isLoading"
+    >
+      <span class="repair-icon">{{ isLoading ? "🔄" : "🔧" }}</span>
+      {{ isLoading ? "İşleniyor..." : "Eksik Şarkıları Düzelt" }}
+    </button>
+
+    <!-- Ayarlar Butonu -->
+    <button
+      class="settings-button"
+      (click)="openSettings.emit()"
+      [disabled]="isLoading"
+    >
+      <span class="settings-icon">⚙️</span>
+      Ayarlar
+    </button>
+  </div>
 </div>

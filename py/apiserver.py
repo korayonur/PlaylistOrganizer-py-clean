@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 import asyncio
 from contextlib import asynccontextmanager
+import hashlib
 
 # Konfigürasyonu import et
 from config import (
@@ -23,8 +24,13 @@ from config import (
     PLAYLISTS_FOLDERS,
     PLAYLISTS_MYLISTS,
     MUSIC_ROOT,
-    DB_PATH
+    DB_PATH,
+    API_HOST,
+    API_PORT
 )
+
+# Ayarlar dosyası yolu
+SETTINGS_PATH = Path(__file__).parent / "settings.json"
 
 # FastAPI uygulamasını oluştur
 app = FastAPI()
@@ -37,6 +43,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for the API"""
+    return {"status": "ok", "message": "API is healthy", "timestamp": time.time()}
 
 # Desteklenen formatlar
 SUPPORTED_FORMATS = {
@@ -117,25 +129,31 @@ CHAR_MAP = {
 # Veritabanı sınıfı
 class Database:
     _instance = None
-    _lock: asyncio.Lock = None
-    _data_lock: asyncio.Lock = None
-    _file_lock: asyncio.Lock = None
+    _lock = asyncio.Lock()
+    _data_lock = asyncio.Lock()
+    _file_lock = asyncio.Lock()
     _cache: Dict[str, Any] = {}
     _last_write: float = 0
     _cache_ttl: int = 300  # 5 dakika
     data = None
+    _path_index = {}  # Tam yol indeksi
+    _name_index = {}  # Dosya adı indeksi
+    _normalized_name_index = {}  # Normalize edilmiş ad indeksi
+    _dir_index = {}  # Klasör indeksi
+    _search_cache = {}  # Arama önbelleği
+    _search_cache_ttl = 600  # 10 dakika
 
     def __init__(self):
         """Initialize locks"""
-        Database._lock = asyncio.Lock()
-        Database._data_lock = asyncio.Lock()
-        Database._file_lock = asyncio.Lock()
+        pass  # Lock'lar artık sınıf değişkeni olarak tanımlandı
 
     @classmethod
     @asynccontextmanager
     async def get_data_lock(cls):
         """Context manager for data access"""
         instance = await cls.get_instance()
+        if instance.data is None:
+            await instance.load()
         try:
             await instance._data_lock.acquire()
             yield instance.data
@@ -155,50 +173,119 @@ class Database:
     async def load(cls) -> Optional[Dict]:
         """Load database with file lock"""
         instance = await cls.get_instance()
-        if instance.data is None:
-            try:
-                async with instance._file_lock:
-                    if DB_PATH.exists():
-                        async with aiofiles.open(DB_PATH, "r", encoding="utf-8") as f:
-                            content = await f.read()
-                            instance.data = json.loads(content)
+        try:
+            async with instance._file_lock:
+                if DB_PATH.exists():
+                    async with aiofiles.open(DB_PATH, "r", encoding="utf-8") as f:
+                        content = await f.read()
+                        instance.data = json.loads(content)
+                        # İndeksleri oluştur
+                        await instance._build_indexes()
+                else:
+                    instance.data = {
+                        "version": "1.0",
+                        "lastUpdate": datetime.now().isoformat(),
+                        "encoding": "utf-8",
+                        "musicFiles": [],
+                        "stats": {
+                            "totalFiles": 0,
+                            "lastIndexDuration": 0,
+                            "indexingProgress": 0,
+                            "status": "initial",
+                        },
+                    }
+                    await instance.save()
+                return instance.data
+        except Exception as e:
+            logging.error(f"Database load error: {e}")
+            return None
 
-                            # indexedWords kontrolü - mevcut mantık korundu
-                            if not any("indexedWords" in file for file in instance.data["musicFiles"]):
-                                instance.data["musicFiles"] = [
-                                    {
-                                        **file,
-                                        "indexedWords": extract_normalized_words(file["fileNameOnly"]),
-                                    }
-                                    for file in instance.data["musicFiles"]
-                                ]
-                                await instance.save()
-                    else:
-                        instance.data = {
-                            "version": "1.0",
-                            "lastUpdate": datetime.now().isoformat(),
-                            "encoding": "utf-8",
-                            "musicFiles": [],
-                            "stats": {
-                                "totalFiles": 0,
-                                "lastIndexDuration": 0,
-                                "indexingProgress": 0,
-                                "status": "initial",
-                            },
-                        }
-                        await instance.save()
-            except Exception as e:
-                logging.error(f"Database load error: {e}")
-                return None
-        return instance.data
+    @classmethod
+    async def _build_indexes(cls):
+        """Veritabanı indekslerini oluştur"""
+        instance = await cls.get_instance()
+        if not instance.data or "musicFiles" not in instance.data:
+            return
+        
+        # İndeksleri temizle
+        instance._path_index = {}
+        instance._name_index = {}
+        instance._normalized_name_index = {}
+        instance._dir_index = {}
+        
+        # İndeksleri oluştur
+        for file in instance.data["musicFiles"]:
+            # Tam yol indeksi
+            instance._path_index[file["path"]] = file
+            
+            # Dosya adı indeksi
+            file_name = Path(file["path"]).stem
+            if file_name not in instance._name_index:
+                instance._name_index[file_name] = []
+            instance._name_index[file_name].append(file)
+            
+            # Normalize edilmiş ad indeksi
+            if "normalizedName" in file:
+                if file["normalizedName"] not in instance._normalized_name_index:
+                    instance._normalized_name_index[file["normalizedName"]] = []
+                instance._normalized_name_index[file["normalizedName"]].append(file)
+            
+            # Klasör indeksi
+            dir_path = str(Path(file["path"]).parent)
+            normalized_dir = normalize_path(dir_path)
+            if normalized_dir not in instance._dir_index:
+                instance._dir_index[normalized_dir] = []
+            instance._dir_index[normalized_dir].append(file)
+        
+        logging.info(f"Veritabanı indeksleri oluşturuldu: {len(instance._path_index)} dosya")
 
     @classmethod
     async def save(cls) -> None:
         """Save database with file lock"""
         instance = await cls.get_instance()
-        async with instance._file_lock:
-            async with aiofiles.open(DB_PATH, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(instance.data, indent=2))
+        if instance.data is not None:
+            async with instance._file_lock:
+                async with aiofiles.open(DB_PATH, "w", encoding="utf-8") as f:
+                    await f.write(json.dumps(instance.data, indent=2))
+                # İndeksleri güncelle
+                await instance._build_indexes()
+
+    @classmethod
+    async def get_search_cache(cls, cache_key: str) -> Optional[Dict]:
+        """Arama önbelleğinden veri al"""
+        instance = await cls.get_instance()
+        current_time = time.time()
+        
+        if cache_key in instance._search_cache:
+            cache_entry = instance._search_cache[cache_key]
+            if current_time - cache_entry["timestamp"] < instance._search_cache_ttl:
+                logging.info(f"Önbellek kullanıldı: {cache_key}")
+                return cache_entry["data"]
+            else:
+                # Süresi dolmuş önbellek girişini temizle
+                del instance._search_cache[cache_key]
+        
+        return None
+
+    @classmethod
+    async def set_search_cache(cls, cache_key: str, data: Dict) -> None:
+        """Arama önbelleğine veri kaydet"""
+        instance = await cls.get_instance()
+        instance._search_cache[cache_key] = {
+            "timestamp": time.time(),
+            "data": data
+        }
+        
+        # Önbellek boyutunu kontrol et ve gerekirse temizle
+        if len(instance._search_cache) > 1000:  # Maksimum 1000 önbellek girişi
+            # En eski girişleri temizle
+            sorted_cache = sorted(
+                instance._search_cache.items(),
+                key=lambda x: x[1]["timestamp"]
+            )
+            # İlk 200 girişi sil (en eski olanlar)
+            for key, _ in sorted_cache[:200]:
+                del instance._search_cache[key]
 
 
 # Yardımcı fonksiyonlar
@@ -289,7 +376,7 @@ def split_artist_and_title(filename: str) -> List[Dict[str, str]]:
     return [{"artist": "", "title": normalize_text(filename)}]
 
 
-async def extract_normalized_words(file_name: str, file_path: str = "") -> List[str]:
+def extract_normalized_words(file_name: str, file_path: str = "") -> List[str]:
     """Dosya adını ve klasör yolunu kelimelere ayırıp normalize et"""
     folder_parts = [
         p for p in Path(file_path).parent.parts 
@@ -303,7 +390,7 @@ async def extract_normalized_words(file_name: str, file_path: str = "") -> List[
     return [normalize_text(word) for word in words if len(word) > 1]
 
 
-async def calculate_word_based_similarity(words1: List[str], words2: List[str]) -> float:
+def calculate_word_based_similarity(words1: List[str], words2: List[str]) -> float:
     """Kelime bazlı benzerlik hesapla"""
     search_words = words1[4:] if len(words1) > 4 else words1
     target_words = words2[4:] if len(words2) > 4 else words2
@@ -813,6 +900,7 @@ async def get_index_status():
                     "lastUpdate": db["lastUpdate"],
                     "fileCount": len(db["musicFiles"]),
                     "indexStatus": db["stats"].get("status", "unknown"),
+                    "databasePath": str(DB_PATH.absolute())
                 },
             }
     except Exception as e:
@@ -862,9 +950,20 @@ async def search_files(data: SearchRequest):
 
         start_time = time.time()
         limited_paths = data.paths[:100]  # İlk 100 path ile sınırla
+        
+        # Önbellek anahtarı oluştur
+        cache_key = hashlib.md5(json.dumps(limited_paths).encode()).hexdigest()
+        
+        # Önbellekten kontrol et
+        cached_result = await Database.get_search_cache(cache_key)
+        if cached_result:
+            return cached_result
 
-        results = []
-        total_process_time = 0
+        # Veritabanını yükle ve indeksleri oluştur
+        db_instance = await Database.get_instance()
+        if not db_instance._path_index:  # İndeksler oluşturulmamışsa
+            await Database.load()  # Veritabanını yükle ve indeksleri oluştur
+        
         match_details = {
             "tamYolEsleme": {"count": 0, "time": 0, "algoritmaYontemi": "Tam Yol Eşleşme"},
             "ayniKlasorFarkliUzanti": {
@@ -880,24 +979,21 @@ async def search_files(data: SearchRequest):
             },
             "benzerDosya": {"count": 0, "time": 0, "algoritmaYontemi": "Benzerlik Bazlı Arama"},
         }
-
-        db = await Database.load()
-        music_files = db["musicFiles"]
-
-        for search_path in limited_paths:
+        
+        # Paralel arama için yardımcı fonksiyon
+        async def search_single_file(search_path: str) -> Dict:
             search_start_time = time.time()
             search_file_name = Path(search_path).name
             search_file_name_without_ext = Path(search_path).stem
             search_dir = str(Path(search_path).parent)
-
-            # 1. Tam yol eşleşme kontrolü
-            exact_match = next((file for file in music_files if file["path"] == search_path), None)
-
-            if exact_match:
+            normalized_search_dir = normalize_path(search_dir)
+            
+            # 1. Tam yol eşleşme kontrolü - İndeks kullanarak
+            if search_path in db_instance._path_index:
                 match_type = "tamYolEsleme"
                 current_process_time = int((time.time() - search_start_time) * 1000)
-                results.append(
-                    {
+                return {
+                    "result": {
                         "originalPath": search_path,
                         "found": True,
                         "status": "exact_match",
@@ -905,124 +1001,97 @@ async def search_files(data: SearchRequest):
                         "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
                         "foundPath": search_path,
                         "processTime": current_process_time,
-                    }
-                )
-                match_details[match_type]["count"] += 1
-                match_details[match_type]["time"] += current_process_time
-                total_process_time += current_process_time
-                continue
-
-            # 2. Aynı klasörde farklı uzantı kontrolü
-            same_dir_diff_ext = next(
-                (
-                    file
-                    for file in music_files
-                    if normalize_path(str(Path(file["path"]).parent)) == normalize_path(search_dir)
-                    and normalize_file_name(Path(file["path"]).stem)
-                    == normalize_file_name(search_file_name_without_ext)
-                ),
-                None,
-            )
-
-            if same_dir_diff_ext:
-                match_type = "ayniKlasorFarkliUzanti"
-                current_process_time = int((time.time() - search_start_time) * 1000)
-                results.append(
-                    {
-                        "originalPath": search_path,
-                        "found": True,
-                        "status": "exact_match",
-                        "matchType": match_type,
-                        "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
-                        "foundPath": same_dir_diff_ext["path"],
-                        "processTime": current_process_time,
-                    }
-                )
-                match_details[match_type]["count"] += 1
-                match_details[match_type]["time"] += current_process_time
-                total_process_time += current_process_time
-                continue
-
-            # 3. Farklı klasörde aynı ad kontrolü
-            diff_dir_same_file = next(
-                (
-                    file
-                    for file in music_files
-                    if file["fileNameOnly"] == search_file_name_without_ext
-                ),
-                None,
-            )
-
-            if diff_dir_same_file:
+                    },
+                    "match_type": match_type,
+                    "process_time": current_process_time
+                }
+            
+            # 2. Aynı klasörde farklı uzantı kontrolü - İndeks kullanarak
+            if normalized_search_dir in db_instance._dir_index:
+                dir_files = db_instance._dir_index[normalized_search_dir]
+                for file in dir_files:
+                    file_stem = Path(file["path"]).stem
+                    if normalize_file_name(file_stem) == normalize_file_name(search_file_name_without_ext):
+                        match_type = "ayniKlasorFarkliUzanti"
+                        current_process_time = int((time.time() - search_start_time) * 1000)
+                        return {
+                            "result": {
+                                "originalPath": search_path,
+                                "found": True,
+                                "status": "exact_match",
+                                "matchType": match_type,
+                                "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
+                                "foundPath": file["path"],
+                                "processTime": current_process_time,
+                            },
+                            "match_type": match_type,
+                            "process_time": current_process_time
+                        }
+            
+            # 3. Farklı klasörde aynı ad kontrolü - İndeks kullanarak
+            if search_file_name_without_ext in db_instance._name_index:
                 match_type = "farkliKlasor"
                 current_process_time = int((time.time() - search_start_time) * 1000)
-                results.append(
-                    {
+                return {
+                    "result": {
                         "originalPath": search_path,
                         "found": True,
                         "status": "exact_match",
                         "matchType": match_type,
                         "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
-                        "foundPath": diff_dir_same_file["path"],
+                        "foundPath": db_instance._name_index[search_file_name_without_ext][0]["path"],
                         "processTime": current_process_time,
-                    }
-                )
-                match_details[match_type]["count"] += 1
-                match_details[match_type]["time"] += current_process_time
-                total_process_time += current_process_time
-                continue
-
-            # 4. Farklı klasörde farklı uzantı kontrolü
-            diff_dir_diff_ext = next(
-                (
-                    file
-                    for file in music_files
-                    if file["normalizedName"] == normalize_text(search_file_name_without_ext)
-                ),
-                None,
-            )
-
-            if diff_dir_diff_ext:
+                    },
+                    "match_type": match_type,
+                    "process_time": current_process_time
+                }
+            
+            # 4. Farklı klasörde farklı uzantı kontrolü - İndeks kullanarak
+            normalized_name = normalize_text(search_file_name_without_ext)
+            if normalized_name in db_instance._normalized_name_index:
                 match_type = "farkliKlasorveUzanti"
                 current_process_time = int((time.time() - search_start_time) * 1000)
-                results.append(
-                    {
+                return {
+                    "result": {
                         "originalPath": search_path,
                         "found": True,
                         "status": "exact_match",
                         "matchType": match_type,
                         "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
-                        "foundPath": diff_dir_diff_ext["path"],
+                        "foundPath": db_instance._normalized_name_index[normalized_name][0]["path"],
                         "processTime": current_process_time,
-                    }
-                )
-                match_details[match_type]["count"] += 1
-                match_details[match_type]["time"] += current_process_time
-                total_process_time += current_process_time
-                continue
-
-            # 5. Benzerlik bazlı arama
-            search_words = extract_normalized_words(search_file_name)
-            candidates = [
-                {
-                    "file": file,
-                    "similarity": calculate_two_stage_similarity(
-                        search_words, file["indexedWords"]
-                    ),
+                    },
+                    "match_type": match_type,
+                    "process_time": current_process_time
                 }
-                for file in music_files
-            ]
-
-            candidates = [match for match in candidates if match["similarity"] > 0.3]
-            candidates.sort(key=lambda x: x["similarity"], reverse=True)
-            candidates = candidates[:1]
-
+            
+            # 5. Benzerlik bazlı arama - Optimize edilmiş
+            search_words = extract_normalized_words(search_file_name)
+            
+            # Benzerlik hesaplama için aday dosyaları filtrele
+            # Dosya adının ilk 2 harfini kullanarak filtreleme yap
+            prefix = normalized_name[:2] if len(normalized_name) >= 2 else normalized_name
+            candidates = []
+            
+            # Tüm müzik dosyalarını taramak yerine, benzer prefixlere sahip dosyaları kontrol et
+            for norm_name, files in db_instance._normalized_name_index.items():
+                if norm_name.startswith(prefix) or prefix in norm_name:
+                    for file in files:
+                        similarity = calculate_two_stage_similarity(search_words, file["indexedWords"])
+                        if similarity > 0.3:  # Eşik değeri
+                            candidates.append({"file": file, "similarity": similarity})
+                            # Yüksek benzerlik bulunduğunda erken sonlandır
+                            if similarity > 0.8:
+                                break
+            
+            # En iyi eşleşmeyi bul
             if candidates:
+                candidates.sort(key=lambda x: x["similarity"], reverse=True)
                 best_match = candidates[0]
                 match_type = "benzerDosya"
                 current_process_time = int((time.time() - search_start_time) * 1000)
-                results.append(
-                    {
+                return {
+                    "result": {
                         "originalPath": search_path,
                         "found": True,
                         "status": "similar_found",
@@ -1031,29 +1100,47 @@ async def search_files(data: SearchRequest):
                         "similarity": best_match["similarity"],
                         "foundPath": best_match["file"]["path"],
                         "processTime": current_process_time,
-                    }
-                )
-                match_details[match_type]["count"] += 1
-                match_details[match_type]["time"] += current_process_time
-                total_process_time += current_process_time
-            else:
-                current_process_time = int((time.time() - search_start_time) * 1000)
-                results.append(
-                    {
-                        "originalPath": search_path,
-                        "found": False,
-                        "status": "not_found",
-                        "processTime": current_process_time,
-                    }
-                )
-                total_process_time += current_process_time
-
+                    },
+                    "match_type": match_type,
+                    "process_time": current_process_time
+                }
+            
+            # Eşleşme bulunamadı
+            current_process_time = int((time.time() - search_start_time) * 1000)
+            return {
+                "result": {
+                    "originalPath": search_path,
+                    "found": False,
+                    "status": "not_found",
+                    "processTime": current_process_time,
+                },
+                "match_type": None,
+                "process_time": current_process_time
+            }
+        
+        # Tüm dosyaları paralel olarak ara
+        tasks = [search_single_file(path) for path in limited_paths]
+        search_results = await asyncio.gather(*tasks)
+        
+        # Sonuçları birleştir
+        results = []
+        total_process_time = 0
+        
+        for result_data in search_results:
+            results.append(result_data["result"])
+            total_process_time += result_data["process_time"]
+            
+            # İstatistikleri güncelle
+            if result_data["match_type"]:
+                match_details[result_data["match_type"]]["count"] += 1
+                match_details[result_data["match_type"]]["time"] += result_data["process_time"]
+        
         execution_time = int((time.time() - start_time) * 1000)
         average_process_time = int(total_process_time / len(limited_paths))
-
+        
         not_found_paths = [result["originalPath"] for result in results if not result["found"]]
-
-        return {
+        
+        response_data = {
             "status": "success",
             "results": results,
             "stats": {
@@ -1068,6 +1155,11 @@ async def search_files(data: SearchRequest):
             },
             "notFoundPaths": not_found_paths if not_found_paths else None,
         }
+        
+        # Sonucu önbelleğe kaydet
+        await Database.set_search_cache(cache_key, response_data)
+        
+        return response_data
 
     except HTTPException:
         raise
@@ -1212,9 +1304,71 @@ async def stream_file(
         )
 
 
-# Diğer endpoint'ler eklenecek...
+# Ayarlar modeli
+class Settings(BaseModel):
+    music_folder: str
+    virtualdj_root: str
+    last_updated: Optional[str] = None
+
+# Ayarları oku
+async def read_settings() -> Settings:
+    try:
+        if not SETTINGS_PATH.exists():
+            # Varsayılan ayarları oluştur
+            default_settings = {
+                "music_folder": MUSIC_ROOT,
+                "virtualdj_root": PLAYLISTS_ROOT.replace("/Folders", ""),
+                "last_updated": datetime.now().isoformat()
+            }
+            async with aiofiles.open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(default_settings, indent=2))
+            return Settings(**default_settings)
+        
+        async with aiofiles.open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+            content = await f.read()
+            settings_data = json.loads(content)
+            return Settings(**settings_data)
+    except Exception as e:
+        logging.error(f"Ayarlar okunamadı: {str(e)}")
+        # Hata durumunda varsayılan ayarları döndür
+        return Settings(
+            music_folder=MUSIC_ROOT,
+            virtualdj_root=PLAYLISTS_ROOT.replace("/Folders", ""),
+            last_updated=datetime.now().isoformat()
+        )
+
+# Ayarları kaydet
+async def save_settings(settings: Settings) -> bool:
+    try:
+        settings.last_updated = datetime.now().isoformat()
+        async with aiofiles.open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(settings.dict(), indent=2))
+        return True
+    except Exception as e:
+        logging.error(f"Ayarlar kaydedilemedi: {str(e)}")
+        return False
+
+# Ayarları getir endpoint'i
+@app.get("/api/settings", response_model=Settings)
+async def get_settings():
+    return await read_settings()
+
+# Ayarları güncelle endpoint'i
+@app.post("/api/settings", response_model=Settings)
+async def update_settings(settings: Settings):
+    if not os.path.exists(settings.music_folder):
+        raise HTTPException(status_code=400, detail="Müzik klasörü bulunamadı")
+    
+    if not os.path.exists(settings.virtualdj_root):
+        raise HTTPException(status_code=400, detail="VirtualDJ klasörü bulunamadı")
+    
+    success = await save_settings(settings)
+    if not success:
+        raise HTTPException(status_code=500, detail="Ayarlar kaydedilemedi")
+    
+    return settings
 
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="localhost", port=3000)
+    uvicorn.run(app, host=API_HOST, port=API_PORT)

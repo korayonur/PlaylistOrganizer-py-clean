@@ -34,13 +34,24 @@ import { Song } from "../../models/song.model";
           <div class="stat-value danger">{{ missingCount }}</div>
         </button>
       </div>
-      <button
-        class="repair-button"
-        [disabled]="loading || missingCount === 0"
-        (click)="repair.emit()"
-      >
-        {{ loading ? "Onarılıyor..." : "Eksik Dosyaları Onar" }}
-      </button>
+      <div class="action-buttons">
+        <button
+          class="repair-button"
+          [disabled]="loading || missingCount === 0"
+          (click)="repair.emit()"
+        >
+          {{ loading ? "Onarılıyor..." : "Eksik Dosyaları Onar" }}
+        </button>
+        
+        <button
+          class="settings-button"
+          (click)="openSettings.emit()"
+          [disabled]="loading"
+        >
+          <span class="settings-icon">⚙️</span>
+          <strong>Ayarlar</strong>
+        </button>
+      </div>
     </div>
   `,
   styles: [
@@ -106,6 +117,11 @@ import { Song } from "../../models/song.model";
         }
       }
 
+      .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+      }
+
       .repair-button {
         padding: 0.5rem 1rem;
         border: none;
@@ -127,6 +143,35 @@ import { Song } from "../../models/song.model";
           transform: none;
         }
       }
+
+      .settings-button {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: var(--border-radius-sm);
+        background: var(--accent-color);
+        color: white;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        margin-left: 10px;
+
+        &:hover:not(:disabled) {
+          background: var(--hover-color);
+          transform: translateY(-1px);
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          transform: none;
+        }
+      }
+
+      .settings-icon {
+        margin-right: 0.5rem;
+      }
     `,
   ],
 })
@@ -136,6 +181,7 @@ export class StatsPanelComponent {
   @Input() currentFilter: "all" | "exists" | "missing" = "all";
   @Output() filterChange = new EventEmitter<"all" | "exists" | "missing">();
   @Output() repair = new EventEmitter<void>();
+  @Output() openSettings = new EventEmitter<void>();
 
   get foundCount(): number {
     return this.songs.filter((song) => song.isFileExists).length;

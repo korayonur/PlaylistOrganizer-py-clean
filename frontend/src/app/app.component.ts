@@ -9,11 +9,17 @@ import { SongGridComponent } from "./components/song-grid/song-grid.component";
 import { firstValueFrom } from "rxjs";
 import { MatDialog } from "@angular/material/dialog";
 import { MultisearchDialogComponent } from "./components/multisearch-dialog/multisearch-dialog.component";
+import { SettingsDialogComponent } from "./components/settings-dialog/settings-dialog.component";
 
 @Component({
   selector: "app-root",
   standalone: true,
-  imports: [CommonModule, PlaylistTreeComponent, StatsPanelComponent, SongGridComponent],
+  imports: [
+    CommonModule, 
+    PlaylistTreeComponent, 
+    StatsPanelComponent, 
+    SongGridComponent
+  ],
   template: `
     <div class="app">
       <div class="sidebar">
@@ -28,6 +34,7 @@ import { MultisearchDialogComponent } from "./components/multisearch-dialog/mult
             [currentFilter]="currentFilter()"
             (filterChange)="setFilter($event)"
             (repair)="handleMissingFiles()"
+            (openSettings)="openSettingsDialog()"
           >
           </app-stats-panel>
         </div>
@@ -228,5 +235,23 @@ export class AppComponent {
 
   handleRejectAlternative(): void {
     // TODO: Implement
+  }
+
+  openSettingsDialog(): void {
+    const dialogRef = this.dialog.open(SettingsDialogComponent, {
+      width: '500px',
+      disableClose: false
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        // Ayarlar değiştiğinde gerekli işlemleri yap
+        // Örneğin, mevcut playlist'i yeniden yükle
+        const currentPlaylist = this.selectedPlaylist();
+        if (currentPlaylist && currentPlaylist.type !== 'folder') {
+          this.loadPlaylistContent(currentPlaylist.path);
+        }
+      }
+    });
   }
 }

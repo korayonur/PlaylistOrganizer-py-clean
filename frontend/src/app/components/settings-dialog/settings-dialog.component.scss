@@ -1,0 +1,35 @@
+.settings-dialog {
+  min-width: 400px;
+  max-width: 600px;
+}
+
+.full-width {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.loading-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100px;
+}
+
+.error-message {
+  color: var(--danger-color);
+  background-color: rgba(255, 0, 0, 0.1);
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.last-updated {
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 8px;
+  margin-bottom: 16px;
+}
+
+mat-dialog-actions {
+  padding: 16px 0;
+}

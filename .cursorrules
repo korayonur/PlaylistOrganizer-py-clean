@@ -41,7 +41,7 @@ development_environment:
     
     backend:
       path: "/Users/koray/projects/PlaylistOrganizer-py/py"
-      required_files: ["pyproject.toml", "__main__.py", "apiserver.py"]
+      required_files: ["pyproject.toml", "apiserver.py"]
       virtual_env: "/Users/koray/projects/PlaylistOrganizer-py/py/.venv"
       startup_checks:
         - type: "exists"
@@ -50,16 +50,13 @@ development_environment:
         - type: "file_exists"
           path: "/Users/koray/projects/PlaylistOrganizer-py/py/pyproject.toml"
           message: "pyproject.toml dosyası bulunamadı"
-        - type: "file_exists"
-          path: "/Users/koray/projects/PlaylistOrganizer-py/py/__main__.py"
-          message: "Main dosyası bulunamadı"
         - type: "venv_exists"
           path: "/Users/koray/projects/PlaylistOrganizer-py/py/.venv"
           message: "Virtual environment bulunamadı"
       commands:
         activate_venv: "source /Users/koray/projects/PlaylistOrganizer-py/py/.venv/bin/activate"
         run_api: "cd /Users/koray/projects/PlaylistOrganizer-py/py && source .venv/bin/activate && python apiserver.py"
-        run_desktop: "cd /Users/koray/projects/PlaylistOrganizer-py/py && source .venv/bin/activate && python __main__.py"
+        run_desktop: "cd /Users/koray/projects/PlaylistOrganizer-py/py && source .venv/bin/activate && python main.py"
 
   execution_rules:
     pre_run_checks: true

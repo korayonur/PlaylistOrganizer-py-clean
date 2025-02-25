@@ -1,0 +1,42 @@
+<div class="settings-dialog">
+  <h2 mat-dialog-title>Uygulama Ayarları</h2>
+  
+  <div mat-dialog-content>
+    <div *ngIf="isLoading" class="loading-indicator">
+      <p>Ayarlar yükleniyor...</p>
+    </div>
+    
+    <div *ngIf="errorMessage" class="error-message">
+      <p>{{ errorMessage }}</p>
+    </div>
+    
+    <form *ngIf="!isLoading">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Müzik Klasörü</mat-label>
+        <input matInput [(ngModel)]="settings.music_folder" name="musicFolder" required>
+        <mat-hint>Müzik dosyalarınızın bulunduğu klasör</mat-hint>
+      </mat-form-field>
+      
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>VirtualDJ Klasörü</mat-label>
+        <input matInput [(ngModel)]="settings.virtualdj_root" name="virtualdjRoot" required>
+        <mat-hint>VirtualDJ programının ana klasörü</mat-hint>
+      </mat-form-field>
+      
+      <div *ngIf="settings.last_updated" class="last-updated">
+        <small>Son güncelleme: {{ settings.last_updated | date:'medium' }}</small>
+      </div>
+    </form>
+  </div>
+  
+  <div mat-dialog-actions align="end">
+    <button mat-button (click)="cancel()" [disabled]="isLoading">İptal</button>
+    <button 
+      mat-raised-button 
+      color="primary" 
+      (click)="saveSettings()" 
+      [disabled]="isLoading || !settings.music_folder || !settings.virtualdj_root">
+      {{ isLoading ? 'Kaydediliyor...' : 'Kaydet' }}
+    </button>
+  </div>
+</div>

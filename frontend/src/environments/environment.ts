@@ -3,5 +3,5 @@
  */
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:3000/api'  // config.py'daki API_CONFIG["ENDPOINT"] ile aynı
+  apiUrl: 'http://localhost:3000/api'  // Development modunda API portu 3000
 };
