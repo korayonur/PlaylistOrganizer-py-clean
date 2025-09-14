@@ -3,5 +3,5 @@
  */
 export const environment = {
   production: true,
-  apiUrl: 'http://localhost:5000/api'  // Production modunda API portu 5000
-}; 
+  apiUrl: 'http://localhost:50001/api'  // Production modunda direkt API URL
+};

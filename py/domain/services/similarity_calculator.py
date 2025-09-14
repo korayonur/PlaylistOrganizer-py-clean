@@ -84,3 +84,7 @@ class SimilarityCalculator:
     def calculate_string_similarity(self, text1: str, text2: str) -> float:
         """String benzerliği hesaplar"""
         return fuzz.ratio(text1, text2) / 100.0
+
+    def calculate_similarity(self, words1: List[str], words2: List[str]) -> float:
+        """Ana benzerlik hesaplama metodu - iki aşamalı algoritma kullanır"""
+        return self.calculate_two_stage_similarity(words1, words2)

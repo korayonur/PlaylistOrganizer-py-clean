@@ -4,7 +4,7 @@ import { Song, SimilarFile } from "../../models/song.model";
 import { MusicPlayerService } from "../../services/music-player.service";
 import { HttpClient } from "@angular/common/http";
 import { DialogService, DialogResult } from "../../shared/services/dialog.service";
-import { environment } from '../../../environments/environment';
+import { ConfigService } from "../../services/config.service";
 
 interface SearchResult {
   originalPath: string;
@@ -49,7 +49,9 @@ interface ApiSearchResponse {
 export class SongGridComponent {
   private readonly _songs: WritableSignal<Song[]> = signal([]);
   loading = signal(false);
-  private apiUrl = environment.apiUrl;
+  private getApiUrl(): string {
+    return this.configService.getApiUrl();
+  }
 
   @Input() set songs(value: Song[]) {
     if (value) {
@@ -95,6 +97,7 @@ export class SongGridComponent {
     private readonly musicPlayer: MusicPlayerService,
     private readonly http: HttpClient,
     private dialogService: DialogService,
+    private configService: ConfigService,
   ) {}
 
   hasUpdatedSongs(): boolean {
@@ -174,7 +177,7 @@ export class SongGridComponent {
 
     // API isteği gönder
     this.http
-      .post<ApiSearchResponse>(`${this.apiUrl}/search/files`, {
+      .post<ApiSearchResponse>(`${this.getApiUrl()}/search/files`, {
         paths: [song.filePath],
         batchSize: 1,
       })
@@ -294,7 +297,7 @@ export class SongGridComponent {
   }
 
   searchFiles() {
-    return this.http.post<ApiSearchResponse>(`${this.apiUrl}/search/files`, {
+    return this.http.post<ApiSearchResponse>(`${this.getApiUrl()}/search/files`, {
       // ...
     });
   }

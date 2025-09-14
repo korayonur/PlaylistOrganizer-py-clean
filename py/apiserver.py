@@ -3,9 +3,13 @@ import logging
 import os
 import time
 import unicodedata
+
+# Logging ayarları
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
+from urllib.parse import unquote
 
 import aiofiles
 import xmltodict
@@ -32,6 +36,12 @@ from config import (
 # Ayarlar dosyası yolu
 SETTINGS_PATH = Path(__file__).parent / "settings.json"
 
+# Ayarlar modeli
+class Settings(BaseModel):
+    music_folder: str
+    virtualdj_root: str
+    last_updated: Optional[str] = None
+
 # FastAPI uygulamasını oluştur
 app = FastAPI()
 
@@ -49,6 +59,17 @@ app.add_middleware(
 async def health_check():
     """Health check endpoint for the API"""
     return {"status": "ok", "message": "API is healthy", "timestamp": time.time()}
+
+# Port bilgisi endpoint'i
+@app.get("/api/port")
+async def get_port_info():
+    """API port bilgisini döndür"""
+    return {
+        "status": "ok", 
+        "port": API_PORT,
+        "host": API_HOST,
+        "apiUrl": f"http://{API_HOST}:{API_PORT}/api"
+    }
 
 # Desteklenen formatlar
 SUPPORTED_FORMATS = {
@@ -211,26 +232,29 @@ class Database:
         # İndeksleri oluştur
         for file in instance.data["musicFiles"]:
             # Tam yol indeksi
-            instance._path_index[file["path"]] = file
+            if "path" in file and file["path"] is not None:
+                instance._path_index[file["path"]] = file
             
             # Dosya adı indeksi
-            file_name = Path(file["path"]).stem
-            if file_name not in instance._name_index:
-                instance._name_index[file_name] = []
-            instance._name_index[file_name].append(file)
+            if "path" in file and file["path"] is not None:
+                file_name = Path(file["path"]).stem
+                if file_name not in instance._name_index:
+                    instance._name_index[file_name] = []
+                instance._name_index[file_name].append(file)
             
             # Normalize edilmiş ad indeksi
-            if "normalizedName" in file:
+            if "normalizedName" in file and file["normalizedName"] is not None:
                 if file["normalizedName"] not in instance._normalized_name_index:
                     instance._normalized_name_index[file["normalizedName"]] = []
                 instance._normalized_name_index[file["normalizedName"]].append(file)
             
             # Klasör indeksi
-            dir_path = str(Path(file["path"]).parent)
-            normalized_dir = normalize_path(dir_path)
-            if normalized_dir not in instance._dir_index:
-                instance._dir_index[normalized_dir] = []
-            instance._dir_index[normalized_dir].append(file)
+            if "path" in file and file["path"] is not None:
+                dir_path = str(Path(file["path"]).parent)
+                normalized_dir = normalize_path(dir_path)
+                if normalized_dir not in instance._dir_index:
+                    instance._dir_index[normalized_dir] = []
+                instance._dir_index[normalized_dir].append(file)
         
         logging.info(f"Veritabanı indeksleri oluşturuldu: {len(instance._path_index)} dosya")
 
@@ -376,6 +400,226 @@ def calculate_two_stage_similarity(words1: List[str], words2: List[str]) -> floa
     return (exact_match_score * 0.7) + (partial_match_score * 0.3)
 
 
+def extract_improved_words(file_name: str, file_path: str = "") -> Dict[str, List[str]]:
+    """Geliştirilmiş kelime çıkarma - klasör ve dosya adını ayırır"""
+    folder_parts = [
+        p for p in Path(file_path).parent.parts 
+        if p and p != "." and not p.startswith("/")
+    ]
+    
+    # Sadece son 1 klasörü al (önceden 2 idi)
+    relevant_folders = folder_parts[-1:] if len(folder_parts) >= 1 else []
+    
+    # Dosya adını daha iyi parse et - sanatçı ve şarkı adını ayır
+    file_name_without_ext = Path(file_name).stem
+    file_name_parts = [part.strip() for part in file_name_without_ext.split("-")]
+    
+    # Klasör kelimelerini normalize et
+    folder_words = []
+    for folder in relevant_folders:
+        folder_words.extend([normalize_text(word) for word in folder.split() if len(word) > 1])
+    
+    # Dosya adı kelimelerini normalize et
+    file_words = []
+    artist_words = []
+    song_words = []
+    
+    if len(file_name_parts) >= 2:
+        # İlk kısım numara olabilir, sanatçı adını bul
+        artist_part = ""
+        song_part = ""
+        
+        # İlk kısım sadece numara ise, ikinci kısım sanatçı adı
+        if file_name_parts[0].strip().isdigit() and len(file_name_parts) >= 3:
+            artist_part = file_name_parts[1]
+            song_part = " ".join(file_name_parts[2:])
+        else:
+            # Normal durum: ilk kısım sanatçı, ikinci kısım şarkı
+            artist_part = file_name_parts[0]
+            song_part = " ".join(file_name_parts[1:])
+        
+        artist_words = [normalize_text(word) for word in artist_part.split() if len(word) > 1]
+        song_words = [normalize_text(word) for word in song_part.split() if len(word) > 1]
+        
+        # Tüm dosya kelimeleri
+        for part in file_name_parts:
+            file_words.extend([normalize_text(word) for word in part.split() if len(word) > 1])
+    else:
+        # Tek kısım varsa tümünü dosya kelimeleri olarak al
+        for part in file_name_parts:
+            file_words.extend([normalize_text(word) for word in part.split() if len(word) > 1])
+    
+    # Genel kelimeler (filtreleme için)
+    common_words = {
+        'remix', 'mix', 'dj', 'feat', 'ft', 'music', 'song', 'mp3', 'm4a', 'flac', 'wmv',
+        'the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by',
+        'official', 'video', 'hd', 'version', 'edit', 'extended', 'radio', 'clean',
+        'original', 'acoustic', 'live', 'studio', 'album', 'single', 'ep', 'lp',
+        've', 'ile', 'için', 'olan', 'gibi', 'kadar', 'sonra', 'önce',
+        'müzik', 'şarkı', 'parça',
+        # Video ve medya terimleri
+        'mv', 'clip', 'trailer', 'teaser', 'preview', 'behind', 'scenes', 'making', 'of'
+    }
+    
+    # Anlamlı kelimeler (genel kelimeler filtrelenmiş)
+    meaningful_words = [w for w in file_words if w not in common_words]
+    meaningful_artist_words = [w for w in artist_words if w not in common_words]
+    meaningful_song_words = [w for w in song_words if w not in common_words]
+    
+    result = {
+        'folder_words': folder_words,
+        'file_words': file_words,
+        'artist_words': artist_words,
+        'song_words': song_words,
+        'all_words': folder_words + file_words,
+        'meaningful_words': meaningful_words,
+        'meaningful_artist_words': meaningful_artist_words,
+        'meaningful_song_words': meaningful_song_words
+    }
+    
+    # DEBUG: Dr Alban aramaları için detaylı log
+    if "Dr Alban" in file_name or "Away From Home" in file_name:
+        logging.info(f"🔍 EXTRACT DEBUG - File name: {file_name}")
+        logging.info(f"🔍 EXTRACT DEBUG - File path: {file_path}")
+        logging.info(f"🔍 EXTRACT DEBUG - File name parts: {file_name_parts}")
+        logging.info(f"🔍 EXTRACT DEBUG - Artist words: {artist_words}")
+        logging.info(f"🔍 EXTRACT DEBUG - Song words: {song_words}")
+        logging.info(f"🔍 EXTRACT DEBUG - Meaningful words: {meaningful_words}")
+        logging.info(f"🔍 EXTRACT DEBUG - Common words filtered: {[w for w in file_words if w in common_words]}")
+    
+    return result
+
+
+def calculate_improved_similarity(search_words: Dict[str, List[str]], 
+                                target_words: Dict[str, List[str]]) -> float:
+    """MÜKEMMEL BENZERLİK ALGORİTMASI - Geliştirilmiş versiyon"""
+    if not search_words['all_words'] or not target_words['all_words']:
+        return 0.0
+    
+    # DEBUG: Dr Alban aramaları için detaylı log
+    if "dr" in search_words.get('all_words', []) and "alban" in search_words.get('all_words', []):
+        logging.info(f"🔍 SIMILARITY DEBUG - Search words: {search_words}")
+        logging.info(f"🔍 SIMILARITY DEBUG - Target words: {target_words}")
+    
+    # Genel kelimeler (filtreleme için)
+    common_words = {
+        'remix', 'mix', 'dj', 'feat', 'ft', 'music', 'song', 'mp3', 'm4a', 'flac', 'wmv',
+        'the', 'a', 'an', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by',
+        'official', 'video', 'hd', 'version', 'edit', 'extended', 'radio', 'clean',
+        'original', 'acoustic', 'live', 'studio', 'album', 'single', 'ep', 'lp',
+        've', 'ile', 'için', 'olan', 'gibi', 'kadar', 'sonra', 'önce',
+        'müzik', 'şarkı', 'parça',
+        # Video ve medya terimleri
+        'mv', 'clip', 'trailer', 'teaser', 'preview', 'behind', 'scenes', 'making', 'of'
+    }
+    
+    # 1. GENEL KELİME FİLTRESİ - meaningful_words kullan
+    meaningful_search = search_words.get('meaningful_words', [])
+    meaningful_target = target_words.get('meaningful_words', [])
+    
+    # Eğer anlamlı kelime yoksa, çok düşük skor ver
+    if not meaningful_search or not meaningful_target:
+        if not search_words['file_words'] or not target_words['file_words']:
+            return 0.0
+        exact_matches = sum(1 for word in search_words['file_words'] if word in target_words['file_words'])
+        return (exact_matches / max(len(search_words['file_words']), len(target_words['file_words']))) * 0.3
+    
+    # 2. ANLAMLI KELİME EŞLEŞMESİ (Ana skor)
+    exact_meaningful_matches = sum(1 for word in meaningful_search if word in meaningful_target)
+    meaningful_score = exact_meaningful_matches / max(len(meaningful_search), len(meaningful_target))
+    
+    # 2.5. SANATÇI ADI ZORUNLU KONTROLÜ - İlk kelime (sanatçı) eşleşmeli (KALDIRILDI)
+    # if meaningful_search and meaningful_target:
+    #     first_word_search = meaningful_search[0].lower() if meaningful_search else ""
+    #     first_word_target = meaningful_target[0].lower() if meaningful_target else ""
+    #     
+    #     # Sanatçı adı tamamen farklıysa eşleşme yapma (daha gevşek kontrol)
+    #     if first_word_search and first_word_target and len(first_word_search) >= 4 and len(first_word_target) >= 4:
+    #         # İlk 4 karakter eşleşmiyorsa farklı sanatçı (daha gevşek)
+    #         if first_word_search[:4] != first_word_target[:4]:
+    #             return 0.0  # Farklı sanatçı, eşleşme yok
+    
+    # 2.6. ŞARKI ADI ZORUNLU KONTROLÜ - En az 1 anlamlı kelime eşleşmeli (gevşetildi)
+    if exact_meaningful_matches < 1:
+        return 0.0  # Hiç eşleşme yoksa direkt 0 döndür
+    
+    # 2.6. ŞARKI ADI ZORUNLU KONTROLÜ - Şarkı adı kelimeleri eşleşmeli (KALDIRILDI)
+    # meaningful_song_search = search_words.get('meaningful_song_words', [])
+    # meaningful_song_target = target_words.get('meaningful_song_words', [])
+    
+    # if meaningful_song_search and meaningful_song_target:
+    #     # Şarkı adı kelimelerinden en az biri eşleşmeli
+    #     song_matches = sum(1 for word in meaningful_song_search if word in meaningful_song_target)
+    #     if song_matches == 0:
+    #         return 0.0  # Şarkı adı eşleşmiyorsa direkt 0 döndür
+    
+    # 3. KELİME UZUNLUK BONUSU (Uzun kelimeler daha önemli)
+    long_word_matches = sum(1 for word in meaningful_search if word in meaningful_target and len(word) >= 4)
+    long_word_bonus = long_word_matches / max(len(meaningful_search), len(meaningful_target)) * 0.2
+    
+    # 4. SANATÇI ADI BONUSU (İlk kelime) - Azaltıldı
+    artist_bonus = 0.0
+    if meaningful_search and meaningful_target:
+        if meaningful_search[0] == meaningful_target[0] and len(meaningful_search[0]) >= 3:
+            artist_bonus = 0.1  # 0.3'ten 0.1'e düşürüldü
+    
+    # 5. ŞARKI ADI BONUSU (İkinci kelime)
+    song_bonus = 0.0
+    if len(meaningful_search) >= 2 and len(meaningful_target) >= 2:
+        if meaningful_search[1] == meaningful_target[1] and len(meaningful_search[1]) >= 3:
+            song_bonus = 0.2
+    
+    # 6. TAM EŞLEŞME BONUSU
+    full_match_bonus = 0.0
+    if exact_meaningful_matches >= 3:
+        full_match_bonus = 0.15
+    
+    # 7. GENEL KELİME PENALTY
+    general_word_penalty = 0.0
+    general_matches = sum(1 for word in search_words['file_words'] if word in target_words['file_words'] and word in common_words)
+    if general_matches > 0:
+        general_word_penalty = min(0.2, general_matches * 0.05)
+    
+    # Toplam skor hesapla
+    total_score = meaningful_score + long_word_bonus + artist_bonus + song_bonus + full_match_bonus - general_word_penalty
+    
+    # 0.0 - 1.0 arasında sınırla
+    return max(0.0, min(1.0, total_score))
+
+
+def _calculate_word_similarity(words1: List[str], words2: List[str]) -> float:
+    """Kelime listeleri arasında benzerlik hesapla - Final optimize edilmiş algoritma"""
+    if not words1 or not words2:
+        return 0.0
+    
+    # Tam kelime eşleşmesi
+    exact_matches = sum(1 for word in words1 if word in words2)
+    
+    # Hibrit normalizasyon: Hem min hem max kullan
+    min_length = min(len(words1), len(words2))
+    max_length = max(len(words1), len(words2))
+    
+    # Eğer kelime sayısı farkı çok büyükse (3x'den fazla), min kullan
+    # Aksi takdirde max kullan (daha konservatif)
+    if max_length > min_length * 3:
+        # Çok farklı uzunluklar - min kullan (kısa dosya adlarını korur)
+        exact_match_score = exact_matches / min_length if min_length > 0 else 0.0
+    else:
+        # Benzer uzunluklar - max kullan (daha konservatif)
+        exact_match_score = exact_matches / max_length if max_length > 0 else 0.0
+    
+    # Kısmi kelime eşleşmesi (düşük ağırlık)
+    partial_matches = sum(
+        1
+        for word in words1
+        if any((len(word) > 3 and word in w) or (len(w) > 3 and w in word) for w in words2)
+    )
+    partial_match_score = partial_matches / max_length if max_length > 0 else 0.0
+    
+    # Tam eşleşme %85, kısmi eşleşme %15 (tam eşleşmeye daha fazla ağırlık)
+    return (exact_match_score * 0.85) + (partial_match_score * 0.15)
+
+
 # Arama servisi
 class SearchService:
     @staticmethod
@@ -403,6 +647,69 @@ async def test():
         "status": "ok",
         "timestamp": datetime.now().isoformat()
     }
+
+
+# Ayarlar endpoint'leri
+@app.get("/api/settings")
+async def get_settings():
+    """Mevcut ayarları getir"""
+    try:
+        if SETTINGS_PATH.exists():
+            async with aiofiles.open(SETTINGS_PATH, "r", encoding="utf-8") as f:
+                content = await f.read()
+                settings = json.loads(content)
+                return settings
+        else:
+            # Varsayılan ayarları döndür
+            default_settings = {
+                "music_folder": MUSIC_ROOT,
+                "virtualdj_root": VIRTUALDJ_ROOT or "/Users/koray/Library/Application Support/VirtualDJ",
+                "last_updated": None
+            }
+            return default_settings
+    except Exception as e:
+        logging.error(f"Ayarlar yüklenirken hata: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"success": False, "error": str(e)}
+        )
+
+
+@app.post("/api/settings")
+async def save_settings(settings: Settings):
+    """Ayarları kaydet"""
+    try:
+        # Ayarları JSON formatına çevir
+        settings_data = {
+            "music_folder": settings.music_folder,
+            "virtualdj_root": settings.virtualdj_root,
+            "last_updated": datetime.now().isoformat()
+        }
+        
+        # Ayarları dosyaya kaydet
+        async with aiofiles.open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(settings_data, indent=2))
+        
+        # Config.py dosyasındaki MUSIC_ROOT ve VIRTUALDJ_ROOT değerlerini güncelle
+        # (Bu değişiklikler runtime'da etkili olacak)
+        global MUSIC_ROOT, VIRTUALDJ_ROOT
+        MUSIC_ROOT = settings.music_folder
+        VIRTUALDJ_ROOT = settings.virtualdj_root
+        
+        logging.info(f"Ayarlar kaydedildi: {settings_data}")
+        
+        return {
+            "success": True,
+            "message": "Ayarlar başarıyla kaydedildi",
+            "data": settings_data
+        }
+        
+    except Exception as e:
+        logging.error(f"Ayarlar kaydedilirken hata: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={"success": False, "error": str(e)}
+        )
 
 
 # Playlist endpoint'leri
@@ -452,6 +759,11 @@ async def get_playlists():
                         xml_dict = xmltodict.parse(content)
                     except Exception as err:
                         logging.warning(f"XML parse hatası: {full_path}")
+                        continue
+
+                    # XML parsing başarılı mı kontrol et
+                    if xml_dict is None:
+                        logging.warning(f"XML içeriği boş: {full_path}")
                         continue
 
                     songs = xml_dict.get("VirtualFolder", {}).get("song", [])
@@ -570,6 +882,172 @@ async def update_playlist_song(data: PlaylistSongUpdate):
         ) from e
 
 
+class GlobalPlaylistUpdate(BaseModel):
+    items: List[Dict[str, str]]  # oldPath -> newPath mappings
+    updateAllPlaylists: bool = True
+
+
+class GlobalMissingFilesResponse(BaseModel):
+    success: bool
+    total_missing_files: int
+    unique_missing_files: int
+    playlists_checked: int
+    missing_files: List[Dict[str, Any]]
+
+
+@app.post("/api/playlistsong/global-update")
+async def global_update_playlist_songs(data: GlobalPlaylistUpdate):
+    """Tüm playlist'lerdeki aynı dosya yollarını global olarak güncelle"""
+    try:
+        if not data.items:
+            raise HTTPException(
+                status_code=400,
+                detail={"success": False, "error": "Güncellenecek öğe bulunamadı"}
+            )
+
+        # Tüm playlist dosyalarını bul
+        all_playlists = []
+        
+        # Folders klasöründeki playlist'leri tara
+        if os.path.exists(PLAYLISTS_FOLDERS):
+            for root, dirs, files in os.walk(PLAYLISTS_FOLDERS):
+                for file in files:
+                    if file.endswith('.vdjfolder'):
+                        all_playlists.append(os.path.join(root, file))
+        
+        # MyLists klasöründeki playlist'leri tara
+        if os.path.exists(PLAYLISTS_MYLISTS):
+            for root, dirs, files in os.walk(PLAYLISTS_MYLISTS):
+                for file in files:
+                    if file.endswith('.vdjfolder'):
+                        all_playlists.append(os.path.join(root, file))
+
+        logging.info(f"Toplam {len(all_playlists)} playlist bulundu")
+
+        # Her playlist'i kontrol et ve güncelle
+        total_updated_playlists = 0
+        total_updated_songs = 0
+        updated_playlists = []
+        
+        # Detaylı log için değişiklik listesi
+        all_changes = []
+
+        for playlist_path in all_playlists:
+            try:
+                # Playlist'i oku
+                async with aiofiles.open(playlist_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+
+                xml_dict = xmltodict.parse(content)
+                
+                if not xml_dict.get("VirtualFolder", {}).get("song"):
+                    continue
+
+                songs = xml_dict["VirtualFolder"]["song"]
+                if not isinstance(songs, list):
+                    songs = [songs]
+
+                # Bu playlist'te güncelleme yapılacak mı kontrol et
+                playlist_updated = False
+                playlist_song_count = 0
+                playlist_changes = []  # Detaylı değişiklik listesi
+
+                for item in data.items:
+                    old_path = item["oldPath"]
+                    new_path = item["newPath"]
+                    
+                    for song in songs:
+                        if song.get("@path") == old_path:
+                            # Eski ve yeni yolu kaydet
+                            playlist_changes.append({
+                                "old_path": old_path,
+                                "new_path": new_path,
+                                "song_name": os.path.basename(old_path)
+                            })
+                            
+                            song["@path"] = new_path
+                            playlist_updated = True
+                            playlist_song_count += 1
+
+                # Eğer güncelleme yapıldıysa dosyayı kaydet
+                if playlist_updated:
+                    xml_content = xmltodict.unparse(xml_dict, pretty=True)
+                    async with aiofiles.open(playlist_path, "w", encoding="utf-8") as f:
+                        await f.write(xml_content)
+                    
+                    total_updated_playlists += 1
+                    total_updated_songs += playlist_song_count
+                    updated_playlists.append({
+                        "path": playlist_path,
+                        "name": os.path.basename(playlist_path).replace('.vdjfolder', ''),
+                        "updated_songs": playlist_song_count,
+                        "changes": playlist_changes  # Detaylı değişiklik listesi
+                    })
+                    
+                    # Tüm değişiklikleri genel listeye ekle
+                    for change in playlist_changes:
+                        all_changes.append({
+                            "playlist_name": os.path.basename(playlist_path).replace('.vdjfolder', ''),
+                            "playlist_path": playlist_path,
+                            "song_name": change["song_name"],
+                            "old_path": change["old_path"],
+                            "new_path": change["new_path"]
+                        })
+                    
+                    logging.info(f"Playlist güncellendi: {playlist_path} ({playlist_song_count} şarkı)")
+
+            except Exception as e:
+                logging.warning(f"Playlist güncellenemedi: {playlist_path} - {str(e)}")
+                continue
+
+        # Detaylı log dosyası oluştur
+        log_filename = f"global_update_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        log_path = os.path.join(os.path.dirname(__file__), "logs", log_filename)
+        
+        # Logs klasörünü oluştur
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        
+        # Detaylı log verilerini hazırla
+        detailed_log = {
+            "timestamp": datetime.now().isoformat(),
+            "summary": {
+                "total_playlists_checked": len(all_playlists),
+                "updated_playlists": total_updated_playlists,
+                "total_songs_updated": total_updated_songs
+            },
+            "updated_playlists": updated_playlists,
+            "all_changes": all_changes
+        }
+        
+        # Log dosyasını kaydet
+        try:
+            import json
+            with open(log_path, 'w', encoding='utf-8') as f:
+                json.dump(detailed_log, f, ensure_ascii=False, indent=2)
+            logging.info(f"Detaylı log dosyası oluşturuldu: {log_path}")
+        except Exception as e:
+            logging.warning(f"Log dosyası oluşturulamadı: {e}")
+
+        return {
+            "success": True,
+            "message": f"Global güncelleme tamamlandı",
+            "log_file": log_filename,
+            "stats": {
+                "total_playlists_checked": len(all_playlists),
+                "updated_playlists": total_updated_playlists,
+                "total_songs_updated": total_updated_songs,
+                "updated_playlist_details": updated_playlists
+            }
+        }
+
+    except Exception as e:
+        logging.error("Global güncelleme hatası:", exc_info=e)
+        raise HTTPException(
+            status_code=500,
+            detail={"success": False, "error": str(e), "details": str(e.__traceback__)},
+        ) from e
+
+
 class PlaylistSongRead(BaseModel):
     playlistPath: str
 
@@ -620,6 +1098,341 @@ async def read_playlist_songs(data: PlaylistSongRead):
     except Exception as e:
         logging.error("Playlist okuma hatası:", exc_info=e)
         raise HTTPException(status_code=500, detail={"success": False, "error": str(e)}) from e
+
+
+# Batch playlist API kaldırıldı - artık kullanılmıyor
+# Global eksik dosyalar API'si zaten her dosya için son okunan playlist bilgisini döndürüyor
+
+# Tek dosya playlist API kaldırıldı - artık kullanılmıyor
+# Global eksik dosyalar API'si zaten her dosya için son okunan playlist bilgisini döndürüyor
+
+
+async def search_similar_file(file_path: str):
+    """Tek dosya için benzerlik araması yap"""
+    try:
+        # Veritabanını yükle
+        db_instance = await Database.get_instance()
+        if not db_instance._path_index:
+            await Database.load()
+        
+        # Dosya adını çıkar
+        file_name = os.path.basename(file_path)
+        file_name_without_ext = os.path.splitext(file_name)[0]
+        
+        # 1. TAM YOL EŞLEŞMESİ
+        if file_path in db_instance._path_index:
+            return {
+                "found": True,
+                "foundPath": file_path,
+                "similarity": 1.0,
+                "matchType": "tamYolEsleme"
+            }
+        
+        # 2. AYNI KLASÖR FARKLI UZANTI
+        file_dir = os.path.dirname(file_path)
+        for ext in ['.mp3', '.m4a', '.flac', '.wav', '.mp4', '.avi', '.mkv']:
+            alt_path = os.path.join(file_dir, file_name_without_ext + ext)
+            if alt_path in db_instance._path_index:
+                return {
+                    "found": True,
+                    "foundPath": alt_path,
+                    "similarity": 0.9,
+                    "matchType": "ayniKlasorFarkliUzanti"
+                }
+        
+        # 3. FARKLI KLASÖR AYNI UZANTI
+        for path in db_instance._path_index:
+            if os.path.basename(path) == file_name:
+                return {
+                    "found": True,
+                    "foundPath": path,
+                    "similarity": 0.8,
+                    "matchType": "farkliKlasorveUzanti"
+                }
+        
+        # 4. BENZERLİK ARAMASI
+        search_words = extract_improved_words(file_name_without_ext)
+        if not search_words:
+            return {
+                "found": False,
+                "foundPath": None,
+                "similarity": 0,
+                "matchType": "missing"
+            }
+        
+        # Veritabanındaki tüm dosyaları kontrol et
+        candidates = []
+        threshold = 0.3  # Aynı threshold'u kullan
+        
+        for path in db_instance._path_index:
+            file_data = db_instance._path_index[path]
+            if not file_data:
+                continue
+                
+            # Veritabanındaki indexedWords'ü kullan
+            indexed_words = file_data.get('indexedWords', [])
+            
+            # indexedWords'den kelime kategorilerini oluştur
+            target_words = {
+                'file_words': indexed_words,
+                'folder_words': indexed_words,
+                'artist_words': indexed_words,
+                'song_words': indexed_words,
+                'all_words': indexed_words,
+                'meaningful_words': indexed_words
+            }
+            
+            # Benzerlik hesapla
+            similarity = calculate_improved_similarity(search_words, target_words)
+            
+            if similarity > threshold:
+                candidates.append({
+                    "path": path,
+                    "similarity": similarity
+                })
+        
+        # En iyi eşleşmeyi bul
+        if candidates:
+            candidates.sort(key=lambda x: x["similarity"], reverse=True)
+            best_match = candidates[0]
+            return {
+                "found": True,
+                "foundPath": best_match["path"],
+                "similarity": best_match["similarity"],
+                "matchType": "benzerDosya"
+            }
+        
+        # Hiç eşleşme bulunamadı
+        return {
+            "found": False,
+            "foundPath": None,
+            "similarity": 0,
+            "matchType": "missing"
+        }
+        
+    except Exception as e:
+        logging.error(f"Benzerlik araması hatası: {str(e)}")
+        return {
+            "found": False,
+            "foundPath": None,
+            "similarity": 0,
+            "matchType": "missing"
+        }
+
+
+@app.get("/api/playlistsong/global-missing")
+async def get_global_missing_files():
+    """Tüm playlist'lerdeki eksik dosyaları getir (duplicate olmadan) - OPTİMİZE EDİLMİŞ"""
+    try:
+        # Tüm playlist dosyalarını bul
+        all_playlists = []
+        
+        # Folders klasöründeki playlist'leri tara
+        if os.path.exists(PLAYLISTS_FOLDERS):
+            for root, dirs, files in os.walk(PLAYLISTS_FOLDERS):
+                for file in files:
+                    if file.endswith('.vdjfolder'):
+                        all_playlists.append(os.path.join(root, file))
+        
+        # MyLists klasöründeki playlist'leri tara
+        if os.path.exists(PLAYLISTS_MYLISTS):
+            for root, dirs, files in os.walk(PLAYLISTS_MYLISTS):
+                for file in files:
+                    if file.endswith('.vdjfolder'):
+                        all_playlists.append(os.path.join(root, file))
+
+        logging.info(f"Toplam {len(all_playlists)} playlist taranıyor")
+
+        # Tüm eksik dosyaları topla - OPTİMİZE EDİLMİŞ
+        all_missing_files = []
+        missing_file_paths = set()  # Duplicate kontrolü için
+        playlists_checked = 0
+
+        for playlist_path in all_playlists:
+            try:
+                # Playlist'i oku
+                async with aiofiles.open(playlist_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+
+                xml_dict = xmltodict.parse(content)
+                
+                if not xml_dict.get("VirtualFolder", {}).get("song"):
+                    continue
+
+                songs = xml_dict["VirtualFolder"]["song"]
+                if not isinstance(songs, list):
+                    songs = [songs]
+
+                playlist_name = os.path.basename(playlist_path).replace('.vdjfolder', '')
+                playlists_checked += 1
+
+                # Eksik dosyaları bul - BENZERLİK ARAMASI İLE
+                for song in songs:
+                    file_path = song.get("@path")
+                    if file_path and not os.path.exists(file_path):
+                        # Duplicate kontrolü - sadece bir kez ekle
+                        if file_path not in missing_file_paths:
+                            missing_file_paths.add(file_path)
+                            
+                            # Benzerlik araması yap
+                            search_result = await search_similar_file(file_path)
+                            
+                            all_missing_files.append({
+                                "originalPath": file_path,
+                                "playlistName": playlist_name,  # Son okunan playlist adı
+                                "playlistPath": playlist_path,  # Son okunan playlist yolu
+                                "artist": song.get("artist", "Bilinmeyen"),
+                                "title": song.get("title", "Bilinmeyen"),
+                                "isFileExists": False,
+                                "found": search_result["found"],
+                                "foundPath": search_result["foundPath"],
+                                "similarity": search_result["similarity"],
+                                "matchType": search_result["matchType"]
+                            })
+
+            except Exception as e:
+                logging.warning(f"Playlist okunamadı: {playlist_path} - {str(e)}")
+                continue
+        
+        return {
+            "success": True,
+            "total_missing_files": len(all_missing_files),
+            "unique_missing_files": len(missing_file_paths),
+            "playlists_checked": playlists_checked,
+            "missing_files": all_missing_files
+        }
+        
+    except Exception as e:
+        logging.error("Global eksik dosyalar hatası:", exc_info=e)
+        raise HTTPException(
+            status_code=500,
+            detail={"success": False, "error": str(e), "details": str(e.__traceback__)},
+        ) from e
+
+
+@app.post("/api/playlistsong/remove-from-all")
+async def remove_song_from_all_playlists(data: dict):
+    """Şarkıyı tüm playlist'lerden kaldır"""
+    try:
+        song_path = data.get("songPath")
+        if not song_path:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "status": "error",
+                    "message": "songPath parametresi gerekli"
+                }
+            )
+
+        removed_from_playlists = []
+        total_playlists_checked = 0
+
+        # Tüm playlist dosyalarını bul
+        all_playlists = []
+        
+        # Folders klasöründeki playlist'leri tara
+        if os.path.exists(PLAYLISTS_FOLDERS):
+            for root, dirs, files in os.walk(PLAYLISTS_FOLDERS):
+                for file in files:
+                    if file.endswith('.vdjfolder'):
+                        all_playlists.append(os.path.join(root, file))
+        
+        # MyLists klasöründeki playlist'leri tara
+        if os.path.exists(PLAYLISTS_MYLISTS):
+            for root, dirs, files in os.walk(PLAYLISTS_MYLISTS):
+                for file in files:
+                    if file.endswith('.vdjfolder'):
+                        all_playlists.append(os.path.join(root, file))
+
+        logging.info(f"Şarkı kaldırma: {song_path} - {len(all_playlists)} playlist kontrol ediliyor")
+        logging.info(f"Playlist'ler: {[os.path.basename(p) for p in all_playlists[:5]]}...")  # İlk 5 playlist adı
+
+        for playlist_path in all_playlists:
+            try:
+                total_playlists_checked += 1
+                
+                # Playlist'i oku
+                async with aiofiles.open(playlist_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+
+                xml_dict = xmltodict.parse(content)
+                
+                if not xml_dict.get("VirtualFolder", {}).get("song"):
+                    continue
+
+                songs = xml_dict["VirtualFolder"]["song"]
+                if not isinstance(songs, list):
+                    songs = [songs]
+
+                # Şarkıyı bul ve kaldır
+                original_count = len(songs)
+                
+                # Path karşılaştırması için normalize et
+                def normalize_path(path):
+                    if not path:
+                        return ""
+                    return os.path.normpath(path).lower().strip()
+                
+                target_path_normalized = normalize_path(song_path)
+                
+                # Debug için ilk birkaç path'i logla
+                if total_playlists_checked <= 3:
+                    logging.info(f"Playlist {os.path.basename(playlist_path)} - İlk 3 path:")
+                    for i, song in enumerate(songs[:3]):
+                        song_path_normalized = normalize_path(song.get("@path"))
+                        logging.info(f"  {i+1}. Orijinal: {song.get('@path')}")
+                        logging.info(f"     Normalize: {song_path_normalized}")
+                        logging.info(f"     Hedef: {target_path_normalized}")
+                        logging.info(f"     Eşleşiyor mu: {song_path_normalized == target_path_normalized}")
+                
+                songs = [song for song in songs if normalize_path(song.get("@path")) != target_path_normalized]
+                
+                # Eğer şarkı kaldırıldıysa
+                if len(songs) < original_count:
+                    playlist_name = os.path.basename(playlist_path).replace('.vdjfolder', '')
+                    removed_from_playlists.append({
+                                "playlistName": playlist_name,
+                                "playlistPath": playlist_path,
+                        "removedCount": original_count - len(songs)
+                    })
+
+                    # XML'i güncelle
+                    if songs:
+                        xml_dict["VirtualFolder"]["song"] = songs
+                    else:
+                        # Eğer hiç şarkı kalmadıysa, song elementini kaldır
+                        if "song" in xml_dict["VirtualFolder"]:
+                            del xml_dict["VirtualFolder"]["song"]
+
+                    # Playlist'i kaydet
+                    updated_content = xmltodict.unparse(xml_dict, pretty=True)
+                    async with aiofiles.open(playlist_path, "w", encoding="utf-8") as f:
+                        await f.write(updated_content)
+                    
+                    logging.info(f"Şarkı kaldırıldı: {playlist_name} - {original_count - len(songs)} adet")
+
+            except Exception as e:
+                logging.warning(f"Playlist güncellenemedi: {playlist_path} - {str(e)}")
+                continue
+
+        return {
+            "success": True,
+            "songPath": song_path,
+            "removedFromPlaylists": removed_from_playlists,
+            "totalPlaylistsChecked": total_playlists_checked,
+            "totalRemovedCount": sum(p["removedCount"] for p in removed_from_playlists)
+        }
+
+    except Exception as e:
+        logging.error("Şarkı kaldırma hatası:", exc_info=e)
+        return {
+            "success": False,
+            "error": str(e),
+            "songPath": data.get("songPath", ""),
+            "removedFromPlaylists": [],
+            "totalPlaylistsChecked": 0,
+            "totalRemovedCount": 0
+        }
 
 
 # İndeksleme ve arama endpoint'leri
@@ -676,6 +1489,9 @@ async def create_index():
                                 "unknown",
                             )
 
+                            # Geliştirilmiş kelime çıkarma
+                            improved_words = extract_improved_words(file_name, full_path)
+
                             new_files.append(
                                 {
                                     "path": full_path,
@@ -691,6 +1507,15 @@ async def create_index():
                                     "modifiedTime": datetime.fromtimestamp(
                                         stats.st_mtime
                                     ).isoformat(),
+                                    # Yeni veritabanı yapısı için kelime kategorileri
+                                    "fileWords": improved_words['file_words'],
+                                    "folderWords": improved_words['folder_words'],
+                                    "allWords": improved_words['all_words'],
+                                    "artistWords": improved_words.get('artist_words', []),
+                                    "songWords": improved_words.get('song_words', []),
+                                    "meaningfulWords": improved_words.get('meaningful_words', []),
+                                    "meaningfulArtistWords": improved_words.get('meaningful_artist_words', []),
+                                    "meaningfulSongWords": improved_words.get('meaningful_song_words', [])
                                 }
                             )
                             total_files += 1
@@ -809,10 +1634,11 @@ async def search_files(data: SearchRequest):
             )
 
         start_time = time.time()
-        limited_paths = data.paths[:100]  # İlk 100 path ile sınırla
+        # Sınır kaldırıldı - tüm path'ler işlenecek
+        all_paths = data.paths
         
         # Önbellek anahtarı oluştur
-        cache_key = hashlib.md5(json.dumps(limited_paths).encode()).hexdigest()
+        cache_key = hashlib.md5(json.dumps(all_paths).encode()).hexdigest()
         
         # Önbellekten kontrol et
         cached_result = await Database.get_search_cache(cache_key)
@@ -848,8 +1674,22 @@ async def search_files(data: SearchRequest):
             search_dir = str(Path(search_path).parent)
             normalized_search_dir = normalize_path(search_dir)
             
+            # Veritabanı örneğinin yüklendiğinden emin ol
+            if db_instance is None or db_instance.data is None:
+                current_process_time = int((time.time() - search_start_time) * 1000)
+                return {
+                    "result": {
+                        "originalPath": search_path,
+                        "found": False,
+                        "status": "not_found",
+                        "processTime": current_process_time,
+                    },
+                    "match_type": None,
+                    "process_time": current_process_time
+                }
+            
             # 1. Tam yol eşleşme kontrolü - İndeks kullanarak
-            if search_path in db_instance._path_index:
+            if db_instance is not None and db_instance._path_index is not None and search_path in db_instance._path_index:
                 match_type = "tamYolEsleme"
                 current_process_time = int((time.time() - search_start_time) * 1000)
                 return {
@@ -867,31 +1707,33 @@ async def search_files(data: SearchRequest):
                 }
             
             # 2. Aynı klasörde farklı uzantı kontrolü - İndeks kullanarak
-            if normalized_search_dir in db_instance._dir_index:
+            if db_instance is not None and db_instance._dir_index is not None and normalized_search_dir in db_instance._dir_index:
                 dir_files = db_instance._dir_index[normalized_search_dir]
                 for file in dir_files:
-                    file_stem = Path(file["path"]).stem
-                    if normalize_file_name(file_stem) == normalize_file_name(search_file_name_without_ext):
-                        match_type = "ayniKlasorFarkliUzanti"
-                        current_process_time = int((time.time() - search_start_time) * 1000)
-                        return {
-                            "result": {
-                                "originalPath": search_path,
-                                "found": True,
-                                "status": "exact_match",
-                                "matchType": match_type,
-                                "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
-                                "foundPath": file["path"],
-                                "processTime": current_process_time,
-                            },
-                            "match_type": match_type,
-                            "process_time": current_process_time
-                        }
+                    if "path" in file and file["path"] is not None:
+                        file_stem = Path(file["path"]).stem
+                        if normalize_file_name(file_stem) == normalize_file_name(search_file_name_without_ext):
+                            match_type = "ayniKlasorFarkliUzanti"
+                            current_process_time = int((time.time() - search_start_time) * 1000)
+                            return {
+                                "result": {
+                                    "originalPath": search_path,
+                                    "found": True,
+                                    "status": "exact_match",
+                                    "matchType": match_type,
+                                    "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
+                                    "foundPath": file["path"],
+                                    "processTime": current_process_time,
+                                },
+                                "match_type": match_type,
+                                "process_time": current_process_time
+                            }
             
             # 3. Farklı klasörde aynı ad kontrolü - İndeks kullanarak
-            if search_file_name_without_ext in db_instance._name_index:
+            if db_instance._name_index is not None and search_file_name_without_ext in db_instance._name_index:
                 match_type = "farkliKlasor"
                 current_process_time = int((time.time() - search_start_time) * 1000)
+                found_path = db_instance._name_index[search_file_name_without_ext][0]["path"] if db_instance._name_index[search_file_name_without_ext] else search_path
                 return {
                     "result": {
                         "originalPath": search_path,
@@ -899,7 +1741,7 @@ async def search_files(data: SearchRequest):
                         "status": "exact_match",
                         "matchType": match_type,
                         "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
-                        "foundPath": db_instance._name_index[search_file_name_without_ext][0]["path"],
+                        "foundPath": found_path,
                         "processTime": current_process_time,
                     },
                     "match_type": match_type,
@@ -908,9 +1750,10 @@ async def search_files(data: SearchRequest):
             
             # 4. Farklı klasörde farklı uzantı kontrolü - İndeks kullanarak
             normalized_name = normalize_text(search_file_name_without_ext)
-            if normalized_name in db_instance._normalized_name_index:
+            if db_instance._normalized_name_index is not None and normalized_name in db_instance._normalized_name_index:
                 match_type = "farkliKlasorveUzanti"
                 current_process_time = int((time.time() - search_start_time) * 1000)
+                found_path = db_instance._normalized_name_index[normalized_name][0]["path"] if db_instance._normalized_name_index[normalized_name] else search_path
                 return {
                     "result": {
                         "originalPath": search_path,
@@ -918,36 +1761,163 @@ async def search_files(data: SearchRequest):
                         "status": "exact_match",
                         "matchType": match_type,
                         "algoritmaYontemi": match_details[match_type]["algoritmaYontemi"],
-                        "foundPath": db_instance._normalized_name_index[normalized_name][0]["path"],
+                        "foundPath": found_path,
                         "processTime": current_process_time,
                     },
                     "match_type": match_type,
                     "process_time": current_process_time
                 }
             
-            # 5. Benzerlik bazlı arama - Optimize edilmiş
-            search_words = extract_normalized_words(search_file_name)
+            # 5. YENİ VERİTABANI YAPISI İLE BENZERLİK ARAMA
+            # Fuzzy search kontrolü - Varsayılan olarak aktif
+            fuzzy_search_enabled = True  # Her zaman aktif
+            if data.options and 'fuzzySearch' in data.options:
+                fuzzy_search_enabled = data.options.get('fuzzySearch', True)
             
-            # Benzerlik hesaplama için aday dosyaları filtrele
-            # Dosya adının ilk 2 harfini kullanarak filtreleme yap
-            prefix = normalized_name[:2] if len(normalized_name) >= 2 else normalized_name
-            candidates = []
+            if not fuzzy_search_enabled:
+                logging.info(f"🔍 Fuzzy search devre dışı, benzerlik arama atlanıyor: {search_file_name}")
+                current_process_time = int((time.time() - search_start_time) * 1000)
+                return {
+                    "result": {
+                        "originalPath": search_path,
+                        "found": False,
+                        "status": "not_found",
+                        "processTime": current_process_time,
+                    },
+                    "match_type": None,
+                    "process_time": current_process_time
+                }
             
-            # Tüm müzik dosyalarını taramak yerine, benzer prefixlere sahip dosyaları kontrol et
-            for norm_name, files in db_instance._normalized_name_index.items():
-                if norm_name.startswith(prefix) or prefix in norm_name:
-                    for file in files:
-                        similarity = calculate_two_stage_similarity(search_words, file["indexedWords"])
-                        if similarity > 0.3:  # Eşik değeri
-                            candidates.append({"file": file, "similarity": similarity})
-                            # Yüksek benzerlik bulunduğunda erken sonlandır
-                            if similarity > 0.8:
-                                break
+            try:
+                logging.info(f"🔍 Benzerlik arama başlatılıyor: {search_file_name}")
+                
+                search_words = extract_improved_words(search_file_name, search_path)
+                logging.info(f"📝 Search words çıkarıldı: {search_words}")
+                
+                # Search words None kontrolü
+                if search_words is None:
+                    logging.warning(f"⚠️ Search words None: {search_file_name}")
+                    current_process_time = int((time.time() - search_start_time) * 1000)
+                    return {
+                        "result": {
+                            "originalPath": search_path,
+                            "found": False,
+                            "status": "not_found",
+                            "processTime": current_process_time,
+                        },
+                        "match_type": None,
+                        "process_time": current_process_time
+                    }
+                
+                # SADECE BENZERLİK SKORU - PREFIX FİLTRELEME YOK
+                candidates = []
+                # Geliştirilmiş eşik değeri - daha anlamlı eşleşmeler için
+                threshold = 0.3  # Düşük threshold - daha fazla eşleşme bul
+                
+                logging.info(f"🎯 Threshold: {threshold}")
+                logging.info(f"🗄️ DB instance kontrol: {db_instance is not None}")
+                logging.info(f"📊 DB data kontrol: {db_instance.data is not None if db_instance else 'N/A'}")
+                
+                # TÜM DOSYALARI TARA - YENİ VERİTABANI YAPISI
+                if db_instance is not None and db_instance.data is not None and 'musicFiles' in db_instance.data:
+                    music_files = db_instance.data['musicFiles']
+                    logging.info(f"📁 Müzik dosyaları sayısı: {len(music_files)}")
+                    
+                    for i, file in enumerate(music_files):
+                        try:
+                            # Dosya None kontrolü
+                            if file is None:
+                                logging.warning(f"⚠️ Dosya None: index {i}")
+                                continue
+                            
+                            logging.debug(f"🔍 Dosya işleniyor {i+1}/{len(music_files)}: {file.get('path', 'Unknown')}")
+                            
+                            # Veritabanındaki indexedWords'ü kullan
+                            indexed_words = file.get('indexedWords', []) if file else []
+                            
+                            # indexedWords'den kelime kategorilerini oluştur
+                            target_words = {
+                                'file_words': indexed_words,
+                                'folder_words': indexed_words,
+                                'artist_words': indexed_words,
+                                'song_words': indexed_words,
+                                'all_words': indexed_words,
+                                'meaningful_words': indexed_words
+                            }
+                            
+                            logging.debug(f"📝 Target words: {target_words}")
+                            
+                            similarity = calculate_improved_similarity(search_words, target_words)
+                            logging.debug(f"🎯 Benzerlik skoru: {similarity}")
+                            
+                            if similarity > threshold:
+                                candidates.append({
+                                    "file": file, 
+                                    "similarity": similarity,
+                                    "file_words": target_words['file_words'],
+                                    "folder_words": target_words['folder_words']
+                                })
+                                logging.info(f"✅ Aday bulundu: {similarity:.3f} - {file.get('path', 'Unknown')}")
+                        
+                        except Exception as file_error:
+                            logging.error(f"❌ Dosya işleme hatası {i}: {file_error}")
+                            continue
+                
+                else:
+                    logging.warning("⚠️ Veritabanı veya müzik dosyaları bulunamadı")
+                    logging.warning(f"   DB instance: {db_instance is not None}")
+                    logging.warning(f"   DB data: {db_instance.data is not None if db_instance else 'N/A'}")
+                    if db_instance and db_instance.data:
+                        logging.warning(f"   MusicFiles key: {'musicFiles' in db_instance.data}")
+                
+                logging.info(f"🎯 Toplam aday sayısı: {len(candidates)}")
+                
+                # DEBUG: Dr Alban aramaları için detaylı log
+                if "Dr Alban" in search_path or "Away From Home" in search_path:
+                    logging.info(f"🔍 DEBUG - Search path: {search_path}")
+                    logging.info(f"🔍 DEBUG - Search words: {search_words}")
+                    sorted_candidates = sorted(candidates, key=lambda x: x["similarity"], reverse=True)
+                    logging.info(f"🔍 DEBUG - Top 10 candidates:")
+                    for i, candidate in enumerate(sorted_candidates[:10]):
+                        logging.info(f"  {i+1}. {candidate['file'].get('name', 'Unknown')} - {candidate['similarity']:.3f}")
+                        logging.info(f"      Path: {candidate['file'].get('path', 'Unknown')}")
+                        if 'target_words' in candidate:
+                            logging.info(f"      Target words: {candidate['target_words']}")
+                
+                # Benzerlik arama sayacını threshold'u geçen dosya sayısına göre ayarla
+                if candidates:
+                    match_details["benzerDosya"]["count"] = len(candidates)  # Threshold'u geçen dosya sayısı
+                
+            except Exception as similarity_error:
+                logging.error(f"❌ Benzerlik arama hatası: {similarity_error}")
+                logging.error(f"   Traceback: {similarity_error.__traceback__}")
+                current_process_time = int((time.time() - search_start_time) * 1000)
+                return {
+                    "result": {
+                        "originalPath": search_path,
+                        "found": False,
+                        "status": "error",
+                        "processTime": current_process_time,
+                        "error": str(similarity_error)
+                    },
+                    "match_type": None,
+                    "process_time": current_process_time
+                }
             
-            # En iyi eşleşmeyi bul
+            # En iyi eşleşmeyi bul - TAM EŞLEŞME ÖNCELİĞİ
             if candidates:
+                # Benzerlik skoruna göre sırala
                 candidates.sort(key=lambda x: x["similarity"], reverse=True)
-                best_match = candidates[0]
+                
+                # Aynı benzerlik skorunda tam eşleşme sayısına göre sırala
+                def sort_key(candidate):
+                    similarity = candidate["similarity"]
+                    file_words = candidate["file_words"]
+                    exact_matches = len(set(search_words['file_words']) & set(file_words))
+                    return (similarity, exact_matches)
+                
+                candidates.sort(key=sort_key, reverse=True)
+                best_match = candidates[0]  # En yüksek benzerlik + en fazla tam eşleşme
                 match_type = "benzerDosya"
                 current_process_time = int((time.time() - search_start_time) * 1000)
                 return {
@@ -979,7 +1949,7 @@ async def search_files(data: SearchRequest):
             }
         
         # Tüm dosyaları paralel olarak ara
-        tasks = [search_single_file(path) for path in limited_paths]
+        tasks = [search_single_file(path) for path in all_paths]
         search_results = await asyncio.gather(*tasks)
         
         # Sonuçları birleştir
@@ -996,239 +1966,197 @@ async def search_files(data: SearchRequest):
                 match_details[result_data["match_type"]]["time"] += result_data["process_time"]
         
         execution_time = int((time.time() - start_time) * 1000)
-        average_process_time = int(total_process_time / len(limited_paths))
+        average_process_time = int(total_process_time / len(all_paths)) if all_paths and len(all_paths) > 0 else 0
         
-        not_found_paths = [result["originalPath"] for result in results if not result["found"]]
+        # Sonuçları log dosyasına kaydet
+        try:
+            log_data = {
+                "timestamp": datetime.now().isoformat(),
+                "api_endpoint": "/api/search/files",
+                "request_data": {
+                    "total_paths": len(all_paths) if all_paths else 0,
+                    "batch_size": 100,
+                    "fuzzy_search": False
+                },
+                "response_data": {
+                    "status": "success",
+                    "totalProcessed": len(all_paths) if all_paths else 0,
+                    "executionTime": execution_time,
+                    "averageProcessTime": average_process_time,
+                    "matchDetails": match_details,
+                    "results": results
+                }
+            }
+        except Exception as log_error:
+            logging.error(f"❌ Log data oluşturma hatası: {log_error}")
+            log_data = {"error": str(log_error)}
         
-        response_data = {
+        # Log dosyasına yaz
+        log_filename = f"search_files_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        log_path = os.path.join("logs", log_filename)
+        
+        try:
+            os.makedirs("logs", exist_ok=True)
+            with open(log_path, "w", encoding="utf-8") as f:
+                json.dump(log_data, f, ensure_ascii=False, indent=2)
+            logging.info(f"Search files sonuçları log dosyasına kaydedildi: {log_path}")
+        except Exception as log_error:
+            logging.error(f"Log dosyası yazma hatası: {log_error}")
+        
+        return {
             "status": "success",
-            "results": results,
+            "data": results,
             "stats": {
-                "totalSearched": len(limited_paths),
-                "found": len([r for r in results if r["found"]]),
-                "notFound": len([r for r in results if not r["found"]]),
-                "executionTimeMs": execution_time,
-                "totalProcessTime": total_process_time,
+                "totalProcessed": len(all_paths),
+                "executionTime": execution_time,
                 "averageProcessTime": average_process_time,
-                "cacheHit": False,
-                "matchDetails": match_details,
-            },
-            "notFoundPaths": not_found_paths if not_found_paths else None,
+                "matchDetails": match_details
+            }
         }
-        
-        # Sonucu önbelleğe kaydet
-        await Database.set_search_cache(cache_key, response_data)
-        
-        return response_data
-
-    except HTTPException:
-        raise
     except Exception as e:
-        logging.error("Search endpoint error:", exc_info=e)
+        logging.error("Search error:", exc_info=e)
         raise HTTPException(
             status_code=500,
             detail={
                 "status": "error",
                 "message": str(e),
-                "details": {
-                    "errorCode": getattr(e, "code", None),
-                    "errorMessage": str(e),
-                    "stack": str(e.__traceback__),
-                },
-            },
-        ) from e
+                "details": str(e.__traceback__)
+            }
+        )
 
 
-# StreamRequest modeli
+# Müzik dosyası stream endpoint'i
 class StreamRequest(BaseModel):
-    """Stream isteği için model"""
     filePath: str
 
-async def range_requests_stream(file_path: str, start: int, end: int):
-    """Dosyayı parça parça stream et"""
-    chunk_size = 1024 * 1024  # 1MB chunks
-    async with aiofiles.open(file_path, 'rb') as f:
-        await f.seek(start)
-        remaining = end - start + 1
-        while remaining > 0:
-            chunk_size = min(chunk_size, remaining)
-            data = await f.read(chunk_size)
-            if not data:
-                break
-            remaining -= len(data)
-            yield data
-
-async def handle_web_stream(file_path: str, range: Optional[str], file_size: int) -> StreamingResponse:
-    """Web tarayıcı için stream yanıtı"""
-    start = 0
-    end = file_size - 1
-    
-    if range:
-        try:
-            parts = range.replace("bytes=", "").split("-")
-            start = int(parts[0])
-            end = int(parts[1]) if parts[1] else file_size - 1
-            
-            if start >= file_size or end >= file_size:
-                raise HTTPException(
-                    status_code=416,
-                    detail={
-                        "success": False,
-                        "error": "İstenen aralık dosya boyutunun dışında"
-                    }
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "success": False,
-                    "error": "Geçersiz range header'ı"
-                }
-            )
-    
-    headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Range": f"bytes {start}-{end}/{file_size}",
-        "Content-Length": str(end - start + 1),
-        "Content-Type": MIME_TYPES.get(Path(file_path).suffix.lower()[1:], "application/octet-stream"),
-        "X-Content-Type-Options": "nosniff",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Access-Control-Allow-Origin": "http://localhost:4200",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Range, Content-Type",
-        "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, Content-Type"
-    }
-    
-    return StreamingResponse(
-        range_requests_stream(file_path, start, end),
-        status_code=206 if range else 200,
-        headers=headers
-    )
 
 @app.post("/api/stream")
-async def stream_file(
-    request: StreamRequest,
-    range: Optional[str] = Header(None),
-    user_agent: Optional[str] = Header(None)
-):
-    """Müzik dosyasını stream olarak gönderir"""
+async def stream_music_file(data: StreamRequest):
+    """Müzik dosyasını stream et"""
     try:
-        file_path = request.filePath
-        logging.info(f"Stream isteği alındı: {file_path}")
+        # Türkçe karakterli dosya yolları için direkt kullan
+        file_path = data.filePath
+        # Logging'i güvenli hale getir
+        try:
+            logging.info(f"Stream isteği - Orijinal: {data.filePath}, Decoded: {file_path}")
+        except UnicodeEncodeError:
+            logging.info("Stream isteği - Türkçe karakterli dosya yolu")
         
-        # URL encoding kontrolü
-        from urllib.parse import unquote
-        decoded_path = unquote(file_path)
+        # Türkçe karakterli dosya yolları için özel handling
+        normalized_path = file_path
+        
+        # Pathlib kullanarak Türkçe karakterli dosya yollarını işle
+        from pathlib import Path
+        file_path_obj = Path(normalized_path)
         
         # Dosya varlığını kontrol et
-        try:
-            file_size = os.path.getsize(decoded_path)
-        except OSError as e:
-            logging.error(f"Dosya erişim hatası: {decoded_path}", exc_info=e)
+        if not file_path_obj.exists():
             raise HTTPException(
                 status_code=404,
-                detail={
-                    "success": False,
-                    "error": "Dosya bulunamadı veya erişilemedi",
-                    "details": {"path": decoded_path, "error": str(e)}
-                }
+                detail={"success": False, "error": "Dosya bulunamadi", "filePath": "Turkish characters in path"}
             )
         
-        # İsteğin masaüstü uygulamasından gelip gelmediğini kontrol et
-        is_desktop_app = "QtWebEngine" in (user_agent or "")
-        ext = Path(decoded_path).suffix.lower()[1:]
+        # Dosya güvenlik kontrolü - sadece müzik dosyalarına izin ver
+        allowed_extensions = {'.mp3', '.wav', '.flac', '.m4a', '.aac', '.ogg', '.wma'}
+        file_extension = file_path_obj.suffix.lower()
         
-        # M4A dosyası ve masaüstü uygulama ise native player kullan
-        if is_desktop_app and ext == "m4a":
-            logging.info(f"Native playback kullanılıyor: {decoded_path}")
-            return {
-                "success": True,
-                "action": "native_playback",
-                "file_path": decoded_path,
-                "mime_type": MIME_TYPES.get(ext, "application/octet-stream")
-            }
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail={"success": False, "error": "Desteklenmeyen dosya formati", "filePath": "Turkish characters in path"}
+            )
         
-        # Diğer durumlar için normal stream devam etsin
-        logging.info(f"Web stream kullanılıyor: {decoded_path}")
-        return await handle_web_stream(decoded_path, range, file_size)
+        # Dosya boyutunu kontrol et (max 100MB)
+        file_size = file_path_obj.stat().st_size
+        max_size = 100 * 1024 * 1024  # 100MB
         
+        if file_size > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail={"success": False, "error": "Dosya cok buyuk", "filePath": "Turkish characters in path", "size": file_size}
+            )
+        
+        # Dosyayı stream et
+        def iter_file():
+            # M4A dosyaları için daha büyük chunk boyutu kullan
+            chunk_size = 32768 if file_extension == '.m4a' else 8192  # 32KB for M4A, 8KB for others
+            
+            try:
+                with file_path_obj.open("rb") as file:
+                    while True:
+                        chunk = file.read(chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+            except Exception as e:
+                logging.error(f"Dosya acma hatasi: {e}")
+                raise
+        
+        # Content-Type'ı dosya uzantısına göre belirle
+        content_type_map = {
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.flac': 'audio/flac',
+            '.m4a': 'audio/mp4',
+            '.aac': 'audio/aac',
+            '.ogg': 'audio/ogg',
+            '.wma': 'audio/x-ms-wma'
+        }
+        
+        content_type = content_type_map.get(file_extension, 'audio/mpeg')
+        
+        # M4A dosyaları için özel header'lar - Türkçe karakter güvenli
+        safe_filename = "music_file" + file_extension
+        headers = {
+            "Content-Disposition": f"inline; filename=\"{safe_filename}\"",
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+            "Cache-Control": "no-cache"
+        }
+        
+        # M4A dosyaları için özel ayarlar
+        if file_extension == '.m4a':
+            headers.update({
+                "Content-Type": "audio/mp4",
+                "X-Content-Type-Options": "nosniff"
+            })
+        
+        # StreamingResponse döndür
+        return StreamingResponse(
+            iter_file(),
+            media_type=content_type,
+            headers=headers
+        )
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        logging.error(f"Stream hatası: {str(e)}", exc_info=True)
+        logging.error("Muzik dosyasi stream hatasi:", exc_info=e)
         raise HTTPException(
             status_code=500,
-            detail={
-                "success": False,
-                "error": "Stream işlemi başarısız",
-                "details": str(e)
-            }
+            detail={"success": False, "error": "Stream hatasi", "details": "Encoding error"}
         )
 
 
-# Ayarlar modeli
-class Settings(BaseModel):
-    music_folder: str
-    virtualdj_root: str
-    last_updated: Optional[str] = None
-
-# Ayarları oku
-async def read_settings() -> Settings:
-    try:
-        if not SETTINGS_PATH.exists():
-            # Varsayılan ayarları oluştur
-            default_settings = {
-                "music_folder": MUSIC_ROOT,
-                "virtualdj_root": PLAYLISTS_ROOT.replace("/Folders", ""),
-                "last_updated": datetime.now().isoformat()
-            }
-            async with aiofiles.open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-                await f.write(json.dumps(default_settings, indent=2))
-            return Settings(**default_settings)
-        
-        async with aiofiles.open(SETTINGS_PATH, "r", encoding="utf-8") as f:
-            content = await f.read()
-            settings_data = json.loads(content)
-            return Settings(**settings_data)
-    except Exception as e:
-        logging.error(f"Ayarlar okunamadı: {str(e)}")
-        # Hata durumunda varsayılan ayarları döndür
-        return Settings(
-            music_folder=MUSIC_ROOT,
-            virtualdj_root=PLAYLISTS_ROOT.replace("/Folders", ""),
-            last_updated=datetime.now().isoformat()
-        )
-
-# Ayarları kaydet
-async def save_settings(settings: Settings) -> bool:
-    try:
-        settings.last_updated = datetime.now().isoformat()
-        async with aiofiles.open(SETTINGS_PATH, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(settings.dict(), indent=2))
-        return True
-    except Exception as e:
-        logging.error(f"Ayarlar kaydedilemedi: {str(e)}")
-        return False
-
-# Ayarları getir endpoint'i
-@app.get("/api/settings", response_model=Settings)
-async def get_settings():
-    return await read_settings()
-
-# Ayarları güncelle endpoint'i
-@app.post("/api/settings", response_model=Settings)
-async def update_settings(settings: Settings):
-    if not os.path.exists(settings.music_folder):
-        raise HTTPException(status_code=400, detail="Müzik klasörü bulunamadı")
-    
-    if not os.path.exists(settings.virtualdj_root):
-        raise HTTPException(status_code=400, detail="VirtualDJ klasörü bulunamadı")
-    
-    success = await save_settings(settings)
-    if not success:
-        raise HTTPException(status_code=500, detail="Ayarlar kaydedilemedi")
-    
-    return settings
-
+# Main bloğu - doğrudan çalıştırılabilir hale getirme
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(app, host=API_HOST, port=API_PORT)
+    import traceback
+    
+    # Hata loglama için dosya ayarla
+    error_log_file = "logs/error.log"
+    os.makedirs("logs", exist_ok=True)
+    
+    try:
+        # Sabit port kullan - dinamik port sistemi kaldırıldı
+        print(f"Starting server on port {API_PORT}...")
+        uvicorn.run(app, host=API_HOST, port=API_PORT, log_level="info")
+    except Exception as e:
+        error_msg = f"Server başlatma hatası: {str(e)}\nTraceback: {traceback.format_exc()}\n"
+        print(error_msg)
+        
+        # Hata dosyasına yaz
+        with open(error_log_file, "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().isoformat()} - {error_msg}\n")
+        
+        raise

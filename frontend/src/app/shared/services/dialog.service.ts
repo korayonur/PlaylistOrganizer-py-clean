@@ -2,7 +2,7 @@ import { Injectable } from "@angular/core";
 import { MatDialog, MatDialogConfig } from "@angular/material/dialog";
 import { Observable } from "rxjs";
 import { MultisearchDialogComponent } from "../../components/multisearch-dialog/multisearch-dialog.component";
-import { environment } from '../../../environments/environment';
+import { ConfigService } from "../../services/config.service";
 
 export interface DialogResult<T = unknown> {
   success: boolean;
@@ -45,9 +45,14 @@ export interface FormDialogConfig<T> {
   providedIn: "root",
 })
 export class DialogService {
-  private apiUrl = environment.apiUrl;  // Environment'tan URL alınmalı
+  private getApiUrl(): string {
+    return this.configService.getApiUrl();
+  }
 
-  constructor(private dialog: MatDialog) {}
+  constructor(
+    private dialog: MatDialog,
+    private configService: ConfigService
+  ) {}
 
   /**
    * Çoklu arama dialogunu açar

@@ -25,23 +25,20 @@
   </div>
 
   <div class="action-buttons">
+    <!-- Global Eksik Dosyalar Butonu -->
+    <button class="global-missing-button" (click)="showGlobalMissing.emit()">
+      <span class="global-icon">🌐</span>
+      Tüm Eksik Dosyaları Göster
+    </button>
+
     <!-- Eksik Şarkıları Düzelt Butonu -->
-    <button
-      *ngIf="missingSongs > 0"
-      class="repair-button"
-      (click)="repair.emit()"
-      [disabled]="isLoading"
-    >
-      <span class="repair-icon">{{ isLoading ? "🔄" : "🔧" }}</span>
-      {{ isLoading ? "İşleniyor..." : "Eksik Şarkıları Düzelt" }}
+    <button *ngIf="missingSongs > 0" class="repair-button" (click)="repair.emit()">
+      <span class="repair-icon">🔧</span>
+      Eksik Şarkıları Düzelt
     </button>
 
     <!-- Ayarlar Butonu -->
-    <button
-      class="settings-button"
-      (click)="openSettings.emit()"
-      [disabled]="isLoading"
-    >
+    <button class="settings-button" (click)="openSettings.emit()">
       <span class="settings-icon">⚙️</span>
       Ayarlar
     </button>

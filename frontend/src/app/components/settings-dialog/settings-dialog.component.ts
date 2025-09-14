@@ -10,6 +10,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { ConfigService } from '../../services/config.service';
 
 export interface Settings {
   music_folder: string;
@@ -49,14 +50,18 @@ export class SettingsDialogComponent implements OnInit {
   isIndexing = false;
   errorMessage = '';
   indexingResult: IndexingResult | null = null;
-  private apiUrl = environment.apiUrl;
 
   constructor(
     private dialogRef: MatDialogRef<SettingsDialogComponent>,
     private http: HttpClient,
     private snackBar: MatSnackBar,
+    private configService: ConfigService,
     @Inject(MAT_DIALOG_DATA) public data: any
   ) {}
+
+  private getApiUrl(): string {
+    return this.configService.getApiUrl();
+  }
 
   ngOnInit(): void {
     this.loadSettings();
@@ -64,14 +69,16 @@ export class SettingsDialogComponent implements OnInit {
 
   loadSettings(): void {
     this.isLoading = true;
-    this.http.get<Settings>(`${this.apiUrl}/settings`).subscribe({
+    this.errorMessage = '';
+    this.http.get<Settings>(`${this.getApiUrl()}/settings`).subscribe({
       next: (settings) => {
         this.settings = settings;
         this.isLoading = false;
+        console.log('Ayarlar yüklendi:', settings);
       },
       error: (error) => {
         console.error('Ayarlar yüklenirken hata oluştu:', error);
-        this.errorMessage = 'Ayarlar yüklenirken bir hata oluştu. Lütfen tekrar deneyin.';
+        this.errorMessage = error.error?.detail || error.message || 'Ayarlar yüklenirken bir hata oluştu. Lütfen tekrar deneyin.';
         this.isLoading = false;
       }
     });
@@ -81,15 +88,20 @@ export class SettingsDialogComponent implements OnInit {
     this.isIndexing = true;
     this.indexingResult = null;
     
-    this.http.post<any>(`${this.apiUrl}/index/create`, {}).subscribe({
+    const requestData = {
+      musicFolder: this.settings.music_folder,
+      virtualdjFolder: this.settings.virtualdj_root
+    };
+    
+    this.http.post<any>(`${this.getApiUrl()}/index/create`, requestData).subscribe({
       next: (response) => {
         this.isIndexing = false;
         
-        if (response.status === 'success') {
+        if (response.success) {
           this.indexingResult = {
             status: 'success',
-            message: `İndeksleme başarılı! ${response.data.totalFiles} dosya indekslendi.`,
-            data: response.data
+            message: response.message || 'İndeksleme başarılı!',
+            data: response
           };
           
           this.snackBar.open('Veritabanı başarıyla indekslendi', 'Tamam', {
@@ -98,7 +110,7 @@ export class SettingsDialogComponent implements OnInit {
         } else {
           this.indexingResult = {
             status: 'error',
-            message: 'İndeksleme sırasında bir sorun oluştu.',
+            message: response.message || 'İndeksleme sırasında bir hata oluştu.',
             data: response
           };
         }
@@ -120,9 +132,10 @@ export class SettingsDialogComponent implements OnInit {
     this.isLoading = true;
     this.errorMessage = '';
 
-    this.http.post<Settings>(`${this.apiUrl}/settings`, this.settings).subscribe({
+    this.http.post<any>(`${this.getApiUrl()}/settings`, this.settings).subscribe({
       next: (response) => {
         this.isLoading = false;
+        console.log('Ayarlar kaydedildi:', response);
         this.snackBar.open('Ayarlar başarıyla kaydedildi', 'Tamam', {
           duration: 3000
         });
@@ -131,7 +144,10 @@ export class SettingsDialogComponent implements OnInit {
       error: (error) => {
         this.isLoading = false;
         console.error('Ayarlar kaydedilirken hata oluştu:', error);
-        this.errorMessage = error.error?.detail || 'Ayarlar kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.';
+        this.errorMessage = error.error?.detail || error.message || 'Ayarlar kaydedilirken bir hata oluştu. Lütfen tekrar deneyin.';
+        this.snackBar.open('Ayarlar kaydedilemedi', 'Tamam', {
+          duration: 3000
+        });
       }
     });
   }

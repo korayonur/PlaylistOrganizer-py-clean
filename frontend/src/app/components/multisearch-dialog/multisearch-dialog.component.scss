@@ -248,6 +248,84 @@
           font-style: italic;
         }
       }
+
+      // Playlist bilgileri
+      .playlist-info {
+        margin-top: 16px;
+        padding: 12px;
+        background-color: rgba(33, 150, 243, 0.1);
+        border: 1px solid rgba(33, 150, 243, 0.3);
+        border-radius: 8px;
+
+        .playlist-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 12px;
+          padding-bottom: 8px;
+          border-bottom: 1px solid rgba(33, 150, 243, 0.2);
+
+          mat-icon {
+            color: #64b5f6;
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
+          }
+
+          .playlist-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #64b5f6;
+          }
+        }
+
+        .playlist-list {
+          .playlist-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            border-left: 3px solid #64b5f6;
+
+            &:last-child {
+              margin-bottom: 0;
+            }
+
+            .playlist-name {
+              font-size: 14px;
+              font-weight: 500;
+              color: #e0e0e0;
+              margin-bottom: 4px;
+            }
+
+            .playlist-details {
+              display: flex;
+              flex-direction: column;
+              align-items: flex-end;
+              gap: 2px;
+
+              .playlist-count {
+                font-size: 12px;
+                color: #64b5f6;
+                font-weight: 500;
+              }
+
+              .playlist-path {
+                font-size: 11px;
+                color: rgba(255, 255, 255, 0.6);
+                font-family: var(--font-mono);
+                max-width: 200px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              }
+            }
+          }
+        }
+      }
     }
 
     .matches-container {
@@ -434,6 +512,25 @@ mat-dialog-actions {
   .selection-info {
     font-size: 14px;
     color: rgba(255, 255, 255, 0.7);
+
+    .global-update-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background-color: rgba(33, 150, 243, 0.1);
+      border: 1px solid rgba(33, 150, 243, 0.3);
+      border-radius: 6px;
+      font-size: 12px;
+      color: #64b5f6;
+
+      mat-icon {
+        font-size: 16px;
+        width: 16px;
+        height: 16px;
+      }
+    }
   }
 }
 

@@ -256,12 +256,15 @@ export class PlaylistTreeComponent {
   }
 
   loadPlaylists(): void {
+    console.log('🔄 loadPlaylists başlatıldı');
     this.loading.set(true);
     this.error.set(null);
 
     this.playlistService.getPlaylists().subscribe({
       next: (response: PlaylistResponse) => {
+        console.log('✅ API Response alındı:', response);
         if (!response.success) {
+          console.error('❌ Response success false:', response);
           this.error.set("Sunucudan geçersiz yanıt alındı");
           this.loading.set(false);
           return;
@@ -292,7 +295,8 @@ export class PlaylistTreeComponent {
         this.stats.set(response.stats);
         this.loading.set(false);
       },
-      error: () => {
+      error: (error) => {
+        console.error('❌ API Error:', error);
         this.error.set("Playlistler yüklenirken bir hata oluştu");
         this.loading.set(false);
       },

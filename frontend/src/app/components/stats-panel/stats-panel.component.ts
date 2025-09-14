@@ -35,6 +35,16 @@ import { Song } from "../../models/song.model";
         </button>
       </div>
       <div class="action-buttons">
+        <!-- Global Eksik Dosyalar Butonu -->
+        <button
+          class="global-missing-button"
+          (click)="showGlobalMissing.emit()"
+          [disabled]="loading"
+        >
+          <span class="global-icon">🌐</span>
+          Tüm Eksik Dosyaları Göster
+        </button>
+
         <button
           class="repair-button"
           [disabled]="loading || missingCount === 0"
@@ -120,6 +130,41 @@ import { Song } from "../../models/song.model";
       .action-buttons {
         display: flex;
         gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .global-missing-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: var(--border-radius-sm);
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+
+        &:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        &:active {
+          transform: translateY(0);
+        }
+
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+      }
+
+      .global-icon {
+        font-size: 1.2em;
       }
 
       .repair-button {
@@ -182,6 +227,7 @@ export class StatsPanelComponent {
   @Output() filterChange = new EventEmitter<"all" | "exists" | "missing">();
   @Output() repair = new EventEmitter<void>();
   @Output() openSettings = new EventEmitter<void>();
+  @Output() showGlobalMissing = new EventEmitter<void>();
 
   get foundCount(): number {
     return this.songs.filter((song) => song.isFileExists).length;

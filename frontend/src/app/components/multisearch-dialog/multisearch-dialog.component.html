@@ -28,11 +28,20 @@
         </button>
         <button mat-raised-button color="accent" [disabled]="!hasSelectedItems()" (click)="saveSelected()">
           <mat-icon>save</mat-icon>
-          Seçilenleri Kaydet
+          Seçilenleri Kaydet & Global Güncelle
+        </button>
+        <button mat-raised-button color="warn" [disabled]="!hasSelectedItems()" (click)="removeFromAllPlaylists()" 
+                matTooltip="Seçilen şarkıları tüm playlist'lerden kaldır">
+          <mat-icon>delete_forever</mat-icon>
+          Playlist'lerden Kaldır ({{ getSelectedCount() }})
         </button>
       </div>
       <div class="selection-info" *ngIf="hasSelectedItems()">
         {{ getSelectedCount() }} öğe seçildi
+        <div class="global-update-info">
+          <mat-icon>info</mat-icon>
+          <span>Bu işlem tüm playlist'lerdeki aynı dosyaları da otomatik güncelleyecek</span>
+        </div>
       </div>
     </div>
 
@@ -50,6 +59,25 @@
 
     <!-- Sonuç istatistikleri -->
     <div class="stats-container" *ngIf="!isSearching && !error && searchResults">
+      <!-- Global Mode İstatistikleri -->
+      <div class="stats-section" *ngIf="isGlobalMode && globalStats">
+        <h3>Global Eksik Dosyalar İstatistikleri</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value">{{ globalStats.playlists_checked }}</div>
+            <div class="stat-label">Kontrol Edilen Playlist</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value warning">{{ globalStats.unique_missing_files }}</div>
+            <div class="stat-label">Benzersiz Eksik Dosya</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value success">{{ generalStats.processed }}</div>
+            <div class="stat-label">Eşleşme Bulunan</div>
+          </div>
+        </div>
+      </div>
+
       <!-- Ana İstatistikler -->
       <div class="stats-section">
         <h3>Genel Bilgiler</h3>
@@ -219,7 +247,6 @@
               <div class="result-header">
                 <div class="left-section">
                   <mat-checkbox 
-                    *ngIf="result.found"
                     [checked]="isSelected(result)"
                     (change)="toggleSelection(result)"
                     color="primary">
@@ -244,6 +271,20 @@
                   <span class="path-label">Bulunan Yol</span>
                   <code class="path-text">{{ result.foundPath }}</code>
                   <div class="process-time">İşlem Süresi: {{ result.processTime }}</div>
+                </div>
+                
+                <!-- Son Okunan Playlist Bilgisi (Sadece Global Mode) -->
+                <div class="playlist-info" *ngIf="isGlobalMode && result.lastPlaylistName">
+                  <div class="playlist-header">
+                    <mat-icon>playlist_play</mat-icon>
+                    <span class="playlist-label">Son okunan playlist:</span>
+                  </div>
+                  <div class="playlist-item">
+                    <div class="playlist-name">{{ result.lastPlaylistName }}</div>
+                    <div class="playlist-details">
+                      <span class="playlist-path">{{ result.lastPlaylistPath }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

@@ -1,13 +1,14 @@
 import { Injectable, signal } from "@angular/core";
 import { AppConfig, DEFAULT_CONFIG } from "../shared/config/app.config";
+import { HttpClient } from "@angular/common/http";
+import { environment } from "../../environments/environment";
 
 @Injectable({
   providedIn: "root",
 })
 export class ConfigService {
   private readonly config = signal<AppConfig>(DEFAULT_CONFIG);
-
-  constructor() {
+  constructor(private http: HttpClient) {
     this.loadConfig();
   }
 
@@ -54,10 +55,8 @@ export class ConfigService {
 
   private getHomeDir(): string {
     // İşletim sistemine göre home dizinini belirle
-    if (process.platform === "win32") {
-      return process.env["USERPROFILE"] || "C:\\Users\\Default";
-    }
-    return process.env["HOME"] || "/home/user";
+    // Browser ortamında process kullanılamaz, varsayılan değer döndür
+    return "/home/user";
   }
 
   getSupportedAudioFormats(): string[] {
@@ -66,5 +65,9 @@ export class ConfigService {
 
   getSupportedPlaylistFormats(): string[] {
     return this.config().supportedFormats.playlist;
+  }
+
+  getApiUrl(): string {
+    return environment.apiUrl;
   }
 }

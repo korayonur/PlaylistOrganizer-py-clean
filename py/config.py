@@ -5,15 +5,16 @@ PlaylistOrganizer konfigürasyon dosyası
 import os
 import platform
 import json
+import socket
 from pathlib import Path
 
 # Environment kontrolü
 IS_DEVELOPMENT = os.environ.get('PLAYLIST_ORGANIZER_DEV', '0') == '1'
 
-# API Port ayarları
-# NOT: Bu port numaraları sabit olmalıdır, değiştirilmemelidir!
-API_PORT = 3000 if IS_DEVELOPMENT else 5000  # Development: 3000, Production: 5000
-API_HOST = "localhost" 
+# API Port ayarları - Sabit port kullan (dinamik port sistemi kaldırıldı)
+API_PORT = 50001  # Her zaman aynı port kullan
+
+API_HOST = os.environ.get('API_HOST', "localhost") 
 
 # Frontend URL'leri
 FRONTEND_DEV_URL = f"http://{API_HOST}:4200"  # Angular geliştirme sunucusu

@@ -10,7 +10,7 @@ export interface SimilarFile {
 }
 
 export interface Song {
-  id: string;
+  id?: string;
   filePath: string;
   isFileExists: boolean;
   status: "exists" | "missing" | "updated";

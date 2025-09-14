@@ -6,22 +6,30 @@ import { Song } from "../models/song.model";
 import { FileExistsResponse } from "../models/file-exists-response.model";
 import { PlaylistError } from "../models/playlist-error.model";
 import { environment } from '../../environments/environment';
+import { ConfigService } from './config.service';
 
 @Injectable({
   providedIn: "root",
 })
 export class PlaylistService {
-  private apiUrl = environment.apiUrl;
   private readonly PLAYLISTS_ROOT = "/Users/koray/Library/Application Support/VirtualDJ/Folders";
 
-  constructor(private readonly http: HttpClient) {
+  constructor(
+    private readonly http: HttpClient,
+    private readonly configService: ConfigService
+  ) {
     // Servis başlatıldığında API URL'ini kontrol et
-    console.log('PlaylistService initialized with API URL:', this.apiUrl);
+    console.log('PlaylistService initialized with API URL:', this.getApiUrl());
+  }
+
+  private getApiUrl(): string {
+    return this.configService.getApiUrl();
   }
 
   getPlaylists(): Observable<PlaylistResponse> {
-    const url = `${this.apiUrl}/playlists/list`;
-    console.log('getPlaylists - Calling API:', url);
+    const url = `${this.getApiUrl()}/playlists/list`;
+    console.log('🎵 PlaylistService getPlaylists - Calling API:', url);
+    console.log('🎵 ConfigService API URL:', this.configService.getApiUrl());
     return this.http.get<PlaylistResponse>(url).pipe(
       retry(3),
       map((response) => {
@@ -35,12 +43,12 @@ export class PlaylistService {
   }
 
   getPlaylistContent(path: string): Observable<Song[]> {
-    const url = `${this.apiUrl}/playlistsongs/read`;
+    const url = `${this.getApiUrl()}/playlistsongs/read`;
     console.log('getPlaylistContent - Calling API:', url);
     interface PlaylistSongResponse {
       success: boolean;
       songs: {
-        path: string;
+        file: string;
         isFileExists: boolean;
       }[];
     }
@@ -57,9 +65,10 @@ export class PlaylistService {
           }
 
           return response.songs.map(
-            (song) =>
+            (song, index) =>
               ({
-                filePath: song.path,
+                id: `song-${index}-${Date.now()}`,
+                filePath: song.file,
                 isFileExists: song.isFileExists,
                 status: song.isFileExists ? "exists" : "missing",
               }) as Song,
@@ -70,7 +79,7 @@ export class PlaylistService {
   }
 
   updateSongPath(playlistPath: string, oldPath: string, newPath: string): Observable<void> {
-    const url = `${this.apiUrl}/playlistsong/update`;
+    const url = `${this.getApiUrl()}/playlistsong/update`;
     console.log('updateSongPath - Calling API:', url);
     return this.http
       .post<{
@@ -93,7 +102,7 @@ export class PlaylistService {
   }
 
   fileExists(path: string): Observable<FileExistsResponse> {
-    const url = `${this.apiUrl}/files/exists`;
+    const url = `${this.getApiUrl()}/files/exists`;
     console.log('fileExists - Calling API:', url);
     return this.http
       .post<{
@@ -110,6 +119,81 @@ export class PlaylistService {
         }),
         catchError(this.handleError),
       );
+  }
+
+  getFilePlaylists(filePath: string): Observable<{
+    success: boolean;
+    filePath: string;
+    playlists: Array<{
+      name: string;
+      path: string;
+      songCount: number;
+    }>;
+    totalPlaylists: number;
+  }> {
+    const encodedPath = encodeURIComponent(filePath);
+    const url = `${this.getApiUrl()}/files/playlists/${encodedPath}`;
+    console.log('getFilePlaylists - Calling API:', url);
+    
+    return this.http.get<{
+      success: boolean;
+      filePath: string;
+      playlists: Array<{
+        name: string;
+        path: string;
+        songCount: number;
+      }>;
+      totalPlaylists: number;
+    }>(url).pipe(
+      retry(3),
+      map((response) => {
+        if (!response.success) {
+          throw new PlaylistError("PLY-500", "Dosya playlist bilgisi alma hatası");
+        }
+        return response;
+      }),
+      catchError(this.handleError),
+    );
+  }
+
+  getFilesPlaylistsBatch(filePaths: string[]): Observable<{
+    success: boolean;
+    results: Array<{
+      filePath: string;
+      playlists: Array<{
+        name: string;
+        path: string;
+        songCount: number;
+      }>;
+      totalPlaylists: number;
+    }>;
+    totalFiles: number;
+  }> {
+    const url = `${this.getApiUrl()}/files/playlists/batch`;
+    console.log('getFilesPlaylistsBatch - Calling API:', url, 'with', filePaths.length, 'files');
+    
+    return this.http.post<{
+      success: boolean;
+      results: Array<{
+        filePath: string;
+        playlists: Array<{
+          name: string;
+          path: string;
+          songCount: number;
+        }>;
+        totalPlaylists: number;
+      }>;
+      totalFiles: number;
+    }>(url, filePaths).pipe(
+      retry(3),
+      map((response) => {
+        if (!response.success) {
+          throw new PlaylistError("PLY-500", "Batch playlist bilgisi alma hatası");
+        }
+        return response;
+      }),
+      catchError(this.handleError),
+    );
   }
 
   private handleError(error: HttpErrorResponse) {

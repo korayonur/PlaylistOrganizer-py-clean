@@ -7,7 +7,7 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.12"
 fastapi = "^0.109.2"
 uvicorn = "^0.27.1"
 python-multipart = "^0.0.9"
@@ -30,23 +30,27 @@ types-aiofiles = "^24.1.0.20241221"
 types-xmltodict = "^0.14.0.20241009"
 types-sqlalchemy = "^1.4.53.38"
 
+[tool.poetry.scripts]
+similarity-test = "similarity_analysis_test_system:main"
+similarity-analysis = "similarity_analysis_test_system:run_analysis"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py312"]
 include = '\.pyi?$'
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 select = ["E", "F", "B", "I"]
 ignore = []
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
@@ -57,4 +61,4 @@ check_untyped_defs = true
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --cov=py --cov-report=term-missing"
-asyncio_mode = "auto" 
+asyncio_mode = "auto"

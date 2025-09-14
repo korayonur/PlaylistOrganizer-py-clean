@@ -5,6 +5,9 @@ export interface SearchResult {
   foundPath?: string;
   algoritmaYontemi: string;
   processTime: string;
+  // Global mode için son okunan playlist bilgisi
+  lastPlaylistName?: string;
+  lastPlaylistPath?: string;
 }
 
 export interface MatchDetail {
@@ -22,16 +25,16 @@ export interface MatchDetails {
 }
 
 export interface SearchStats {
-  totalSearched: number;
-  found: number;
-  notFound: number;
-  executionTimeMs: number;
-  cacheHit: boolean;
+  totalProcessed: number;
+  executionTime: number;
+  averageProcessTime: number;
   matchDetails: MatchDetails;
+  foundCount?: number;
+  notFoundCount?: number;
 }
 
 export interface SearchResponse {
   status: "success" | "error";
-  results: SearchResult[];
+  data: SearchResult[];
   stats: SearchStats;
 }

@@ -180,6 +180,9 @@ class PlaylistOrganizer:
                 js_api=None
             )
             
+            # Port bilgisini frontend'e ileten script ekle
+            self.inject_port_info()
+            
             logger.info("Pencere başarıyla oluşturuldu, webview.start çağrılıyor...")
             
             # Pencereyi göster - özel menüyü kullan
@@ -189,6 +192,10 @@ class PlaylistOrganizer:
             logger.error(f"Pencere oluşturulurken hata: {e}")
             logger.exception("Pencere oluşturma hatası detayları:")
             raise
+    
+    def inject_port_info(self):
+        """Port bilgisi enjeksiyonu artık gerekli değil - proxy kullanıyoruz"""
+        pass
     
     def create_custom_menu(self):
         """Özel menüyü oluştur"""

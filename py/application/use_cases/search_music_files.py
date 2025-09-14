@@ -219,7 +219,15 @@ class SearchMusicFilesUseCase:
                     for file in music_files
                 ]
 
-                candidates = [match for match in candidates if match["similarity"] > 0.3]
+                # Debug: En yüksek benzerlik skorlarını yazdır
+                if search_path.endswith("Dr Alban Away From Home.mp3"):
+                    print(f"DEBUG - Search words: {search_words}")
+                    sorted_candidates = sorted(candidates, key=lambda x: x["similarity"], reverse=True)
+                    print(f"DEBUG - Top 5 candidates:")
+                    for i, candidate in enumerate(sorted_candidates[:5]):
+                        print(f"  {i+1}. {candidate['file'].name} - {candidate['similarity']:.3f}")
+
+                candidates = [match for match in candidates if match["similarity"] > 0.1]  # Threshold'u düşürdük
                 candidates.sort(key=lambda x: x["similarity"], reverse=True)
                 candidates = candidates[:1]
 

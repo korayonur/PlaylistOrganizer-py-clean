@@ -7,18 +7,21 @@ import { PlaylistTreeComponent } from "./components/playlist-tree/playlist-tree.
 import { StatsPanelComponent } from "./components/stats-panel/stats-panel.component";
 import { SongGridComponent } from "./components/song-grid/song-grid.component";
 import { firstValueFrom } from "rxjs";
-import { MatDialog } from "@angular/material/dialog";
-import { MultisearchDialogComponent } from "./components/multisearch-dialog/multisearch-dialog.component";
+import { HttpClient } from "@angular/common/http";
+import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { SettingsDialogComponent } from "./components/settings-dialog/settings-dialog.component";
+import { MultisearchDialogComponent } from "./components/multisearch-dialog/multisearch-dialog.component";
+import { ConfigService } from "./services/config.service";
 
 @Component({
   selector: "app-root",
   standalone: true,
   imports: [
-    CommonModule, 
+    CommonModule,
     PlaylistTreeComponent, 
     StatsPanelComponent, 
-    SongGridComponent
+    SongGridComponent,
+    MatDialogModule
   ],
   template: `
     <div class="app">
@@ -35,6 +38,7 @@ import { SettingsDialogComponent } from "./components/settings-dialog/settings-d
             (filterChange)="setFilter($event)"
             (repair)="handleMissingFiles()"
             (openSettings)="openSettingsDialog()"
+            (showGlobalMissing)="handleGlobalMissingFiles()"
           >
           </app-stats-panel>
         </div>
@@ -141,7 +145,15 @@ export class AppComponent {
   constructor(
     private playlistService: PlaylistService,
     private dialog: MatDialog,
-  ) {}
+    private http: HttpClient,
+    private configService: ConfigService,
+  ) {
+    console.log('🚀 App Component başlatıldı');
+  }
+
+  private getApiUrl(): string {
+    return this.configService.getApiUrl();
+  }
 
   filteredSongs() {
     const songs = this.playlistContent();
@@ -221,6 +233,19 @@ export class AppComponent {
         if (currentPlaylist) {
           await this.loadPlaylistContent(currentPlaylist.path);
         }
+
+        // Global güncelleme sonuçlarını göster
+        if (result.globalStats) {
+          const stats = result.globalStats;
+          const message = `✅ Global güncelleme tamamlandı!\n\n` +
+            `📊 İstatistikler:\n` +
+            `• Kontrol edilen playlist: ${stats.total_playlists_checked}\n` +
+            `• Güncellenen playlist: ${stats.updated_playlists}\n` +
+            `• Toplam güncellenen şarkı: ${stats.total_songs_updated}\n\n` +
+            `🎉 Artık tüm playlist'lerinizde aynı dosyalar otomatik olarak güncellenmiş durumda!`;
+          
+          alert(message);
+        }
       }
     } catch (error) {
       this.error.set("Eksik dosyalar kontrol edilirken bir hata oluştu");
@@ -235,6 +260,60 @@ export class AppComponent {
 
   handleRejectAlternative(): void {
     // TODO: Implement
+  }
+
+  async handleGlobalMissingFiles(): Promise<void> {
+    this.loading.set(true);
+    this.error.set(null);
+
+    try {
+      // Global eksik dosyaları getir
+      const response: any = await firstValueFrom(
+        this.http.get(`${this.getApiUrl()}/playlistsong/global-missing`)
+      );
+
+      if (response.success && response.missing_files.length > 0) {
+        // Global eksik dosyalar dialog'unu aç
+        const dialogRef = this.dialog.open(MultisearchDialogComponent, {
+          width: "1400px",
+          maxWidth: "95vw",
+          data: {
+            paths: response.missing_files.map((file: any) => file.originalPath),
+            playlistPath: "global", // Global işlem için özel değer
+            category: "global",
+            globalMissingFiles: response.missing_files,
+            globalStats: {
+              total_missing_files: response.total_missing_files,
+              unique_missing_files: response.unique_missing_files,
+              playlists_checked: response.playlists_checked
+            }
+          },
+        });
+
+        const result = await dialogRef.afterClosed().toPromise();
+
+        if (result?.success) {
+          // Global güncelleme sonuçlarını göster
+          if (result.globalStats) {
+            const stats = result.globalStats;
+            const message = `✅ Global eksik dosyalar düzeltildi!\n\n` +
+              `📊 İstatistikler:\n` +
+              `• Kontrol edilen playlist: ${stats.total_playlists_checked}\n` +
+              `• Güncellenen playlist: ${stats.updated_playlists}\n` +
+              `• Toplam güncellenen şarkı: ${stats.total_songs_updated}\n\n` +
+              `🎉 Tüm playlist'lerinizdeki eksik dosyalar otomatik olarak düzeltildi!`;
+            
+            alert(message);
+          }
+        }
+      } else {
+        this.error.set("Tüm playlist'lerde eksik dosya bulunamadı");
+      }
+    } catch (error) {
+      this.error.set("Global eksik dosyalar yüklenirken bir hata oluştu");
+    } finally {
+      this.loading.set(false);
+    }
   }
 
   openSettingsDialog(): void {

@@ -25,13 +25,18 @@ import { SearchResponse, SearchResult } from "../../models/api.model";
 import { firstValueFrom } from "rxjs";
 import { provideAnimations } from "@angular/platform-browser/animations";
 import { signal } from "@angular/core";
-import { environment } from '../../../environments/environment';
+import { ConfigService } from "../../services/config.service";
+import { PlaylistService } from "../../services/playlist.service";
 
 export interface DialogData {
   paths: string[];
   playlistPath: string;
   category: string;
+  globalMissingFiles?: any[];
+  globalStats?: any;
 }
+
+// PlaylistInfo interface kaldırıldı - artık sadece son okunan playlist bilgisi kullanılıyor
 
 @Component({
   selector: "app-multisearch-dialog",
@@ -71,7 +76,13 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   isSearching = false;
   selectedItems = new Set<string>();
   playlistInfo = signal<{ name: string; path: string; category: string } | null>(null);
-  private apiUrl = environment.apiUrl;
+  globalMissingFiles: any[] = [];
+  globalStats: any = null;
+  isGlobalMode = false;
+  
+  private getApiUrl(): string {
+    return this.configService.getApiUrl();
+  }
   activeFilters: Set<string> = new Set();
   filteredResults: SearchResult[] | null = null;
 
@@ -84,6 +95,8 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     private http: HttpClient,
     private changeDetector: ChangeDetectorRef,
     private fb: FormBuilder,
+    private configService: ConfigService,
+    private playlistService: PlaylistService,
   ) {
     // Form başlatma
     this.searchForm = this.fb.group({
@@ -98,30 +111,55 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     this.dialogRef.addPanelClass(["multisearch-dialog-panel", "modern-dialog"]);
     this.dialogRef.updateSize("90vw", "90vh");
 
-    // Playlist bilgilerini ayarla
-    if (this.data.playlistPath) {
-      // VirtualDJ klasör yapısından playlist adını çıkar
-      const pathParts = this.data.playlistPath.split("/");
-      const folderIndex = pathParts.findIndex((part) => part === "Folders");
-      const playlistName = pathParts
-        .slice(folderIndex + 1)
-        .map((part) => part.replace(".vdjfolder", "").replace(".subfolders", ""))
-        .join(" / ");
-
+    // Global mode kontrolü
+    if (this.data.playlistPath === "global") {
+      this.isGlobalMode = true;
+      
+      // Veri zaten app.component.ts'den geliyor, tekrar API çağrısı yapma
+      if (this.data.globalMissingFiles) {
+      this.globalMissingFiles = this.data.globalMissingFiles;
+      this.globalStats = this.data.globalStats;
+      }
+      
       this.playlistInfo.set({
-        name: playlistName,
-        path: this.data.playlistPath,
-        category: this.data.category || "Genel",
+        name: "Tüm Eksik Dosyalar",
+        path: "global",
+        category: "Global",
       });
+      
+      // Veri zaten yüklü, direkt sonuçları göster
+      this.performGlobalSearch();
+    } else {
+      // Normal playlist mode
+      if (this.data.playlistPath) {
+        // VirtualDJ klasör yapısından playlist adını çıkar
+        const pathParts = this.data.playlistPath.split("/");
+        const folderIndex = pathParts.findIndex((part) => part === "Folders");
+        const playlistName = pathParts
+          .slice(folderIndex + 1)
+          .map((part) => part.replace(".vdjfolder", "").replace(".subfolders", ""))
+          .join(" / ");
+
+        this.playlistInfo.set({
+          name: playlistName,
+          path: this.data.playlistPath,
+          category: this.data.category || "Genel",
+        });
+      }
     }
   }
 
   ngOnInit() {
+    // Global mode'da search() çağrılmaz, performGlobalSearch() kullanılır
+    if (this.isGlobalMode) {
+      return; // Global mode'da ngOnInit'te hiçbir şey yapma
+    }
+    
     if (this.data.paths && this.data.paths.length > 0) {
       this.search(this.data.paths).then(() => {
         // Arama tamamlandıktan sonra benzerDosya dışındaki tüm sonuçları seç
-        if (this.searchResults?.results) {
-          this.searchResults.results
+        if (this.searchResults?.data) {
+          this.searchResults.data
             .filter(result => result.found && result.matchType !== 'benzerDosya')
             .forEach(result => this.selectedItems.add(result.originalPath));
         }
@@ -160,11 +198,14 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
       return { total: 0, processed: 0, matches: 0, notFound: 0 };
     }
 
+    const found = this.searchResults.data?.filter(r => r.found).length || 0;
+    const notFound = this.searchResults.data?.filter(r => !r.found).length || 0;
+
     return {
-      total: this.searchResults.stats.totalSearched,
-      processed: this.searchResults.stats.found + this.searchResults.stats.notFound,
-      matches: this.searchResults.stats.found,
-      notFound: this.searchResults.stats.notFound
+      total: this.searchResults.stats.totalProcessed,
+      processed: this.searchResults.stats.totalProcessed,
+      matches: found,
+      notFound: notFound
     };
   }
 
@@ -172,7 +213,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     if (!this.searchResults?.stats) {
       return 0;
     }
-    return this.searchResults.stats.executionTimeMs;
+    return this.searchResults.stats.averageProcessTime;
   }
 
   close(): void {
@@ -188,19 +229,21 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     try {
       const formValue = this.searchForm.value;
       const response = await firstValueFrom(
-        this.http.post<SearchResponse>(`${this.apiUrl}/search/files`, {
+        this.http.post<SearchResponse>(`${this.getApiUrl()}/search/files`, {
           paths,
           options: {
             ...formValue.options,
-            batchSize: 100,
+            batchSize: this.isGlobalMode ? 50 : 100, // Global mode'da daha küçük batch
             fuzzySearch: true,
           },
         }),
       );
 
-      if (response) {
+      if (response && response.status === "success") {
         this.searchResults = response;
         this.changeDetector.detectChanges();
+      } else {
+        this.error = "Arama başarısız oldu";
       }
     } catch (err) {
       this.error = "Arama sırasında bir hata oluştu";
@@ -263,13 +306,18 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
       return { totalTime: 0, averageTime: 0, efficiency: 0 };
     }
 
-    const { executionTimeMs, found, totalSearched } = this.searchResults.stats;
-    const efficiency = (found / totalSearched) * 100;
+    const { executionTime, averageProcessTime, totalProcessed } = this.searchResults.stats;
+    
+    // Bulunan dosya sayısını hesapla
+    const found = this.searchResults.data?.filter(r => r.found).length || 0;
+    
+    // Sıfıra bölme kontrolü
+    const efficiency = totalProcessed > 0 ? (found / totalProcessed) * 100 : 0;
 
     return {
-      totalTime: executionTimeMs,
-      averageTime: Number((executionTimeMs / totalSearched).toFixed(2)),
-      efficiency,
+      totalTime: executionTime || 0,
+      averageTime: averageProcessTime || 0,
+      efficiency: Number(efficiency.toFixed(1)),
     };
   }
 
@@ -323,8 +371,8 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   }
 
   selectAll(): void {
-    if (!this.searchResults?.results) return;
-    this.searchResults.results
+    if (!this.searchResults?.data) return;
+    this.searchResults.data
       .filter((result) => result.found)
       .forEach((result) => this.selectedItems.add(result.originalPath));
   }
@@ -342,35 +390,89 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   }
 
   async saveSelected(): Promise<void> {
-    if (!this.searchResults?.results || !this.hasSelectedItems()) return;
+    if (!this.searchResults?.data || !this.hasSelectedItems()) return;
 
-    const playlistPath = this.getPlaylistPath();
-    if (!playlistPath) {
-      this.error = "Playlist yolu belirtilmemiş";
-      return;
-    }
-
-    const selectedResults = this.searchResults.results.filter(
+    const selectedResults = this.searchResults.data.filter(
       (result) => this.isSelected(result) && result.found,
     );
 
-    const requestData = {
-      playlistPath,
-      items: selectedResults.map((result) => ({
-        oldPath: result.originalPath,
-        newPath: result.foundPath,
-      })),
-    };
+    const items = selectedResults.map((result) => ({
+      oldPath: result.originalPath,
+      newPath: result.foundPath,
+    }));
+
+    // Onay mesajı kaldırıldı - doğrudan işleme başla
+
+    this.isSearching = true;
+    this.error = null;
 
     try {
-      await firstValueFrom(
-        this.http.post(`${this.apiUrl}/playlistsong/update`, requestData),
-      );
+      let globalStats: any = null;
+      const updatedPaths = new Set<string>(); // Güncellenen dosyaları takip et
 
+      // Global mode'da sadece global güncelleme yap
+      if (this.isGlobalMode) {
+        const globalResponse = await firstValueFrom(
+          this.http.post(`${this.getApiUrl()}/playlistsong/global-update`, {
+            items,
+            updateAllPlaylists: true,
+          }),
+        );
+
+        globalStats = globalResponse as any;
+        
+        // Güncellenen dosyaları işaretle
+        selectedResults.forEach(result => updatedPaths.add(result.originalPath));
+      } else {
+        // Normal mode'da önce mevcut playlist'i güncelle
+        const playlistPath = this.getPlaylistPath();
+        if (playlistPath && playlistPath !== "global") {
+          await firstValueFrom(
+            this.http.post(`${this.getApiUrl()}/playlistsong/update`, {
+              playlistPath,
+              items,
+            }),
+          );
+        }
+
+        // Sonra global güncelleme yap
+        const globalResponse = await firstValueFrom(
+          this.http.post(`${this.getApiUrl()}/playlistsong/global-update`, {
+            items,
+            updateAllPlaylists: true,
+          }),
+        );
+
+        globalStats = globalResponse as any;
+        
+        // Güncellenen dosyaları işaretle
+        selectedResults.forEach(result => updatedPaths.add(result.originalPath));
+      }
+
+      // Local olarak güncellenen dosyaları arayüzden kaldır
+      if (updatedPaths.size > 0) {
+        this.removeUpdatedSongsFromUI(Array.from(updatedPaths));
+      }
+
+      // Modern mesaj sistemi
+      this.showSaveSuccessMessage(selectedResults.length, globalStats);
+
+      // Seçimi temizle
       this.clearSelection();
-      this.dialogRef.close({ success: true, data: selectedResults });
+
+      // Dialog'u kapat (isteğe bağlı)
+      // this.dialogRef.close({ 
+      //   success: true, 
+      //   data: selectedResults,
+      //   globalStats: globalStats
+      // });
+
     } catch (err) {
+      console.error('Kaydetme hatası:', err);
       this.error = "Seçili öğeler kaydedilirken bir hata oluştu";
+      this.showSaveErrorMessage();
+    } finally {
+      this.isSearching = false;
     }
   }
 
@@ -386,6 +488,120 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     return this.playlistInfo()?.path || "";
   }
 
+  // loadGlobalMissingFiles fonksiyonu kaldırıldı - veri zaten app.component.ts'den geliyor
+
+  async performGlobalSearch(): Promise<void> {
+    if (!this.globalMissingFiles || this.globalMissingFiles.length === 0) {
+      this.isSearching = false;
+      return;
+    }
+
+    // Debug: Veriyi kontrol et
+    console.log('Global missing files:', this.globalMissingFiles[0]);
+    console.log('Playlist name:', this.globalMissingFiles[0]?.playlistName);
+    console.log('Playlist path:', this.globalMissingFiles[0]?.playlistPath);
+
+    // Loading göstergesini başlat
+    this.isSearching = true;
+    this.error = null;
+
+    // 1. Önce global-missing API'si çalıştı (zaten çalıştı)
+    // 2. Şimdi benzerlik algoritması çalıştır (466 dosya için toplu arama)
+    const paths = this.globalMissingFiles.map(file => file.originalPath);
+    
+    try {
+      const formValue = this.searchForm.value;
+      const response = await firstValueFrom(
+        this.http.post<SearchResponse>(`${this.getApiUrl()}/search/files`, {
+          paths,
+          options: {
+            ...formValue.options,
+            batchSize: 50, // Global mode'da daha küçük batch
+            fuzzySearch: true,
+          },
+        }),
+      );
+
+      if (response && response.status === "success") {
+        // Benzerlik sonuçlarını playlist bilgileriyle birleştir
+        this.searchResults = {
+          ...response,
+          data: response.data.map(result => {
+            const originalFile = this.globalMissingFiles.find(f => f.originalPath === result.originalPath);
+            return {
+              ...result,
+              // Her dosya için son okunan playlist bilgisini ekle
+              lastPlaylistName: originalFile?.playlistName,
+              lastPlaylistPath: originalFile ? this.getShortPlaylistPath(originalFile.playlistPath) : undefined
+            };
+          })
+        };
+      } else {
+        // Hata durumunda sadece eksik dosyaları göster
+        this.searchResults = {
+          status: "success",
+          data: this.globalMissingFiles.map(file => ({
+            originalPath: file.originalPath,
+            found: false,
+            matchType: "benzerDosya" as const,
+            algoritmaYontemi: "Eksik Dosya",
+            processTime: "0",
+            lastPlaylistName: file.playlistName,
+            lastPlaylistPath: this.getShortPlaylistPath(file.playlistPath)
+          })),
+          stats: {
+            totalProcessed: this.globalMissingFiles.length,
+            executionTime: 0,
+            averageProcessTime: 0,
+            matchDetails: {
+              tamYolEsleme: { count: 0, time: "0", algoritmaYontemi: "Tam Yol Eşleşme" },
+              ayniKlasorFarkliUzanti: { count: 0, time: "0", algoritmaYontemi: "Aynı Klasör Farklı Uzantı" },
+              farkliKlasorveUzanti: { count: 0, time: "0", algoritmaYontemi: "Farklı Klasör Farklı Uzantı" },
+              farkliKlasor: { count: 0, time: "0", algoritmaYontemi: "Farklı Klasör Aynı Ad" },
+              benzerDosya: { count: this.globalMissingFiles.length, time: "0", algoritmaYontemi: "Eksik Dosya" }
+            },
+            foundCount: 0,
+            notFoundCount: this.globalMissingFiles.length
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Global search error:', error);
+      this.error = "Global arama sırasında hata oluştu";
+      
+      // Hata durumunda sadece eksik dosyaları göster
+      this.searchResults = {
+        status: "success",
+        data: this.globalMissingFiles.map(file => ({
+          originalPath: file.originalPath,
+          found: false,
+          matchType: "benzerDosya" as const,
+          algoritmaYontemi: "Eksik Dosya",
+          processTime: "0",
+          lastPlaylistName: file.playlistName,
+          lastPlaylistPath: this.getShortPlaylistPath(file.playlistPath)
+        })),
+        stats: {
+          totalProcessed: this.globalMissingFiles.length,
+          executionTime: 0,
+          averageProcessTime: 0,
+          matchDetails: {
+            tamYolEsleme: { count: 0, time: "0", algoritmaYontemi: "Tam Yol Eşleşme" },
+            ayniKlasorFarkliUzanti: { count: 0, time: "0", algoritmaYontemi: "Aynı Klasör Farklı Uzantı" },
+            farkliKlasorveUzanti: { count: 0, time: "0", algoritmaYontemi: "Farklı Klasör Farklı Uzantı" },
+            farkliKlasor: { count: 0, time: "0", algoritmaYontemi: "Farklı Klasör Aynı Ad" },
+            benzerDosya: { count: this.globalMissingFiles.length, time: "0", algoritmaYontemi: "Eksik Dosya" }
+          },
+          foundCount: 0,
+          notFoundCount: this.globalMissingFiles.length
+        }
+      };
+    }
+
+    // Loading state'ini kapat
+    this.isSearching = false;
+  }
+
   filterResults(type: string) {
     if (this.activeFilters.has(type)) {
       this.activeFilters.delete(type);
@@ -394,9 +610,9 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     }
     
     if (this.activeFilters.size === 0) {
-      this.filteredResults = this.searchResults?.results || null;
+      this.filteredResults = this.searchResults?.data || null;
     } else {
-      this.filteredResults = this.searchResults?.results?.filter(result => 
+      this.filteredResults = this.searchResults?.data?.filter(result => 
         this.activeFilters.has(result.matchType)
       ) || null;
     }
@@ -407,7 +623,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   }
 
   get displayResults(): SearchResult[] {
-    return this.filteredResults || this.searchResults?.results || [];
+    return this.filteredResults || this.searchResults?.data || [];
   }
 
   // Grup seçimini değiştir
@@ -417,8 +633,8 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     const currentState = this.isGroupSelected(groupType);
     this.groupSelectionState.set(groupType, !currentState);
     
-    if (this.searchResults?.results) {
-      const groupResults = this.searchResults.results.filter(
+    if (this.searchResults?.data) {
+      const groupResults = this.searchResults.data.filter(
         (result: SearchResult) => result.matchType === groupType
       );
       
@@ -438,9 +654,9 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
   // Bir grubun seçili olup olmadığını kontrol et
   isGroupSelected(groupType: string): boolean {
-    if (!this.searchResults?.results) return false;
+    if (!this.searchResults?.data) return false;
     
-    const groupResults = this.searchResults.results.filter(
+    const groupResults = this.searchResults.data.filter(
       (result: SearchResult) => result.matchType === groupType
     );
     
@@ -448,5 +664,344 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     return groupResults.length > 0 && groupResults.every(
       (result: SearchResult) => this.selectedItems.has(result.originalPath)
     );
+  }
+
+  // Global mode'da playlist bilgilerini yükleme işlemi kaldırıldı
+  // Artık her dosya için sadece son okunan playlist bilgisi gösteriliyor
+
+  // Playlist yolunu kısalt - VirtualDJ root'tan sonrasını göster
+  getShortPlaylistPath(fullPath: string): string {
+    const virtualDJRoot = '/Users/koray/Library/Application Support/VirtualDJ';
+    if (fullPath.startsWith(virtualDJRoot)) {
+      return fullPath.substring(virtualDJRoot.length + 1); // +1 for the leading slash
+    }
+    return fullPath;
+  }
+
+  async removeFromAllPlaylists(): Promise<void> {
+    if (!this.hasSelectedItems()) {
+      return;
+    }
+
+    const selectedPaths = Array.from(this.selectedItems);
+    // Onay mesajı kaldırıldı - doğrudan işleme başla
+
+    this.isSearching = true;
+    this.error = null;
+
+    try {
+      let totalRemoved = 0;
+      const results = [];
+      const removedSongPaths = new Set<string>(); // Kaldırılan şarkıları takip et
+
+      // Her seçili şarkı için ayrı ayrı kaldır
+      for (const songPath of selectedPaths) {
+        const response = await firstValueFrom(
+          this.http.post<any>(`${this.getApiUrl()}/playlistsong/remove-from-all`, {
+            songPath: songPath
+          })
+        );
+
+        if (response && response.success) {
+          totalRemoved += response.totalRemovedCount;
+          results.push({
+            songPath: songPath,
+            removedFrom: response.removedFromPlaylists,
+            totalRemoved: response.totalRemovedCount
+          });
+
+          // Eğer şarkı kaldırıldıysa, local olarak da kaldır
+          if (response.totalRemovedCount > 0) {
+            removedSongPaths.add(songPath);
+          }
+        } else {
+          console.error('Şarkı kaldırma hatası:', response);
+        }
+      }
+
+      // Local olarak kaldırılan şarkıları arayüzden de kaldır
+      if (removedSongPaths.size > 0) {
+        this.removeSongsFromUI(Array.from(removedSongPaths));
+      }
+
+      // Modern mesaj sistemi - Toast benzeri
+      this.showModernMessage(totalRemoved, results, removedSongPaths.size);
+      
+      // Sonuçları konsola yazdır
+      console.log('Playlist kaldırma sonuçları:', results);
+
+      // Seçimi temizle
+      this.clearSelection();
+
+      // Dialog'u kapat (isteğe bağlı)
+      // this.dialogRef.close();
+
+    } catch (error) {
+      console.error('Playlist kaldırma hatası:', error);
+      this.error = "Şarkılar playlist'lerden kaldırılırken hata oluştu";
+    } finally {
+      this.isSearching = false;
+    }
+  }
+
+  // Local olarak şarkıları arayüzden kaldır
+  private removeSongsFromUI(removedPaths: string[]): void {
+    if (!this.searchResults?.data) return;
+
+    // Kaldırılan şarkıları filtrele
+    this.searchResults.data = this.searchResults.data.filter(result => 
+      !removedPaths.includes(result.originalPath)
+    );
+
+    // İstatistikleri güncelle
+    if (this.searchResults.stats) {
+      this.searchResults.stats.foundCount = this.searchResults.data.filter(r => r.found).length;
+      this.searchResults.stats.notFoundCount = this.searchResults.data.filter(r => !r.found).length;
+    }
+
+    // Seçili öğeleri temizle
+    this.selectedItems.clear();
+    
+    // Change detection'ı tetikle
+    this.changeDetector.detectChanges();
+  }
+
+  // Modern mesaj sistemi
+  private showModernMessage(totalRemoved: number, results: any[], removedFiles: number): void {
+    // Toast benzeri mesaj oluştur
+    const messageContainer = document.createElement('div');
+    messageContainer.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: ${totalRemoved > 0 ? '#4caf50' : '#ff9800'};
+      color: white;
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      max-width: 400px;
+      animation: slideIn 0.3s ease-out;
+    `;
+
+    // CSS animasyonu ekle
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    if (totalRemoved > 0) {
+      // Daha anlamlı mesaj oluştur
+      const playlistCount = results.reduce((sum, result) => sum + (result.removedFrom?.length || 0), 0);
+      const fileCount = removedFiles;
+      
+      let messageText = '';
+      if (fileCount === 1) {
+        messageText = `1 dosya ${playlistCount} playlist'ten kaldırıldı`;
+      } else {
+        messageText = `${fileCount} dosya toplam ${playlistCount} playlist'ten kaldırıldı`;
+      }
+      
+      messageContainer.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">✅</span>
+          <div>
+            <div style="font-weight: bold; margin-bottom: 4px;">Başarılı!</div>
+            <div>${messageText}</div>
+            <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">Arayüzden de kaldırıldı</div>
+          </div>
+        </div>
+      `;
+    } else {
+      messageContainer.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">ℹ️</span>
+          <div>
+            <div style="font-weight: bold; margin-bottom: 4px;">Bilgi</div>
+            <div>Seçilen dosyalar playlist'lerde bulunamadı</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Mesajı DOM'a ekle
+    document.body.appendChild(messageContainer);
+
+    // 4 saniye sonra kaldır
+    setTimeout(() => {
+      messageContainer.style.animation = 'slideOut 0.3s ease-in';
+      setTimeout(() => {
+        if (messageContainer.parentNode) {
+          messageContainer.parentNode.removeChild(messageContainer);
+        }
+        if (style.parentNode) {
+          style.parentNode.removeChild(style);
+        }
+      }, 300);
+    }, 4000);
+  }
+
+  // Güncellenen şarkıları arayüzden kaldır
+  private removeUpdatedSongsFromUI(updatedPaths: string[]): void {
+    if (!this.searchResults?.data) return;
+
+    // Güncellenen şarkıları filtrele
+    this.searchResults.data = this.searchResults.data.filter(result => 
+      !updatedPaths.includes(result.originalPath)
+    );
+
+    // İstatistikleri güncelle
+    if (this.searchResults.stats) {
+      this.searchResults.stats.foundCount = this.searchResults.data.filter(r => r.found).length;
+      this.searchResults.stats.notFoundCount = this.searchResults.data.filter(r => !r.found).length;
+    }
+
+    // Seçili öğeleri temizle
+    this.selectedItems.clear();
+    
+    // Change detection'ı tetikle
+    this.changeDetector.detectChanges();
+  }
+
+  // Kaydetme başarı mesajı
+  private showSaveSuccessMessage(fileCount: number, globalStats: any): void {
+    const messageContainer = document.createElement('div');
+    messageContainer.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #4caf50;
+      color: white;
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      max-width: 400px;
+      animation: slideIn 0.3s ease-out;
+    `;
+
+    // CSS animasyonu ekle
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Backend'den gelen gerçek verileri kullan
+    const actualFileCount = globalStats?.totalUpdated || fileCount;
+    const playlistCount = globalStats?.totalPlaylistsUpdated || 0;
+    
+    let messageText = '';
+    if (actualFileCount === 1) {
+      messageText = `1 dosya ${playlistCount} playlist'te güncellendi`;
+    } else {
+      messageText = `${actualFileCount} dosya toplam ${playlistCount} playlist'te güncellendi`;
+    }
+
+    messageContainer.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 20px;">✅</span>
+        <div>
+          <div style="font-weight: bold; margin-bottom: 4px;">Güncelleme Başarılı!</div>
+          <div>${messageText}</div>
+          <div style="font-size: 12px; opacity: 0.9; margin-top: 4px;">Arayüzden de kaldırıldı</div>
+        </div>
+      </div>
+    `;
+
+    // Mesajı DOM'a ekle
+    document.body.appendChild(messageContainer);
+
+    // 5 saniye sonra kaldır
+    setTimeout(() => {
+      messageContainer.style.animation = 'slideOut 0.3s ease-in';
+      setTimeout(() => {
+        if (messageContainer.parentNode) {
+          messageContainer.parentNode.removeChild(messageContainer);
+        }
+        if (style.parentNode) {
+          style.parentNode.removeChild(style);
+        }
+      }, 300);
+    }, 5000);
+  }
+
+  // Kaydetme hata mesajı
+  private showSaveErrorMessage(): void {
+    const messageContainer = document.createElement('div');
+    messageContainer.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: #f44336;
+      color: white;
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      font-family: 'Roboto', sans-serif;
+      font-size: 14px;
+      max-width: 400px;
+      animation: slideIn 0.3s ease-out;
+    `;
+
+    // CSS animasyonu ekle
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+
+    messageContainer.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 20px;">❌</span>
+        <div>
+          <div style="font-weight: bold; margin-bottom: 4px;">Hata!</div>
+          <div>Dosyalar güncellenirken bir hata oluştu</div>
+        </div>
+      </div>
+    `;
+
+    // Mesajı DOM'a ekle
+    document.body.appendChild(messageContainer);
+
+    // 5 saniye sonra kaldır
+    setTimeout(() => {
+      messageContainer.style.animation = 'slideOut 0.3s ease-in';
+      setTimeout(() => {
+        if (messageContainer.parentNode) {
+          messageContainer.parentNode.removeChild(messageContainer);
+        }
+        if (style.parentNode) {
+          style.parentNode.removeChild(style);
+        }
+      }, 300);
+    }, 5000);
   }
 }
