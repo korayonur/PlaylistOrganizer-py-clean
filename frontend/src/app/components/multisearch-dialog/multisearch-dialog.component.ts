@@ -907,14 +907,15 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     document.head.appendChild(style);
 
     // Backend'den gelen gerçek verileri kullan
-    const actualFileCount = globalStats?.totalUpdated || fileCount;
-    const playlistCount = globalStats?.totalPlaylistsUpdated || 0;
+    const totalSongsUpdated = globalStats?.totalUpdated || 0;  // Toplam güncellenen şarkı sayısı
+    const playlistCount = globalStats?.totalPlaylistsUpdated || 0;  // Güncellenen playlist sayısı
+    const selectedFileCount = fileCount;  // Seçilen dosya sayısı
     
     let messageText = '';
-    if (actualFileCount === 1) {
-      messageText = `1 dosya ${playlistCount} playlist'te güncellendi`;
+    if (selectedFileCount === 1) {
+      messageText = `1 dosya seçildi, ${totalSongsUpdated} şarkı ${playlistCount} playlist'te güncellendi`;
     } else {
-      messageText = `${actualFileCount} dosya toplam ${playlistCount} playlist'te güncellendi`;
+      messageText = `${selectedFileCount} dosya seçildi, ${totalSongsUpdated} şarkı ${playlistCount} playlist'te güncellendi`;
     }
 
     messageContainer.innerHTML = `

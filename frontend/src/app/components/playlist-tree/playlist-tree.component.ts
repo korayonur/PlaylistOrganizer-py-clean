@@ -60,6 +60,9 @@ import { PlaylistService } from "../../services/playlist.service";
             [class.expanded]="node.isExpanded"
             [class.selected]="node.isSelected"
             [class.matched]="searchQuery() && isNodeMatched(node)"
+            [class.special-folder]="isSpecialFolder(node)"
+            [class.serato-folder]="node.name.toLowerCase().includes('serato')"
+            [class.mylists-folder]="node.name.toLowerCase().includes('mylists')"
             role="treeitem"
             [attr.aria-expanded]="node.type === 'folder' ? node.isExpanded : undefined"
             [attr.aria-selected]="node.isSelected"
@@ -341,9 +344,107 @@ export class PlaylistTreeComponent {
 
   getNodeIcon(node: TreeNode): string {
     if (node.type === "folder") {
+      // Özel klasör türlerine göre farklı ikonlar (VirtualDJ tarzı)
+      const folderName = node.name.toLowerCase();
+      
+      // Ana klasörler
+      if (folderName === 'folders') {
+        return node.isExpanded ? "📂" : "📁";
+      }
+      if (folderName === 'mylists') {
+        return node.isExpanded ? "📋" : "📋";
+      }
+      
+      // Özel klasör türleri
+      if (folderName.includes('serato')) {
+        return node.isExpanded ? "🎛️" : "🎛️";
+      }
+      if (folderName.includes('my library')) {
+        return node.isExpanded ? "📚" : "📚";
+      }
+      if (folderName.includes('crates') || folderName.includes('crateler')) {
+        return node.isExpanded ? "📦" : "📦";
+      }
+      if (folderName.includes('history') || folderName.includes('geçmiş')) {
+        return node.isExpanded ? "🕒" : "🕒";
+      }
+      if (folderName.includes('favorites') || folderName.includes('favoriler')) {
+        return node.isExpanded ? "⭐" : "⭐";
+      }
+      
+      // Müzik türü klasörleri
+      if (folderName.includes('düğün') || folderName.includes('dugun')) {
+        return node.isExpanded ? "💒" : "💒";
+      }
+      if (folderName.includes('club') || folderName.includes('klup')) {
+        return node.isExpanded ? "🎪" : "🎪";
+      }
+      if (folderName.includes('slow') || folderName.includes('romantik')) {
+        return node.isExpanded ? "💕" : "💕";
+      }
+      if (folderName.includes('pop') || folderName.includes('hit')) {
+        return node.isExpanded ? "🎤" : "🎤";
+      }
+      if (folderName.includes('oyun') || folderName.includes('halay')) {
+        return node.isExpanded ? "🎉" : "🎉";
+      }
+      
+      // Varsayılan klasör
       return node.isExpanded ? "📂" : "📁";
     }
-    return "🎵";
+    
+    // Playlist türleri
+    if (node.type === "playlist") {
+      const playlistName = node.name.toLowerCase();
+      
+      // Özel playlist türleri
+      if (playlistName.includes('favorites') || playlistName.includes('favoriler')) {
+        return "⭐";
+      }
+      if (playlistName.includes('history') || playlistName.includes('geçmiş')) {
+        return "🕒";
+      }
+      if (playlistName.includes('crate')) {
+        return "📦";
+      }
+      if (playlistName.includes('smart') || playlistName.includes('akıllı')) {
+        return "🧠";
+      }
+      if (playlistName.includes('auto') || playlistName.includes('otomatik')) {
+        return "⚡";
+      }
+      
+      // Müzik türü playlistleri
+      if (playlistName.includes('düğün') || playlistName.includes('dugun')) {
+        return "💒";
+      }
+      if (playlistName.includes('club') || playlistName.includes('klup')) {
+        return "🎪";
+      }
+      if (playlistName.includes('slow') || playlistName.includes('romantik')) {
+        return "💕";
+      }
+      if (playlistName.includes('pop') || playlistName.includes('hit')) {
+        return "🎤";
+      }
+      if (playlistName.includes('oyun') || playlistName.includes('halay')) {
+        return "🎉";
+      }
+      
+      // Varsayılan playlist
+      return "🎵";
+    }
+    
+    return "📄";
+  }
+
+  isSpecialFolder(node: TreeNode): boolean {
+    if (node.type !== 'folder') return false;
+    
+    const folderName = node.name.toLowerCase();
+    const specialFolders = ['mylists', 'serato', 'my library', 'favorites', 'history', 'crates'];
+    
+    return specialFolders.some(special => folderName.includes(special));
   }
 
   clearSearch() {

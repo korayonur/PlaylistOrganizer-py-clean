@@ -77,6 +77,32 @@
         background-color: var(--surface-hover);
       }
     }
+    
+    // Özel klasör türleri için özel stiller
+    &.special-folder {
+      > .node-content {
+        border-left: 3px solid var(--accent-color);
+        background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.05), transparent);
+        
+        .icon {
+          text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.3);
+        }
+      }
+    }
+    
+    &.serato-folder {
+      > .node-content {
+        border-left: 3px solid #00d4aa;
+        background: linear-gradient(90deg, rgba(0, 212, 170, 0.05), transparent);
+      }
+    }
+    
+    &.mylists-folder {
+      > .node-content {
+        border-left: 3px solid #ff6b35;
+        background: linear-gradient(90deg, rgba(255, 107, 53, 0.05), transparent);
+      }
+    }
 
     .node-content {
       display: flex;
@@ -93,6 +119,17 @@
         font-size: 1.2rem;
         min-width: 24px;
         text-align: center;
+        margin-right: 0.5rem;
+        
+        // VirtualDJ tarzı ikon efektleri
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+        transition: all 0.2s ease;
+        
+        // Özel klasör türleri için hover efektleri
+        &:hover {
+          transform: scale(1.1);
+          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+        }
       }
 
       .node-name {

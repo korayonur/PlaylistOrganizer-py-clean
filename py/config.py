@@ -12,7 +12,7 @@ from pathlib import Path
 IS_DEVELOPMENT = os.environ.get('PLAYLIST_ORGANIZER_DEV', '0') == '1'
 
 # API Port ayarları - Sabit port kullan (dinamik port sistemi kaldırıldı)
-API_PORT = 50001  # Her zaman aynı port kullan
+API_PORT = 50002  # Her zaman aynı port kullan
 
 API_HOST = os.environ.get('API_HOST', "localhost") 
 
