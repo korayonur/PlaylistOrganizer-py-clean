@@ -89,7 +89,17 @@ class SimpleSQLiteDatabase {
         let results = this.searchExact(normalizedSearch, limit);
         if (results.length > 0) {
             console.log(`✅ Tam eşleşme: ${results.length} sonuç`);
-            return this.addScoring(results, words);
+            return {
+                results: this.addScoring(results, words),
+                searchInfo: {
+                    originalQuery: searchTerm,
+                    normalizedQuery: normalizedSearch,
+                    totalWords: words.length,
+                    matchedAt: 'exact',
+                    matchedWords: words.length,
+                    searchStage: 'Tam eşleşme'
+                }
+            };
         }
         
         // 2. Adım: Kelime azaltma (son kelimeyi çıkar)
@@ -98,21 +108,54 @@ class SimpleSQLiteDatabase {
             results = this.searchExact(partialTerm, limit);
             if (results.length > 0) {
                 console.log(`✅ Kısmi eşleşme (${i} kelime): ${results.length} sonuç`);
-                return this.addScoring(results, words);
+                return {
+                    results: this.addScoring(results, words),
+                    searchInfo: {
+                        originalQuery: searchTerm,
+                        normalizedQuery: normalizedSearch,
+                        totalWords: words.length,
+                        matchedAt: 'partial',
+                        matchedWords: i,
+                        searchStage: `Kısmi eşleşme (${i}/${words.length} kelime)`
+                    }
+                };
             }
         }
         
         // 3. Adım: Tek kelime arama
-        for (const word of words) {
+        for (let i = 0; i < words.length; i++) {
+            const word = words[i];
             results = this.searchExact(word, limit);
             if (results.length > 0) {
                 console.log(`✅ Tek kelime eşleşme: ${results.length} sonuç`);
-                return this.addScoring(results, words);
+                return {
+                    results: this.addScoring(results, words),
+                    searchInfo: {
+                        originalQuery: searchTerm,
+                        normalizedQuery: normalizedSearch,
+                        totalWords: words.length,
+                        matchedAt: 'single',
+                        matchedWords: 1,
+                        matchedWordIndex: i + 1,
+                        matchedWord: word,
+                        searchStage: `Tek kelime eşleşme (${i + 1}/${words.length}. kelime: "${word}")`
+                    }
+                };
             }
         }
         
         console.log(`❌ Hiçbir eşleşme bulunamadı`);
-        return [];
+        return {
+            results: [],
+            searchInfo: {
+                originalQuery: searchTerm,
+                normalizedQuery: normalizedSearch,
+                totalWords: words.length,
+                matchedAt: 'none',
+                matchedWords: 0,
+                searchStage: 'Hiçbir eşleşme bulunamadı'
+            }
+        };
     }
 
     // Basit LIKE sorgusu - çok hızlı

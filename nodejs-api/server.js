@@ -673,7 +673,9 @@ async function searchFile(filePath, options = {}) {
         console.log(`🔍 Arama terimi: "${normalizedFileName}"`);
         
         // Kademeli arama algoritması
-        let results = sqliteDb.searchProgressive(normalizedFileName, 10);
+        let searchResult = sqliteDb.searchProgressive(normalizedFileName, 10);
+        let results = searchResult.results || [];
+        let searchInfo = searchResult.searchInfo || {};
         
         const processTime = Date.now() - startTime;
         
@@ -693,7 +695,12 @@ async function searchFile(filePath, options = {}) {
                 },
                 matchType: 'benzerDosya',
                 processTime: processTime,
-                totalMatches: results.length
+                totalMatches: results.length,
+                searchInfo: {
+                    ...searchInfo,
+                    inputType: 'filePath',
+                    inputValue: filePath
+                }
             };
         } else {
             return {
@@ -737,7 +744,9 @@ async function searchByQuery(query, options = {}) {
         // 1. Basit arama
         console.log(`🔍 DEBUG: musicDatabase:`, musicDatabase ? 'var' : 'null');
         console.log(`🔍 DEBUG: Kademeli arama başlatılıyor...`);
-        let results = musicDatabase.searchProgressive(normalizedQuery, 20);
+        let searchResult = musicDatabase.searchProgressive(normalizedQuery, 20);
+        let results = searchResult.results || [];
+        let searchInfo = searchResult.searchInfo || {};
         console.log(`🔍 DEBUG: Kademeli arama sonucu: ${results.length} adet`);
         
         const processTime = Date.now() - startTime;
@@ -750,6 +759,11 @@ async function searchByQuery(query, options = {}) {
                 similarity: result.similarity_score || 1.0
             })),
             totalMatches: results.length,
+            searchInfo: {
+                ...searchInfo,
+                inputType: 'query',
+                inputValue: query
+            },
             processTime: processTime,
             query: query,
             normalizedQuery: normalizedQuery
