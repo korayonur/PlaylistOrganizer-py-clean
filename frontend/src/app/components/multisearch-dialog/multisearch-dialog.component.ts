@@ -240,7 +240,8 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
       );
 
       if (response && response.status === "success") {
-        this.searchResults = response;
+        // Backend'den gelen yeni veri yapısını eski yapıya dönüştür
+        this.searchResults = this.transformSearchResponse(response);
         this.changeDetector.detectChanges();
       } else {
         this.error = "Arama başarısız oldu";
@@ -523,10 +524,13 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
       );
 
       if (response && response.status === "success") {
+        // Backend'den gelen yeni veri yapısını eski yapıya dönüştür
+        const transformedResponse = this.transformSearchResponse(response);
+        
         // Benzerlik sonuçlarını playlist bilgileriyle birleştir
         this.searchResults = {
-          ...response,
-          data: response.data.map(result => {
+          ...transformedResponse,
+          data: transformedResponse.data.map(result => {
             const originalFile = this.globalMissingFiles.find(f => f.originalPath === result.originalPath);
             return {
               ...result,
@@ -664,6 +668,68 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     return groupResults.length > 0 && groupResults.every(
       (result: SearchResult) => this.selectedItems.has(result.originalPath)
     );
+  }
+
+  // Backend'den gelen yeni veri yapısını eski yapıya dönüştür
+  private transformSearchResponse(response: any): SearchResponse {
+    const transformedData = response.data.map((item: any) => {
+      const result: SearchResult = {
+        originalPath: item.searchInfo?.inputValue || item.originalPath || '',
+        found: item.found || false,
+        matchType: this.mapMatchType(item.matchType),
+        algoritmaYontemi: this.getAlgorithmMethod(item.matchType, item.searchInfo),
+        processTime: item.processTime?.toString() || '0',
+        foundPath: item.bestMatch?.path || item.foundPath || '',
+        searchInfo: item.searchInfo
+      };
+      return result;
+    });
+
+    return {
+      status: response.status,
+      data: transformedData,
+      stats: response.stats
+    };
+  }
+
+  // Match type'ı eski formata dönüştür
+  private mapMatchType(matchType: string): string {
+    switch (matchType) {
+      case 'benzerDosya':
+        return 'benzerDosya';
+      case 'tamYolEsleme':
+        return 'tamYolEsleme';
+      case 'ayniKlasorFarkliUzanti':
+        return 'ayniKlasorFarkliUzanti';
+      case 'farkliKlasor':
+        return 'farkliKlasor';
+      case 'farkliKlasorveUzanti':
+        return 'farkliKlasorveUzanti';
+      default:
+        return 'benzerDosya';
+    }
+  }
+
+  // Algoritma yöntemini belirle
+  private getAlgorithmMethod(matchType: string, searchInfo: any): string {
+    if (searchInfo?.searchStage) {
+      return searchInfo.searchStage;
+    }
+    
+    switch (matchType) {
+      case 'benzerDosya':
+        return 'Benzer Dosya Arama';
+      case 'tamYolEsleme':
+        return 'Tam Yol Eşleşme';
+      case 'ayniKlasorFarkliUzanti':
+        return 'Aynı Klasör Farklı Uzantı';
+      case 'farkliKlasor':
+        return 'Farklı Klasör';
+      case 'farkliKlasorveUzanti':
+        return 'Farklı Klasör ve Uzantı';
+      default:
+        return 'Bilinmeyen Yöntem';
+    }
   }
 
   // Global mode'da playlist bilgilerini yükleme işlemi kaldırıldı

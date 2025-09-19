@@ -273,6 +273,28 @@
                   <div class="process-time">İşlem Süresi: {{ result.processTime }}</div>
                 </div>
                 
+                <!-- Arama Bilgileri -->
+                <div class="search-info" *ngIf="result.searchInfo">
+                  <div class="search-info-header">
+                    <span class="search-stage">{{ result.searchInfo.searchStage }}</span>
+                    <span class="search-step">{{ result.searchInfo.searchStep }}. AŞAMA</span>
+                  </div>
+                  <div class="search-details">
+                    <div class="search-detail">
+                      <span class="label">Aranan:</span>
+                      <span class="value">{{ result.searchInfo.searchedTerm || result.searchInfo.normalizedQuery }}</span>
+                    </div>
+                    <div class="search-detail">
+                      <span class="label">Eşleşen Kelimeler:</span>
+                      <span class="value">{{ result.searchInfo.matchedWords }}/{{ result.searchInfo.totalWords }}</span>
+                    </div>
+                    <div class="search-detail" *ngIf="result.searchInfo.matchedWord">
+                      <span class="label">Bulunan Kelime:</span>
+                      <span class="value">{{ result.searchInfo.matchedWord }}</span>
+                    </div>
+                  </div>
+                </div>
+
                 <!-- Son Okunan Playlist Bilgisi (Sadece Global Mode) -->
                 <div class="playlist-info" *ngIf="isGlobalMode && result.lastPlaylistName">
                   <div class="playlist-header">

@@ -823,3 +823,62 @@ mat-dialog-actions {
     }
   }
 }
+
+// Arama bilgileri
+.search-info {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(52, 152, 219, 0.05);
+  border: 1px solid rgba(52, 152, 219, 0.2);
+  border-radius: 8px;
+  font-size: 0.9em;
+
+  .search-info-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    
+    .search-stage {
+      font-weight: 600;
+      color: #3498db;
+      font-size: 1em;
+    }
+    
+    .search-step {
+      font-size: 0.85em;
+      color: rgba(255, 255, 255, 0.7);
+      background: rgba(52, 152, 219, 0.1);
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+  }
+
+  .search-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    .search-detail {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85em;
+
+      .label {
+        color: rgba(255, 255, 255, 0.7);
+        font-weight: 500;
+        min-width: 120px;
+      }
+
+      .value {
+        color: #ffffff;
+        font-family: 'Courier New', monospace;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+    }
+  }
+}
