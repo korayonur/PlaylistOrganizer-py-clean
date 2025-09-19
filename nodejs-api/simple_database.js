@@ -97,7 +97,7 @@ class SimpleSQLiteDatabase {
                     totalWords: words.length,
                     matchedAt: 'exact',
                     matchedWords: words.length,
-                    searchStage: 'Tam eşleşme'
+                    searchStage: '🎯 TAM EŞLEŞME - Tüm kelimeler bulundu'
                 }
             };
         }
@@ -116,7 +116,7 @@ class SimpleSQLiteDatabase {
                         totalWords: words.length,
                         matchedAt: 'partial',
                         matchedWords: i,
-                        searchStage: `Kısmi eşleşme (${i}/${words.length} kelime)`
+                        searchStage: `📉 KISMİ EŞLEŞME - ${i}/${words.length} kelime bulundu`
                     }
                 };
             }
@@ -138,7 +138,7 @@ class SimpleSQLiteDatabase {
                         matchedWords: 1,
                         matchedWordIndex: i + 1,
                         matchedWord: word,
-                        searchStage: `Tek kelime eşleşme (${i + 1}/${words.length}. kelime: "${word}")`
+                        searchStage: `🔍 TEK KELİME EŞLEŞME - ${i + 1}/${words.length}. kelime: "${word}"`
                     }
                 };
             }
@@ -153,7 +153,7 @@ class SimpleSQLiteDatabase {
                 totalWords: words.length,
                 matchedAt: 'none',
                 matchedWords: 0,
-                searchStage: 'Hiçbir eşleşme bulunamadı'
+                searchStage: '❌ HİÇBİR EŞLEŞME BULUNAMADI'
             }
         };
     }
