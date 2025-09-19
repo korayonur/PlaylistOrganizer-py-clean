@@ -6,6 +6,10 @@ const compression = require('compression');
 const fs = require('fs-extra');
 const path = require('path');
 const xml2js = require('xml2js');
+const SimpleSQLiteDatabase = require('./simple_database');
+
+// Server versiyonu
+const SERVER_VERSION = '4.2.0';
 
 // Logging sistemi
 const logDir = path.join(__dirname, 'logs');
@@ -67,244 +71,84 @@ const SUPPORTED_FORMATS = {
     ]
 };
 
-// Python'daki önemli fonksiyonları Node.js'e aktar
-function normalizeText(text, options = {}) {
-    /**
-     * Tüm uygulama için merkezi string normalizasyon fonksiyonu
-     * İndeksleme ile uyumlu hale getirildi
-     */
-    if (typeof text !== 'string') {
-        throw new TypeError("Input must be a string");
+// BASİT KELİME EŞLEŞME ALGORİTMASI
+class SimpleWordMatcher {
+    constructor() {
+        this.musicFiles = [];
     }
 
-    const keepSpaces = options.keepSpaces !== false;
-    const keepSpecialChars = options.keepSpecialChars || false;
-    const keepCase = options.keepCase || false;
-    const keepDiacritics = options.keepDiacritics || false;
+    /**
+     * Türkçe karakterleri normalize et
+     */
+    normalizeText(text) {
+        const charMap = {
+            "ğ": "g", "Ğ": "G", "ı": "i", "I": "I", "İ": "I", 
+            "ş": "s", "Ş": "S", "ç": "c", "Ç": "C", 
+            "ü": "u", "Ü": "U", "ö": "o", "Ö": "O"
+        };
 
     let normalized = text;
 
-    if (!keepDiacritics) {
-        // NFKC normalizasyonu ve ENHANCED_CHAR_MAP dönüşümü
+        // NFKC normalizasyonu ve karakter dönüşümü
         normalized = normalized.normalize("NFKC");
-        normalized = normalized.split('').map(c => ENHANCED_CHAR_MAP[c] || c).join('');
-    }
-
-    if (!keepCase) {
+        normalized = normalized.split('').map(c => charMap[c] || c).join('');
         normalized = normalized.toLowerCase();
-    }
 
-    if (!keepSpecialChars) {
-        normalized = normalized.replace(/[^a-zA-Z0-9\s]/g, '');
-    }
+        // Sadece harf ve rakamları koru, boşlukları koru
+        normalized = normalized.replace(/[^a-z0-9\s]/g, ' ');
 
-    // Boşluk düzenleme - çoklu boşlukları tek boşluğa çevir
-    // Bu işlem keepSpaces parametresinden bağımsız olarak yapılmalı
-    // çünkü özel karakter kaldırma işlemi çift boşluk oluşturabiliyor
+        // Çoklu boşlukları tek boşluğa çevir
     normalized = normalized.replace(/\s+/g, ' ');
 
     return normalized.trim();
 }
 
-function normalizeFileName(text) {
-    /**Dosya adı normalizasyonu*/
-    return normalizeText(text, { keepSpaces: true, keepSpecialChars: true });
-}
-
-function normalizePath(text) {
-    /**Yol normalizasyonu*/
-    return normalizeText(text, { keepSpaces: true, keepSpecialChars: true, keepCase: false });
-}
-
-/**
- * HİBRİT PARANTEZ SİSTEMİ
- * Ana kelimeler öncelikli, parantez kelimeleri ikincil
- */
-function hybridParenthesesFilter(text) {
-    // Ana metni parantezlerden temizle
-    const mainText = text
-        .replace(/\([^)]*\)/g, '')
-        .replace(/\[[^\]]*\]/g, '')
-        .replace(/\{[^}]*\}/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    
-    // Parantez içeriklerini çıkar
-    const parenthesesMatches = text.match(/\([^)]*\)/g) || [];
-    const bracketMatches = text.match(/\[[^\]]*\]/g) || [];
-    const braceMatches = text.match(/\{[^}]*\}/g) || [];
-    
-    const allMatches = [...parenthesesMatches, ...bracketMatches, ...braceMatches];
-    
-    const importantParenthesesWords = [];
-    const noiseWords = [
-        'official', 'audio', 'video', 'music', 'hd', 'stereo', 'mono',
-        'remaster', 'remastered', 'enhanced', 'deluxe', 'high', 'quality',
-        'feat', 'featuring', 'ft', 'with', 'vs', 'and', 've', 'ile',
-        'youtube', 'spotify', 'apple', 'lyric', 'lyrics', 'karaoke',
-        'resmi', 'muzik', 'sarki', 'klip', 'canli', 'performans'
-    ];
-    
-    allMatches.forEach(match => {
-        const content = match.replace(/[\(\)\[\]\{\}]/g, '');
-        const words = content.split(/[\s\-_,&]+/).filter(w => w.length > 1);
+    /**
+     * Dosya adından kelimeleri çıkar
+     */
+    extractWords(fileName, filePath = "") {
+        // fileName zaten sadece dosya adı (path.basename ile alınmış)
+        const fileNameWithoutExt = path.parse(fileName).name;
+        const normalizedFileName = this.normalizeText(fileNameWithoutExt);
         
-        words.forEach(word => {
-            const normalizedWord = normalizeText(word, { keepSpaces: false });
-            
-            // Gürültü kontrolü
-            const isNoise = noiseWords.includes(normalizedWord);
-            const isNumber = /^\d{1,4}$/.test(normalizedWord);
-            
-            // Önemli kelime ise koru (sanatçı adları, remix yapımcıları)
-            if (!isNoise && !isNumber && normalizedWord.length >= 3) {
-                importantParenthesesWords.push(normalizedWord);
-            }
-        });
-    });
+        // Kelime ayırma - sadece boşluk ve tire ile
+        const fileNameWords = normalizedFileName.split(/[\s\-]+/)
+            .map(word => word.trim())
+            .filter(word => word.length > 1);
     
     return {
-        mainText: mainText,
-        parenthesesWords: importantParenthesesWords,
-        // Hibrit: Ana kelimeler + seçilmiş parantez kelimeleri
-        hybridText: mainText + (importantParenthesesWords.length > 0 ? ' ' + importantParenthesesWords.join(' ') : '')
+            file_words: fileNameWords
     };
 }
 
 /**
- * AKILLI PARANTEZ FİLTRELEME
- * Gereksiz kelimeleri filtreler, önemli kelimeleri korur
- */
-function smartParenthesesFilter(text) {
-    // Parantez içindeki metinleri çıkar ama tamamen silme
-    const parenthesesContent = [];
-    
-    // Parantez içeriklerini topla
-    const parenthesesMatches = text.match(/\([^)]*\)/g) || [];
-    const bracketMatches = text.match(/\[[^\]]*\]/g) || [];
-    const braceMatches = text.match(/\{[^}]*\}/g) || [];
-    
-    const allMatches = [...parenthesesMatches, ...bracketMatches, ...braceMatches];
-    
-    allMatches.forEach(match => {
-        // Parantez işaretlerini kaldır
-        const content = match.replace(/[\(\)\[\]\{\}]/g, '');
-        parenthesesContent.push(content);
-    });
-    
-    // Ana metni parantezlerden temizle
-    let mainText = text
-        .replace(/\([^)]*\)/g, '')
-        .replace(/\[[^\]]*\]/g, '')
-        .replace(/\{[^}]*\}/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-    
-    // Parantez içindeki önemli kelimeleri filtrele
-    const importantParenthesesWords = [];
-    const commonNoiseWords = [
-        // Teknik terimler
-        'official', 'audio', 'video', 'music', 'clip', 'klip', 'hd', 'stereo', 'mono',
-        // Kalite belirteçleri  
-        'high', 'quality', 'remaster', 'remastered', 'enhanced', 'deluxe',
-        // Platform belirteçleri
-        'youtube', 'spotify', 'apple', 'music', 'lyric', 'lyrics', 'karaoke',
-        // Bağlaç kelimeler
-        'feat', 'featuring', 'ft', 'with', 'vs', 'versus', 'and', 've', 'ile',
-        // Türkçe teknik terimler
-        'resmi', 'muzik', 'sarki', 'klip', 'canli', 'performans'
-    ];
-    
-    parenthesesContent.forEach(content => {
-        const words = content.split(/[\s\-_,&]+/).filter(w => w.length > 1);
+     * Geliştirilmiş kelime eşleşmesi hesapla
+     */
+    // calculateSimilarity metodu kaldırıldı - artık inline hesaplama yapılıyor
+
+    /**
+     * Dosya adı benzerliği hesapla - Levenshtein distance ile
+     */
+    calculateFileNameSimilarity(aranan, fileName) {
+        // Önce uzantıyı kaldır, sonra normalize et
+        const arananWithoutExt = aranan.replace(/\.[^.]*$/, '');
+        const fileNameWithoutExt = fileName.replace(/\.[^.]*$/, '');
         
-        words.forEach(word => {
-            const normalizedWord = normalizeText(word, { keepSpaces: false });
-            
-            // Gürültü kelimesi mi kontrol et
-            const isNoise = commonNoiseWords.some(noisePattern => {
-                if (noisePattern instanceof RegExp) {
-                    return noisePattern.test(normalizedWord);
-                }
-                return normalizedWord === noisePattern;
-            });
-            
-            // Sayı kontrolü (1-4 haneli sayılar genelde gürültü)
-            const isNumber = /^\d{1,4}$/.test(normalizedWord);
-            
-            // Önemli kelime ise koru
-            if (!isNoise && !isNumber && normalizedWord.length >= 3) {
-                importantParenthesesWords.push(normalizedWord);
-            }
-        });
-    });
-    
-    return {
-        mainText: mainText,
-        parenthesesWords: importantParenthesesWords,
-        allText: mainText + (importantParenthesesWords.length > 0 ? ' ' + importantParenthesesWords.join(' ') : '')
-    };
-}
-
-
-
-function extractImprovedWords(fileName, filePath = "") {
-    /**Geliştirilmiş kelime çıkarma - parantez temizleme ve klasör/dosya adı ayrımı*/
-    const pathParts = path.dirname(filePath).split(path.sep).filter(p => p && p !== "." && !p.startsWith("/"));
-    
-    // Tüm klasörleri al (sadece son 1 değil)
-    const relevantFolders = pathParts;
-    
-    // Dosya adını normalize et ve parantezleri temizle
-    const fileNameWithoutExt = path.parse(fileName).name;
-    
-    // PARANTEZ İÇİ SAYI NORMALIZASYONU - kritik düzeltme
-    const cleanedNameForParentheses = fileNameWithoutExt.replace(/\(\d+\)/g, '').trim();
-    
-    // HİBRİT PARANTEZ SİSTEMİ - Ana kelimeler öncelikli
-    const hybridFiltered = hybridParenthesesFilter(cleanedNameForParentheses);
-    const cleanedFileName = hybridFiltered.mainText; // Sadece ana kelimeler
-    
-    // GELİŞTİRİLMİŞ KELİME AYIRMA - Tüm ayırıcıları dahil et
-    const fileNameParts = cleanedFileName.split(/[-_\s\.\,\&\+\|\~\!\@\#\$\%\^\*\(\)\[\]\{\}]+/).map(part => part.trim()).filter(part => part.length > 0);
-    
-    // Klasör kelimelerini normalize et
-    const folderWords = [];
-    for (const folder of relevantFolders) {
-        const normalizedFolder = normalizeText(folder, { keepSpaces: false });
-        const camelCaseWords = normalizedFolder.replace(/([a-z])([A-Z])/g, '$1 $2');
-        folderWords.push(...camelCaseWords.split(/\s+/).filter(w => w.length > 1));
+        const arananNormalized = this.normalizeText(arananWithoutExt).toLowerCase();
+        const fileNameNormalized = this.normalizeText(fileNameWithoutExt).toLowerCase();
+        
+        // Levenshtein distance hesapla
+        const distance = this.levenshteinDistance(arananNormalized, fileNameNormalized);
+        const maxLength = Math.max(arananNormalized.length, fileNameNormalized.length);
+        
+        // Benzerlik oranı: 1 - (distance / maxLength)
+        return maxLength === 0 ? 1 : 1 - (distance / maxLength);
     }
     
-    // Dosya adı kelimelerini normalize et - parantez temizlenmiş hali
-    const fileWords = [];
-    for (const part of fileNameParts) {
-        if (part.trim()) { // Boş parçaları atla
-        const normalizedPart = normalizeText(part, { keepSpaces: false });
-            const words = normalizedPart.split(/\s+/).filter(w => w.length > 1);
-            fileWords.push(...words);
-        }
-    }
-    
-    // Hibrit sistem: ana kelimeler + önemli parantez kelimeleri
-    const parenthesesWords = hybridFiltered.parenthesesWords;
-    
-    const result = {
-        'folder_words': folderWords,
-        'file_words': fileWords,
-        'parentheses_words': parenthesesWords,  // Yeni: parantez kelimeleri
-        'all_words': [...folderWords, ...fileWords, ...parenthesesWords]
-    };
-    
-    return result;
-}
-
-// YENİ BENZERLİK ALGORİTMASI FONKSİYONLARI
-
-/**
- * Levenshtein distance hesaplama
- */
-function levenshteinDistance(str1, str2) {
+    /**
+     * Levenshtein distance hesapla
+     */
+    levenshteinDistance(str1, str2) {
     const matrix = [];
     
     for (let i = 0; i <= str2.length; i++) {
@@ -333,562 +177,149 @@ function levenshteinDistance(str1, str2) {
 }
 
 /**
- * Exact kelime eşleşmesi - Kelime sırası bonusu ile
- */
-function calculateExactMatch(searchWords, targetWords) {
-    const searchFile = searchWords['file_words'];
-    const targetFile = targetWords['file_words'];
-    
-    if (searchFile.length === 0 || targetFile.length === 0) {
-        return 0.0;
-    }
-    
-    let exactMatches = 0;
-    let sequenceBonus = 0;
-    
-    // 1. Tam kelime eşleşmeleri
-    for (const searchWord of searchFile) {
-        if (targetFile.includes(searchWord)) {
-            exactMatches++;
-        }
-    }
-    
-    // 2. Kelime sırası bonusu - ardışık eşleşmeler
-    for (let i = 0; i < searchFile.length - 1; i++) {
-        const currentWord = searchFile[i];
-        const nextWord = searchFile[i + 1];
+     * Verimli azaltma algoritması
+     */
+    verimliAzaltmaAramasi(aranan, musicFiles) {
+        console.log(`🚀 VERİMLİ AZALTMA ARAMASI BAŞLADI: "${aranan}"`);
+        const arananNormalized = this.normalizeText(aranan);
+        const arananKelimeler = arananNormalized.split(' ');
+        console.log(`🚀 NORMALIZE EDİLDİ: "${arananNormalized}"`);
+        console.log(`🚀 KELİMELER:`, arananKelimeler);
         
-        const currentIndex = targetFile.indexOf(currentWord);
-        const nextIndex = targetFile.indexOf(nextWord);
+        let enIyiSonuc = null;
+        let bulunanSonuclar = [];
+        let toplamTarananDosya = 0;
         
-        // Ardışık kelimeler aynı sırada mı?
-        if (currentIndex !== -1 && nextIndex !== -1 && nextIndex === currentIndex + 1) {
-            sequenceBonus += 0.2; // Sıra bonusu
-        }
-    }
-    
-    // 3. Tam sıra eşleşmesi bonusu - tüm kelimeler aynı sırada
-    let fullSequenceBonus = 0;
-    if (searchFile.length >= 2 && targetFile.length >= searchFile.length) {
-        let isFullSequence = true;
-        let lastIndex = -1;
-        
-        for (const searchWord of searchFile) {
-            const index = targetFile.indexOf(searchWord);
-            if (index === -1 || index <= lastIndex) {
-                isFullSequence = false;
+        // Her kelime sayısı için arama yap (4, 3, 2, 1)
+        let aramaTamamlandi = false;
+        console.log(`🔍 ARANAN KELİMELER:`, arananKelimeler);
+        console.log(`🔍 KELİME SAYISI:`, arananKelimeler.length);
+        for (let kelimeSayisi = arananKelimeler.length; kelimeSayisi >= 1 && !aramaTamamlandi; kelimeSayisi--) {
+            console.log(`🔍 ${kelimeSayisi} kelime araması başlıyor: "${arananKelimeler.slice(0, kelimeSayisi).join(' ')}"`);
+            const azaltilmisAranan = arananKelimeler.slice(0, kelimeSayisi).join(' ');
+            console.log(`🔍 Aranan: "${azaltilmisAranan}"`);
+            let buSeviyedeEnIyi = null;
+            let buSeviyedeBulunan = [];
+            
+            // Müzik dosyalarında ara - İLK EŞLEŞMEDE DUR!
+            let buSeviyedeTarananDosya = 0;
+            for (const musicFile of musicFiles) {
+                toplamTarananDosya++;
+                buSeviyedeTarananDosya++;
+                if (!musicFile || !musicFile.normalizedFileName) {
+                    continue;
+                }
+                const hedefNormalized = musicFile.normalizedFileName;
+                
+                if (hedefNormalized.includes(azaltilmisAranan)) {
+                    const sonuc = {
+                        bulundu: true,
+                        seviye: kelimeSayisi === arananKelimeler.length ? 'tam' : `${kelimeSayisi}_kelime`,
+                        kelimeSayisi: kelimeSayisi
+                    };
+                    
+                    if (!buSeviyedeEnIyi) {
+                        buSeviyedeEnIyi = {
+                            ...musicFile,
+                            sonuc: sonuc
+                        };
+                        console.log(`✅ ${kelimeSayisi} kelime eşleşmesi bulundu: "${musicFile.fileName}" (${buSeviyedeTarananDosya} dosya tarandı)`);
+                        console.log(`✅ Hedef: "${hedefNormalized}"`);
+                        console.log(`✅ Aranan: "${azaltilmisAranan}"`);
+                    }
+                    
+                    buSeviyedeBulunan.push({
+                        ...musicFile,
+                        sonuc: sonuc
+                    });
+                    
+                    // İLK EŞLEŞMEDE HEMEN DUR!
+                    if (kelimeSayisi === arananKelimeler.length) {
+                        console.log(`🎯 TAM EŞLEŞME BULUNDU - ARAMA DURDURULUYOR! (${toplamTarananDosya} dosya tarandı)`);
+                        aramaTamamlandi = true;
+                break;
+                    }
+                    
+                    if (kelimeSayisi >= 3) {
+                        console.log(`✅ İYİ EŞLEŞME BULUNDU (${kelimeSayisi} kelime) - ARAMA DURDURULUYOR! (${toplamTarananDosya} dosya tarandı)`);
+                        aramaTamamlandi = true;
+                        break;
+                    }
+                }
+                
+                // Arama tamamlandıysa dosya taramayı dur
+                if (aramaTamamlandi) {
+                    break;
+                }
+            }
+            console.log(`📊 ${kelimeSayisi} kelime seviyesi tamamlandı: ${buSeviyedeTarananDosya} dosya tarandı, ${buSeviyedeBulunan.length} eşleşme bulundu`);
+            
+            // Bu seviyede eşleşme bulundu mu?
+            if (buSeviyedeEnIyi) {
+                // Bu seviyedeki sonuçları dosya adı benzerliğine göre sırala
+                buSeviyedeBulunan.sort((a, b) => {
+                    const aSimilarity = this.calculateFileNameSimilarity(aranan, a.name);
+                    const bSimilarity = this.calculateFileNameSimilarity(aranan, b.name);
+                    return bSimilarity - aSimilarity; // Yüksek benzerlik önce
+                });
+                
+                // En iyi sonucu güncelle (kelime sayısı + dosya adı benzerliği)
+                if (!enIyiSonuc || kelimeSayisi > enIyiSonuc.sonuc.kelimeSayisi) {
+                    enIyiSonuc = buSeviyedeBulunan[0];
+                } else if (kelimeSayisi === enIyiSonuc.sonuc.kelimeSayisi) {
+                    // Aynı kelime sayısında, dosya adı benzerliğine bak
+                    const currentSimilarity = this.calculateFileNameSimilarity(aranan, enIyiSonuc.name);
+                    const newSimilarity = this.calculateFileNameSimilarity(aranan, buSeviyedeBulunan[0].name);
+                    if (newSimilarity > currentSimilarity) {
+                        enIyiSonuc = buSeviyedeBulunan[0];
+                    }
+                }
+                
+                // Bulunan sonuçları ekle (maksimum 10 sonuç)
+                const yeniSonuclar = buSeviyedeBulunan.slice(0, 10 - bulunanSonuclar.length);
+                bulunanSonuclar = [...bulunanSonuclar, ...yeniSonuclar];
+                
+                // Bu seviyede eşleşme bulundu - sonuçları işle
+            }
+            
+            // Arama tamamlandıysa dış döngüden çık
+            if (aramaTamamlandi) {
+                console.log(`🛑 ARAMA TAMAMLANDI - DIŞ DÖNGÜ DURDURULUYOR! (${toplamTarananDosya} dosya tarandı)`);
                 break;
             }
-            lastIndex = index;
         }
         
-        if (isFullSequence) {
-            fullSequenceBonus = 0.3; // Tam sıra bonusu
-        }
-    }
-    
-    const baseScore = exactMatches / searchFile.length;
-    return Math.min(1.0, baseScore + sequenceBonus + fullSequenceBonus);
-}
-
-/**
- * Fuzzy kelime eşleşmesi (Levenshtein distance tabanlı)
- */
-function calculateFuzzyMatch(searchWords, targetWords) {
-    const searchFile = searchWords['file_words'];
-    const targetFile = targetWords['file_words'];
-    
-    if (searchFile.length === 0 || targetFile.length === 0) {
-        return 0.0;
-    }
-    
-    let totalSimilarity = 0;
-    let comparisons = 0;
-    
-    for (const searchWord of searchFile) {
-        let bestSimilarity = 0;
-        
-        for (const targetWord of targetFile) {
-            // Levenshtein distance ile benzerlik hesapla
-            const distance = levenshteinDistance(searchWord, targetWord);
-            const maxLength = Math.max(searchWord.length, targetWord.length);
-            const similarity = (maxLength - distance) / maxLength;
-            
-            // Minimum %60 benzerlik threshold'u
-            if (similarity > 0.6) {
-                bestSimilarity = Math.max(bestSimilarity, similarity);
+        // Arama aşaması bilgisi
+        let aramaAsamasi = '';
+        if (enIyiSonuc) {
+            if (enIyiSonuc.sonuc.seviye === 'tam') {
+                aramaAsamasi = `Tüm seviyeler taranarak ${arananKelimeler.length} kelime tam eşleşme bulundu`;
+            } else {
+                aramaAsamasi = `Tüm seviyeler taranarak ${enIyiSonuc.sonuc.kelimeSayisi} kelime eşleşme bulundu (en iyi benzerlik)`;
             }
-            
-            // Substring kontrolü
-            if (targetWord.includes(searchWord) && searchWord.length >= 3) {
-                bestSimilarity = Math.max(bestSimilarity, 0.8);
-            }
-            
-            if (searchWord.includes(targetWord) && targetWord.length >= 3) {
-                bestSimilarity = Math.max(bestSimilarity, 0.7);
-            }
-        }
-        
-        if (bestSimilarity > 0) {
-            totalSimilarity += bestSimilarity;
-            comparisons++;
-        }
-    }
-    
-    return comparisons > 0 ? totalSimilarity / comparisons : 0.0;
-}
-
-/**
- * Klasör context eşleşmesi
- */
-function calculateContextMatch(searchWords, targetWords) {
-    const searchFolder = searchWords['folder_words'];
-    const targetFolder = targetWords['folder_words'];
-    
-    if (searchFolder.length === 0 || targetFolder.length === 0) {
-        return 0.0;
-    }
-    
-    let exactMatches = 0;
-    
-    for (const searchWord of searchFolder) {
-        if (targetFolder.includes(searchWord)) {
-            exactMatches++;
-        }
-    }
-    
-    return exactMatches / Math.max(searchFolder.length, targetFolder.length);
-}
-
-/**
- * Dinamik kelime eşleştirmeleri - Sabit liste YOK!
- */
-function calculateSpecialMatches(searchWords, targetWords) {
-    const searchFile = searchWords['file_words'];
-    const targetFile = targetWords['file_words'];
-    
-    let specialScore = 0;
-    let specialCount = 0;
-    
-    // DİNAMİK ALGORİTMA - Sabit liste yok!
-    for (const searchWord of searchFile) {
-        for (const targetWord of targetFile) {
-            
-            // 1. Kelime içerme kontrolü (dinamik)
-            if (targetWord.includes(searchWord) && searchWord.length >= 3) {
-                specialScore += 0.8;
-                specialCount++;
-            } else if (searchWord.includes(targetWord) && targetWord.length >= 3) {
-                specialScore += 0.7;
-                specialCount++;
-            }
-            
-            // 2. Ortak kök analizi (dinamik)
-            const commonPrefix = getCommonPrefix(searchWord, targetWord);
-            if (commonPrefix.length >= 4) { // En az 4 karakter ortak kök
-                const prefixScore = commonPrefix.length / Math.max(searchWord.length, targetWord.length);
-                if (prefixScore > 0.6) {
-                    specialScore += prefixScore * 0.8;
-                    specialCount++;
-                }
-            }
-            
-            // 3. Ortak son ek analizi (dinamik)
-            const commonSuffix = getCommonSuffix(searchWord, targetWord);
-            if (commonSuffix.length >= 3) { // En az 3 karakter ortak son ek
-                const suffixScore = commonSuffix.length / Math.max(searchWord.length, targetWord.length);
-                if (suffixScore > 0.5) {
-                    specialScore += suffixScore * 0.6;
-                    specialCount++;
-                }
-            }
-        }
-    }
-    
-    // 4. Kelime birleştirme analizi (dinamik)
-    for (const searchWord of searchFile) {
-        // Arama kelimesini parçalara ayır ve hedefte ara
-        for (let i = 3; i <= searchWord.length - 3; i++) { // Minimum 3 karakter parçalar
-            const part1 = searchWord.substring(0, i);
-            const part2 = searchWord.substring(i);
-            
-            // Her iki parçanın da hedefte olup olmadığını kontrol et
-            const part1Found = targetFile.some(word => word.includes(part1) && part1.length >= 3);
-            const part2Found = targetFile.some(word => word.includes(part2) && part2.length >= 3);
-            
-            if (part1Found && part2Found) {
-                specialScore += 0.85; // Kelime birleştirme bonusu
-                specialCount++;
-                break; // İlk başarılı birleştirmede dur
-            }
-        }
-    }
-    
-    return specialCount > 0 ? specialScore / specialCount : 0.0;
-}
-
-/**
- * Ortak ön ek bulma (dinamik)
- */
-function getCommonPrefix(str1, str2) {
-    let i = 0;
-    while (i < str1.length && i < str2.length && str1[i].toLowerCase() === str2[i].toLowerCase()) {
-        i++;
-    }
-    return str1.substring(0, i);
-}
-
-/**
- * Ortak son ek bulma (dinamik)  
- */
-function getCommonSuffix(str1, str2) {
-    let i = 0;
-    while (i < str1.length && i < str2.length && 
-           str1[str1.length - 1 - i].toLowerCase() === str2[str2.length - 1 - i].toLowerCase()) {
-        i++;
-    }
-    return str1.substring(str1.length - i);
-}
-
-// ---------------- V4 BENZERLIK ALGORITMASI YARDIMCILARI ----------------
-function lcsLengthTokens(a, b) {
-    const n = a.length, m = b.length;
-    if (n === 0 || m === 0) return 0;
-    const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-    for (let i = 1; i <= n; i++) {
-        for (let j = 1; j <= m; j++) {
-            if (a[i - 1] === b[j - 1]) dp[i][j] = dp[i - 1][j - 1] + 1;
-            else dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-        }
-    }
-    return dp[n][m];
-}
-
-function weightedTokenOverlap(searchFile, targetFile) {
-    // Ağırlık: uzun kelimeler daha değerli, 4+ harf bonus
-    const weightOf = w => Math.min(1, Math.max(0.4, w.length / 7));
-    const targetSet = new Set(targetFile);
-    let sumWeights = 0;
-    let matchedWeights = 0;
-    let exactMatchedCount = 0;
-    for (const w of searchFile) {
-        const wgt = weightOf(w);
-        sumWeights += wgt;
-        if (targetSet.has(w)) {
-            matchedWeights += wgt;
-            exactMatchedCount++;
         } else {
-            // Kısmi içerme: hedefteki bir kelime içinde aranıyorsa ufak bonus
-            const partial = targetFile.find(t => t.includes(w) || w.includes(t));
-            if (partial && w.length >= 3) {
-                matchedWeights += wgt * 0.5; // yarım puan
-            }
+            aramaAsamasi = 'Hiçbir eşleşme bulunamadı';
         }
-    }
-    const overlapScore = sumWeights > 0 ? matchedWeights / sumWeights : 0;
-    const exactScore = searchFile.length > 0 ? exactMatchedCount / searchFile.length : 0;
-    return { overlapScore, exactScore };
-}
 
-function orderSimilarity(searchFile, targetFile) {
-    // Eşleşen kelimelerin hedefteki sıralamasını al, LIS uzunluğu / eşleşen sayısı
-    const positions = [];
-    for (const w of searchFile) {
-        const idx = targetFile.indexOf(w);
-        if (idx !== -1) positions.push(idx);
+        return {
+            enIyiSonuc,
+            bulunanSonuclar,
+            toplamTarananDosya,
+            aramaAsamasi
+        };
     }
-    if (positions.length <= 1) return positions.length; // 0 -> 0, 1 -> 1
-    // LIS
-    const tails = [];
-    for (const x of positions) {
-        let l = 0, r = tails.length;
-        while (l < r) {
-            const m = (l + r) >> 1;
-            if (tails[m] < x) l = m + 1; else r = m;
-        }
-        tails[l] = x;
-    }
-    const lis = tails.length;
-    return lis / positions.length; // [0,1]
-}
 
-function computeParenthesesScore(searchParentheses, targetParentheses) {
-    if (!searchParentheses || !targetParentheses) return 0;
-    if (searchParentheses.length === 0 || targetParentheses.length === 0) return 0;
-    let matches = 0;
-    for (const w of searchParentheses) if (targetParentheses.includes(w)) matches++;
-    return matches / searchParentheses.length;
-}
-
-function computeFolderBoost(folderSearch, folderTarget) {
-    if (!folderSearch || !folderTarget || folderSearch.length === 0 || folderTarget.length === 0) return 0;
-    const exact = folderSearch.filter(w => folderTarget.includes(w)).length;
-    return (exact / Math.max(folderSearch.length, folderTarget.length));
-}
-
-function computeLengthPenalty(searchFile, targetFile) {
-    let penalty = 0;
-    const targetHasNumbers = targetFile.some(word => /^\d+$/.test(word));
-    if (targetHasNumbers) penalty += 0.1;
-    if (targetFile.length > searchFile.length * 1.5) {
-        const ratio = targetFile.length / searchFile.length;
-        penalty += Math.min(0.25, (ratio - 1.5) * 0.1);
-    }
-    return penalty;
-}
-
-function calculateSimilarityV4(searchWords, targetWords) {
-    if (!searchWords || !targetWords) return 0;
-    const searchFile = searchWords['file_words'] || [];
-    const targetFile = targetWords['file_words'] || [];
-    if (searchFile.length === 0 || targetFile.length === 0) return 0;
-
-    const { overlapScore, exactScore } = weightedTokenOverlap(searchFile, targetFile);
-    const ordScore = orderSimilarity(searchFile, targetFile);
-    const lcsScore = lcsLengthTokens(searchFile, targetFile) / Math.max(1, searchFile.length);
-    const parScore = computeParenthesesScore(searchWords['parentheses_words'], targetWords['parentheses_words']);
-    const folderBoost = computeFolderBoost(searchWords['folder_words'], targetWords['folder_words']);
-    const lengthPenalty = computeLengthPenalty(searchFile, targetFile);
-
-    // Ağırlıklı birleşim
-    const base = (overlapScore * 0.5) + (ordScore * 0.2) + (lcsScore * 0.2) + (folderBoost * 0.05) + (parScore * 0.05);
-    const final = Math.max(0, Math.min(1, base - lengthPenalty));
-    return final;
-}
-// ---------------- V4 SONU ----------------
-
-/**
- * YENİ ANA BENZERLİK HESAPLAMA FONKSİYONU
- */
-function calculateNewSimilarity(searchWords, targetWords) {
-    // Boş kontrolleri
-    if (!searchWords || !targetWords || 
-        !searchWords['file_words'] || !targetWords['file_words'] ||
-        searchWords['file_words'].length === 0 || targetWords['file_words'].length === 0) {
-        return 0.0;
-    }
-    
-    // 1. Exact match (en yüksek ağırlık)
-    const exactScore = calculateExactMatch(searchWords, targetWords);
-    
-    // 2. Fuzzy match (orta ağırlık)
-    const fuzzyScore = calculateFuzzyMatch(searchWords, targetWords);
-    
-    // 3. Context match (düşük ağırlık)
-    const contextScore = calculateContextMatch(searchWords, targetWords);
-    
-    // 4. Special matches (bonus)
-    const specialScore = calculateSpecialMatches(searchWords, targetWords);
-    
-    // Parantez kelimeleri için ek skor hesaplama
-    let parenthesesScore = 0.0;
-    const searchParentheses = searchWords['parentheses_words'];
-    const targetParentheses = targetWords['parentheses_words'];
-    
-    if (searchParentheses.length > 0 && targetParentheses.length > 0) {
-        let parenthesesMatches = 0;
-        for (const searchWord of searchParentheses) {
-            if (targetParentheses.includes(searchWord)) {
-                parenthesesMatches++;
-            }
-        }
-        parenthesesScore = parenthesesMatches / searchParentheses.length;
-    }
-    
-    // 5. Dosya adı uzunluğu penaltısı (mashup'lar için)
-    let lengthPenalty = 0.0;
-    const targetFileWords = targetWords['file_words'];
-    const searchFileWords = searchWords['file_words'];
-    
-    // Hedef dosyada gereksiz sayılar var mı kontrol et
-    const targetHasNumbers = targetFileWords.some(word => /^\d+$/.test(word));
-    if (targetHasNumbers) {
-        lengthPenalty += 0.15; // Sayı penaltısı
-    }
-    
-    if (targetFileWords.length > searchFileWords.length * 1.5) {
-        // Hedef dosya uzunsa (mashup olabilir) - threshold düşürüldü
-        const lengthRatio = targetFileWords.length / searchFileWords.length;
-        lengthPenalty += Math.min(0.25, (lengthRatio - 1.5) * 0.1); // Arttırılmış penaltı
-    }
-    
-    // İYİLEŞTİRİLMİŞ ağırlıklı toplam hesaplama - parantez kelimeleri önemli
-    const baseScore = (exactScore * 0.4) + (fuzzyScore * 0.2) + (contextScore * 0.05) + (specialScore * 0.15) + (parenthesesScore * 0.2);
-    const finalScore = Math.max(0.0, baseScore - lengthPenalty);
-    
-    // Minimum threshold kontrolü - tamamen kaldırıldı (debug için)
-    // if (exactScore < 0.05 && fuzzyScore < 0.1) {
-    //     return 0.0;
-    // }
-    
-    return Math.max(0.0, Math.min(1.0, finalScore));
-}
-
-// ESKİ ALGORİTMA (DEPRECATED - SADECE YEDEK İÇİN BIRAKILIYOR)
-function calculateImprovedSimilarity_OLD(searchWords, targetWords) {
-    /**SADELEŞTİRİLMİŞ BENZERLİK ALGORİTMASI - Filtreleme yok*/
-    if (!searchWords['all_words'] || !targetWords['all_words'] || 
-        searchWords['all_words'].length === 0 || targetWords['all_words'].length === 0) {
-        return 0.0;
-    }
-    
-    // 1. DOSYA KELİME EŞLEŞMESİ (Ana skor)
-    const fileSearch = searchWords['file_words'] || [];
-    const fileTarget = targetWords['file_words'] || [];
-    
-    if (!fileSearch || !fileTarget || fileSearch.length === 0 || fileTarget.length === 0) {
-        return 0.0;
-    }
-    
-    // Dosya kelime eşleşmesi (tam kelime + harf bazlı) - genel algoritma
-    let exactFileMatches = 0;
-    for (const word of fileSearch) {
-        if (fileTarget.includes(word)) {
-            exactFileMatches += 1.0; // Tam eşleşme: 1.0 puan
-        }
-    }
-    
-    // Geliştirilmiş kelime birleştirme + harf eşleşme algoritması
-    for (const word of fileSearch) {
-        // Eğer kelime tam eşleşmiyorsa, kelime birleştirme + harf eşleşme dene
-        if (!fileTarget.includes(word)) {
-            let bestCombinationScore = 0;
-            
-            // Kelimeyi 2 parçaya böl ve target'da ara
-            for (let i = 1; i < word.length; i++) {
-                const part1 = word.substring(0, i);
-                const part2 = word.substring(i);
-                
-                // Her iki parçayı da target'da ara
-                const part1Index = fileTarget.findIndex(w => w.toLowerCase() === part1.toLowerCase());
-                const part2Index = fileTarget.findIndex(w => w.toLowerCase() === part2.toLowerCase());
-                
-                if (part1Index !== -1 && part2Index !== -1) {
-                    // Tam kelime birleştirme başarılı
-                    bestCombinationScore = Math.max(bestCombinationScore, 1.0);
-                } else {
-                    // Harf eşleşme ile kelime birleştirme dene
-                    const combinedWord = part1 + ' ' + part2; // "tabii ki"
-                    const searchChars = word.toLowerCase().split('');
-                    const targetChars = combinedWord.toLowerCase().split('');
-                    
-                    // Harf sıklığını hesapla
-                    const searchCharCount = {};
-                    const targetCharCount = {};
-                    
-                    searchChars.forEach(char => {
-                        searchCharCount[char] = (searchCharCount[char] || 0) + 1;
-                    });
-                    
-                    targetChars.forEach(char => {
-                        targetCharCount[char] = (targetCharCount[char] || 0) + 1;
-                    });
-                    
-                    // Minimum harf sayısını hesapla
-                    let minCharCount = 0;
-                    for (const char in searchCharCount) {
-                        if (targetCharCount[char]) {
-                            minCharCount += Math.min(searchCharCount[char], targetCharCount[char]);
-                        }
-                    }
-                    
-                    // Harf eşleşme puanı hesapla
-                    const charSimilarity = minCharCount / Math.max(searchChars.length, targetChars.length);
-                    
-                    if (charSimilarity > 0.6) { // %60 harf eşleşmesi
-                        bestCombinationScore = Math.max(bestCombinationScore, charSimilarity);
-                    }
-                }
-            }
-            
-            if (bestCombinationScore > 0) {
-                exactFileMatches += bestCombinationScore;
-            }
-        }
-    }
-    
-    // Harf bazlı eşleşme - her kelimeyi ayrı ayrı kontrol et
-    let charSimilarity = 0;
-    let charMatches = 0;
-    
-    for (const searchWord of fileSearch) {
-        for (const targetWord of fileTarget) {
-            const searchChars = searchWord.toLowerCase().split('');
-            const targetChars = targetWord.toLowerCase().split('');
-            
-            const commonChars = searchChars.filter(char => targetChars.includes(char));
-            const wordSimilarity = commonChars.length / Math.max(searchChars.length, targetChars.length);
-            
-            if (wordSimilarity > 0.3) { // %30 harf eşleşmesi
-                charSimilarity += wordSimilarity;
-                charMatches++;
-            }
-        }
-    }
-    
-    // Ek kontrol: arama kelimesi hedef kelimenin içinde var mı?
-    for (const searchWord of fileSearch) {
-        for (const targetWord of fileTarget) {
-            if (targetWord.toLowerCase().includes(searchWord.toLowerCase()) && searchWord.length >= 3) {
-                charSimilarity += 0.8; // İçerme bonusu
-                charMatches++;
-            }
-        }
-    }
-    
-    // Ortalama harf benzerliği
-    if (charMatches > 0) {
-        charSimilarity = charSimilarity / charMatches;
-    }
-    
-    // Tam kelime eşleşmesi + harf bazlı eşleşme
-    const totalMatches = exactFileMatches + Math.floor(charSimilarity * 2); // Harf eşleşmesini 2'ye çarp
-    const fileScore = totalMatches / Math.max(fileSearch.length, fileTarget.length);
-    
-    // SABIT KELIME FİLTRELEMESİ KALDIRILDI - TÜM KELİMELER EŞİT
-    // En az 1 dosya kelimesi eşleşmeli (tam kelime + harf bazlı)
-    if (totalMatches < 1) {
-        return 0.0;
-    }
-    
-    
-    // 2. KLASÖR KELİME EŞLEŞMESİ (Bonus)
-    const folderSearch = searchWords['folder_words'] || [];
-    const folderTarget = targetWords['folder_words'] || [];
-    
-    let folderBonus = 0.0;
-    if (folderSearch.length > 0 && folderTarget.length > 0) {
-        const exactFolderMatches = folderSearch.filter(word => folderTarget.includes(word)).length;
-        folderBonus = (exactFolderMatches / Math.max(folderSearch.length, folderTarget.length)) * 0.3;
-    }
-    
-    // UZUN KELİME BONUSU KALDIRILDI - TÜM KELİMELER EŞİT
-    
-    // 4. TAM EŞLEŞME BONUSU
-    let fullMatchBonus = 0.0;
-    if (exactFileMatches >= 3) {
-        fullMatchBonus = 0.15;
-    }
-    
-    // Toplam skor hesapla - SABIT KELIME BONUSU YOK
-    const totalScore = fileScore + folderBonus + fullMatchBonus;
-    
-    // 0.0 - 1.0 arasında sınırla
-    return Math.max(0.0, Math.min(1.0, totalScore));
-}
-
-// Python'daki search_single_file fonksiyonunu Node.js'e aktar
-
-// Dosya arama fonksiyonu
-async function searchFile(searchPath, options = {}) {
+    /**
+     * Dosya arama
+     */
+    searchFile(searchPath, options = {}) {
+    console.log(`🚨 WORDMATCHER.searchFile ÇAĞRILDI: ${searchPath}`);
     const startTime = Date.now();
     
-    // Cache kontrolü
-    if (!musicDatabase || !databaseLoadTime || (Date.now() - databaseLoadTime) > DATABASE_CACHE_DURATION) {
-        await loadDatabase();
-    }
+    console.log(`📊 Veritabanı kontrolü: ${this.musicFiles ? this.musicFiles.length : 'YOK'} dosya`);
     
-    if (!musicDatabase) {
+    
+        if (!this.musicFiles || this.musicFiles.length === 0) {
         return {
             originalPath: searchPath,
             found: false,
@@ -902,7 +333,7 @@ async function searchFile(searchPath, options = {}) {
     const fileDir = path.dirname(searchPath);
     
     // 1. Tam yol eşleşmesi
-    const exactMatch = musicDatabase.musicFiles.find(file => file.path === searchPath);
+        const exactMatch = this.musicFiles.find(file => file.path === searchPath);
     if (exactMatch) {
         return {
             originalPath: searchPath,
@@ -910,16 +341,16 @@ async function searchFile(searchPath, options = {}) {
             status: 'exact_match',
             matchType: 'tamYolEsleme',
             foundPath: searchPath,
-            similarity: 1.0,
+            similarity: 1.0, // Exact match
             processTime: Date.now() - startTime
         };
     }
     
-    // 2. Aynı klasör farklı uzantı (HIZLI - O(1))
+        // 2. Aynı klasör farklı uzantı
     const extensions = ['.mp3', '.m4a', '.flac', '.wav', '.mp4', '.avi', '.mkv'];
     for (const ext of extensions) {
         const altPath = path.join(fileDir, fileNameWithoutExt + ext);
-        const altMatch = musicDatabase.musicFiles.find(file => file.path === altPath);
+            const altMatch = this.musicFiles.find(file => file.path === altPath);
         if (altMatch) {
             return {
                 originalPath: searchPath,
@@ -927,14 +358,14 @@ async function searchFile(searchPath, options = {}) {
                 status: 'exact_match',
                 matchType: 'ayniKlasorFarkliUzanti',
                 foundPath: altPath,
-                similarity: 0.9,
+                similarity: 0.9, // Same folder different extension
                 processTime: Date.now() - startTime
             };
         }
     }
     
-    // 3. Farklı klasör aynı ad (YAVAŞ - O(n))
-    const sameNameMatch = musicDatabase.musicFiles.find(file => 
+        // 3. Farklı klasör aynı ad
+        const sameNameMatch = this.musicFiles.find(file => 
         path.basename(file.path) === fileName
     );
     if (sameNameMatch) {
@@ -944,14 +375,16 @@ async function searchFile(searchPath, options = {}) {
             status: 'exact_match',
             matchType: 'farkliKlasorveUzanti',
             foundPath: sameNameMatch.path,
-            similarity: 0.8,
+            similarity: 0.8, // Same name different folder
             processTime: Date.now() - startTime
         };
     }
     
-    // 4. Benzerlik araması
-    const searchWords = extractImprovedWords(fileName, searchPath);
-    if (!searchWords || !searchWords.all_words || searchWords.all_words.length === 0) {
+        // 4. Basit kelime eşleşmesi araması
+        // Tam dosya adını kullan (uzantı hariç)
+        const normalizedFileName = this.normalizeText(fileNameWithoutExt);
+        const searchWords = this.extractWords(normalizedFileName, "");
+        if (!searchWords || !searchWords.file_words || searchWords.file_words.length === 0) {
         return {
             originalPath: searchPath,
             found: false,
@@ -962,173 +395,86 @@ async function searchFile(searchPath, options = {}) {
     
     const candidates = [];
     const limit = options.limit || 1;
-    const threshold = options.threshold || 0.1; // İyileştirilmiş threshold - 0.3'ten 0.1'e düşürüldü
-    
-    console.log(`🔍 TOPLAM DOSYA SAYISI: ${musicDatabase.musicFiles.length}`);
-    let processedCount = 0;
-    
-    // Debug kodları kaldırıldı - API response'ta zaten var
-    
-    for (const file of musicDatabase.musicFiles) {
-        // TÜM DOSYALAR İÇİN DEBUG - FİLTRELEME YOK
+        const threshold = options.threshold || 0.5;
+        
+        
+        let processedCount = 0;
+        for (const file of this.musicFiles) {
         processedCount++;
         
-        // Her 1000 dosyada bir log
-        if (processedCount % 1000 === 0) {
-            console.log(`📊 İşlenen dosya sayısı: ${processedCount}`);
-        }
-        
-        // Özel debug kodları kaldırıldı - performans optimizasyonu
-        
-        // FİLTRELEME KALDIRILDI - TÜM DOSYALAR İŞLENİR
-        // Yeni DB formatında fileWords mutlaka var, sadece boş olabilir
-        if (file.fileWords.length === 0) {
+            // Debug logları kaldırıldı
+            
+            // Debug logları kaldırıldı
+            if (!file.fileWords || file.fileWords.length === 0) {
             continue;
         }
         
-        // Yeni hibrit format - parantez kelimeleri dahil
         const targetWords = {
-            'folder_words': file.folderWords,
-            'file_words': file.fileWords,
-            'parentheses_words': file.parenthesesWords, // YENİ: Parantez kelimeleri
-            'all_words': [...file.folderWords, ...file.fileWords, ...file.parenthesesWords]
-        };
-        
-        const algorithm = options.algorithm || 'v4';
-        const searchFileWords = searchWords['file_words'];
-        const targetFileWords = targetWords['file_words'];
-
-        let similarity = 0;
-        if (algorithm === 'v4') {
-            similarity = calculateSimilarityV4(searchWords, targetWords);
-        } else {
-            similarity = calculateNewSimilarity(searchWords, targetWords);
-        }
-        
-        // Yeni algoritma için sadeleştirilmiş debug verileri
-        let newAlgorithmDebug = null;
-        if (similarity > 0) {
-            if (algorithm === 'v4') {
-                const tokenStats = weightedTokenOverlap(searchFileWords, targetFileWords);
-                const ordScore = orderSimilarity(searchFileWords, targetFileWords);
-                const lcsScore = lcsLengthTokens(searchFileWords, targetFileWords) / Math.max(1, searchFileWords.length);
-                const parScore = computeParenthesesScore(searchWords['parentheses_words'], targetWords['parentheses_words']);
-                const folderBoost = computeFolderBoost(searchWords['folder_words'], targetWords['folder_words']);
-                const lengthPenalty = computeLengthPenalty(searchFileWords, targetFileWords);
-                newAlgorithmDebug = {
-                    algorithm: 'similarity_v4',
-                    overlapScore: tokenStats.overlapScore,
-                    exactScore: tokenStats.exactScore,
-                    orderScore: ordScore,
-                    lcsScore: lcsScore,
-                    parenthesesScore: parScore,
-                    folderBoost: folderBoost,
-                    lengthPenalty: lengthPenalty,
-                    finalScore: similarity,
-                    thresholdPassed: similarity >= threshold
-                };
-            } else {
-                const exactScore = calculateExactMatch(searchWords, targetWords);
-                const fuzzyScore = calculateFuzzyMatch(searchWords, targetWords);
-                const contextScore = calculateContextMatch(searchWords, targetWords);
-                const specialScore = calculateSpecialMatches(searchWords, targetWords);
-                
-                // Parantez skoru hesapla
-                let parenthesesScore = 0.0;
-                const searchParentheses = searchWords['parentheses_words'];
-                const targetParentheses = targetWords['parentheses_words'];
-                
-                if (searchParentheses.length > 0 && targetParentheses.length > 0) {
-                    let parenthesesMatches = 0;
-                    for (const searchWord of searchParentheses) {
-                        if (targetParentheses.includes(searchWord)) {
-                            parenthesesMatches++;
-                        }
-                    }
-                    parenthesesScore = parenthesesMatches / searchParentheses.length;
+                'file_words': file.fileWords || []
+            };
+            
+            // Basit similarity hesaplama
+            const searchFile = searchWords['file_words'] || [];
+            const targetFile = targetWords['file_words'] || [];
+            
+            // Debug logları kaldırıldı - memory sorunu nedeniyle
+            
+            let exactMatches = 0;
+            for (const searchWord of searchFile) {
+                if (targetFile.includes(searchWord)) {
+                    exactMatches++;
                 }
-
-                newAlgorithmDebug = {
-                    exactScore: exactScore,
-                    fuzzyScore: fuzzyScore,
-                    contextScore: contextScore,
-                    specialScore: specialScore,
-                    parenthesesScore: parenthesesScore,
-                    finalScore: similarity,
-                    algorithm: 'new_similarity_v3_hybrid',
-                    thresholdPassed: similarity >= threshold
-                };
             }
-        }
+            
+            // Düzeltilmiş similarity hesaplaması: arama dosyasındaki kelimelerin ne kadarı eşleşiyor
+            const similarity = searchFile.length > 0 ? exactMatches / searchFile.length : 0;
+            
+            // DEBUG: Bülent Serttaş dosyası için özel similarity hesaplama
+            
+            
+            
         
-        // Sadeleştirilmiş debug bilgileri - eski karmaşık kodlar temizlendi
-        
-        // Yeni algoritma için sadeleştirilmiş debug bilgileri
-        const matchDetails = {
-            filePath: file.path,
-            searchWords: searchWords,
-            targetWords: targetWords,
-            similarity: similarity,
-            algorithm: algorithm,
-            newAlgorithmDebug: newAlgorithmDebug
-        };
-        
-        if (similarity > threshold) {
+        if (similarity >= threshold) {
             candidates.push({
                 path: file.path,
                 similarity: similarity,
-                file: file,
-                matchDetails: matchDetails
+                file: file
             });
         }
     }
     
     if (candidates.length > 0) {
-        // GELİŞTİRİLMİŞ SIRALAMA ALGORİTMASI - ORİJİNAL ÖNCE
+        
+            // Sıralama: benzerlik skoruna göre, sonra tie-breaker
         candidates.sort((a, b) => {
-            // 1. Remix/parantez kontrolü
-            const aHasParentheses = a.file.name.includes('(') && a.file.name.includes(')');
-            const bHasParentheses = b.file.name.includes('(') && b.file.name.includes(')');
-            const aIsRemix = a.file.name.toLowerCase().includes('remix');
-            const bIsRemix = b.file.name.toLowerCase().includes('remix');
-            
-            // Remix veya parantez içeren dosyalar son sırada (arama remix değilse)
-            const searchHasRemix = searchWords.file_words.some(w => w.toLowerCase().includes('remix'));
-            if (!searchHasRemix) {
-                if ((aIsRemix || aHasParentheses) && !(bIsRemix || bHasParentheses)) {
-                    return 1; // a remix/parantezli, b temiz -> b önce
-                }
-                if (!(aIsRemix || aHasParentheses) && (bIsRemix || bHasParentheses)) {
-                    return -1; // a temiz, b remix/parantezli -> a önce  
-                }
-            }
-            
-            // 2. Benzerlik skoruna göre sırala
-            if (Math.abs(a.similarity - b.similarity) > 0.001) {
+                // 1. Önce similarity skoruna göre
+                if (b.similarity !== a.similarity) {
                 return b.similarity - a.similarity;
             }
             
-            // 3. Dosya adı uzunluğuna göre (daha kısa = daha spesifik)
-            const aLength = a.file.fileNameOnly.length;
-            const bLength = b.file.fileNameOnly.length;
-            if (Math.abs(aLength - bLength) > 5) {
-                return aLength - bLength;
-            }
-            
-            // 4. Exact match sayısına göre
-            const aExact = a.matchDetails.newAlgorithmDebug?.exactScore || 0;
-            const bExact = b.matchDetails.newAlgorithmDebug?.exactScore || 0;
-            return bExact - aExact;
+                // 2. Tie-breaker: Eşleşen kelime sayısına göre (daha fazla eşleşme öncelikli)
+                if (a.matchedWords !== b.matchedWords) {
+                    return b.matchedWords - a.matchedWords;
+                }
+                
+                // 3. Tie-breaker: Dosya adı uzunluğuna göre (kısa ad öncelikli)
+                const aNameLength = path.basename(a.path).length;
+                const bNameLength = path.basename(b.path).length;
+                if (aNameLength !== bNameLength) {
+                    return aNameLength - bNameLength;
+                }
+                
+                // 4. Son tie-breaker: Alfabetik sıralama
+                return path.basename(a.path).localeCompare(path.basename(b.path));
         });
         
-        const bestMatch = candidates[0];
         
-        // Limit kadar sonuç al
+        const bestMatch = candidates[0];
         const matches = candidates.slice(0, limit).map(candidate => ({
             path: candidate.path,
-            similarity: candidate.similarity,
-            matchDetails: candidate.matchDetails
+                similarity: candidate.similarity
         }));
+        
         
         return {
             originalPath: searchPath,
@@ -1139,13 +485,11 @@ async function searchFile(searchPath, options = {}) {
             similarity: bestMatch.similarity,
             processTime: Date.now() - startTime,
             matches: matches,
-            debugInfo: {
-                bestMatch: bestMatch,
-                totalCandidates: candidates.length,
-                searchWords: searchWords,
-                matchDetails: bestMatch.matchDetails
+            debug: {
+                searchedWords: searchWords.file_words || [],
+                foundWords: bestMatch.file ? (bestMatch.file.fileWords || []) : []
             }
-        }
+        };
     }
     
     return {
@@ -1156,188 +500,149 @@ async function searchFile(searchPath, options = {}) {
     };
 }
 
-// Veritabanı yükleme
-async function searchByQuery(query, options = {}) {
-    const startTime = Date.now();
-
-    // Cache kontrolü
-    if (!musicDatabase || !databaseLoadTime || (Date.now() - databaseLoadTime) > DATABASE_CACHE_DURATION) {
-        await loadDatabase();
-    }
-
-    if (!musicDatabase) {
-        return {
-            query,
-            found: false,
-            status: 'database_error',
-            processTime: Date.now() - startTime
-        };
-    }
-
-    if (typeof query !== 'string' || query.trim().length === 0) {
-        return {
-            query,
-            found: false,
-            status: 'invalid_query',
-            processTime: Date.now() - startTime
-        };
-    }
-
-    const algorithm = options.algorithm || 'v4';
-    const limit = options.limit || 10;
-    const threshold = options.threshold || 0.1;
-
-    const searchWords = extractImprovedWords(query, "");
-    if (!searchWords || !searchWords.all_words || searchWords.all_words.length === 0) {
-        return {
-            query,
-            found: false,
-            status: 'no_search_words',
-            processTime: Date.now() - startTime
-        };
-    }
-
-    const candidates = [];
-    let processedCount = 0;
-
-    for (const file of musicDatabase.musicFiles) {
-        processedCount++;
-        if (!file || !file.fileWords || file.fileWords.length === 0) continue;
-
-        const targetWords = {
-            'folder_words': file.folderWords || [],
-            'file_words': file.fileWords || [],
-            'parentheses_words': file.parenthesesWords || [],
-            'all_words': [ ...(file.folderWords || []), ...(file.fileWords || []), ...(file.parenthesesWords || []) ]
-        };
-
-        const searchFileWords = searchWords['file_words'] || [];
-        const targetFileWords = targetWords['file_words'] || [];
-
-        let similarity = 0;
-        if (algorithm === 'v4') {
-            similarity = calculateSimilarityV4(searchWords, targetWords);
-        } else {
-            similarity = calculateNewSimilarity(searchWords, targetWords);
+    /**
+     * Sorgu tabanlı arama
+     */
+    searchByQuery(query, options = {}) {
+        const startTime = Date.now();
+        
+        if (!this.musicFiles || this.musicFiles.length === 0) {
+            return {
+                query,
+                found: false,
+                status: 'database_error',
+                processTime: Date.now() - startTime
+            };
         }
-
-        let newAlgorithmDebug = null;
-        if (similarity > 0) {
-            if (algorithm === 'v4') {
-                const tokenStats = weightedTokenOverlap(searchFileWords, targetFileWords);
-                const ordScore = orderSimilarity(searchFileWords, targetFileWords);
-                const lcsScore = lcsLengthTokens(searchFileWords, targetFileWords) / Math.max(1, searchFileWords.length);
-                const parScore = computeParenthesesScore(searchWords['parentheses_words'], targetWords['parentheses_words']);
-                const folderBoost = computeFolderBoost(searchWords['folder_words'], targetWords['folder_words']);
-                const lengthPenalty = computeLengthPenalty(searchFileWords, targetFileWords);
-                newAlgorithmDebug = {
-                    algorithm: 'similarity_v4',
-                    overlapScore: tokenStats.overlapScore,
-                    exactScore: tokenStats.exactScore,
-                    orderScore: ordScore,
-                    lcsScore: lcsScore,
-                    parenthesesScore: parScore,
-                    folderBoost: folderBoost,
-                    lengthPenalty: lengthPenalty,
-                    finalScore: similarity,
-                    thresholdPassed: similarity >= threshold
-                };
-            } else {
-                const exactScore = calculateExactMatch(searchWords, targetWords);
-                const fuzzyScore = calculateFuzzyMatch(searchWords, targetWords);
-                const contextScore = calculateContextMatch(searchWords, targetWords);
-                const specialScore = calculateSpecialMatches(searchWords, targetWords);
-
-                let parenthesesScore = 0.0;
-                const searchParentheses = searchWords['parentheses_words'] || [];
-                const targetParentheses = targetWords['parentheses_words'] || [];
-                if (searchParentheses.length > 0 && targetParentheses.length > 0) {
-                    let parenthesesMatches = 0;
-                    for (const searchWord of searchParentheses) {
-                        if (targetParentheses.includes(searchWord)) {
-                            parenthesesMatches++;
-                        }
-                    }
-                    parenthesesScore = parenthesesMatches / searchParentheses.length;
-                }
-
-                newAlgorithmDebug = {
-                    exactScore: exactScore,
-                    fuzzyScore: fuzzyScore,
-                    contextScore: contextScore,
-                    specialScore: specialScore,
-                    parenthesesScore: parenthesesScore,
-                    finalScore: similarity,
-                    algorithm: 'new_similarity_v3_hybrid',
-                    thresholdPassed: similarity >= threshold
-                };
+        
+        if (typeof query !== 'string' || query.trim().length === 0) {
+            return {
+                query,
+                found: false,
+                status: 'invalid_query',
+                processTime: Date.now() - startTime
+            };
+        }
+        
+        const limit = options.limit || 10;
+        const threshold = options.threshold || 0.5;
+        
+        const searchWords = this.extractWords(query, "");
+        if (!searchWords || !searchWords.file_words || searchWords.file_words.length === 0) {
+            return {
+                query,
+                found: false,
+                status: 'no_search_words',
+                processTime: Date.now() - startTime
+            };
+        }
+        
+        const candidates = [];
+        
+        for (const file of this.musicFiles) {
+            if (!file.fileWords || file.fileWords.length === 0) {
+                continue;
+            }
+            
+            const targetWords = {
+                'file_words': file.fileWords || []
+            };
+            
+            // calculateSimilarity kaldırıldı - artık inline hesaplama yapılıyor
+            
+            if (similarity >= threshold) {
+                candidates.push({
+                    path: file.path,
+                    similarity: similarity,
+                    file: file
+                });
             }
         }
-
-        const matchDetails = {
-            filePath: file.path,
-            searchWords: searchWords,
-            targetWords: targetWords,
-            similarity: similarity,
-            algorithm: algorithm,
-            newAlgorithmDebug: newAlgorithmDebug
+        
+        candidates.sort((a, b) => b.similarity - a.similarity);
+        
+        
+        const matches = candidates.slice(0, limit);
+        
+        return {
+            query,
+            found: matches.length > 0,
+            status: matches.length > 0 ? 'matches_found' : 'no_match',
+            matches: matches,
+            processTime: Date.now() - startTime,
+            totalProcessed: this.musicFiles.length
         };
-
-        if (similarity > threshold) {
-            candidates.push({
-                path: file.path,
-                similarity: similarity,
-                file: file,
-                matchDetails: matchDetails
-            });
-        }
     }
 
-    candidates.sort((a, b) => b.similarity - a.similarity);
-    const matches = candidates.slice(0, limit);
-
-    return {
-        query,
-        found: matches.length > 0,
-        status: matches.length > 0 ? 'matches_found' : 'no_match',
-        matches: matches,
-        processTime: Date.now() - startTime,
-        totalProcessed: processedCount
-    };
 }
+
+// Global matcher instance kaldırıldı - aşağıda yeniden tanımlanacak
+
+// SQLite veritabanı sistemi
 
 let musicDatabase = null;
 let databaseLoadTime = null;
-const DATABASE_CACHE_DURATION = 5 * 60 * 1000; // 5 dakika
+
+// SQLite veritabanı instance'ını oluştur
+const sqliteDb = new SimpleSQLiteDatabase();
 
 async function loadDatabase() {
     try {
-        const dbPath = path.join(__dirname, '../musicfiles.db.json');
+        console.log('📂 SQLite veritabanı yükleniyor...');
         
-        // Dosya varlığını kontrol et
-        if (!await fs.pathExists(dbPath)) {
-            console.error('❌ Veritabanı dosyası bulunamadı:', dbPath);
-            return false;
+        // Veritabanı istatistiklerini kontrol et
+        const stats = sqliteDb.getStats();
+        
+        if (stats.fileCount === 0) {
+            console.log('⚠️ SQLite veritabanı boş, JSON\'dan migrasyon gerekli');
+            
+            // JSON dosyası var mı kontrol et
+            const jsonDbPath = path.join(__dirname, '../simple_musicfiles.db.json');
+            if (await fs.pathExists(jsonDbPath)) {
+                console.log('🔄 JSON\'dan SQLite\'a migrasyon başlatılıyor...');
+                
+                // Migrasyon scriptini çalıştır
+                const JSONToSQLiteMigrator = require('./migrate-to-sqlite');
+                const migrator = new JSONToSQLiteMigrator();
+                
+                try {
+                    await migrator.migrate();
+                    migrator.close();
+                    console.log('✅ Migrasyon tamamlandı');
+                } catch (migrateError) {
+                    console.error('❌ Migrasyon hatası:', migrateError);
+                    return false;
+                }
+            } else {
+                console.log('⚠️ JSON veritabanı bulunamadı, otomatik indexleme başlatılıyor...');
+                
+                // Otomatik indexleme yap
+                const indexer = new SimpleIndexer();
+                const musicFolder = '/Users/koray/Music/KorayMusics'; // Varsayılan müzik klasörü
+                console.log(`🔄 Otomatik indexleme başlatılıyor: ${musicFolder}`);
+                
+                const result = await indexer.indexMusicDirectory(musicFolder);
+                if (!result) {
+                    console.error('❌ Otomatik indexleme başarısız');
+                    return false;
+                }
+                
+                console.log('✅ Otomatik indexleme tamamlandı');
+            }
         }
         
-        // Dosya boyutunu kontrol et
-        const stats = await fs.stat(dbPath);
-        if (stats.size === 0) {
-            console.error('❌ Veritabanı dosyası boş:', dbPath);
-            return false;
-        }
+        // Veritabanı istatistiklerini göster
+        const finalStats = sqliteDb.getStats();
+        console.log('📊 Veritabanı istatistikleri:');
+        console.log(`   📁 Dosya sayısı: ${finalStats.fileCount}`);
+        console.log(`   🔤 Kelime sayısı: ${finalStats.wordCount}`);
+        console.log(`   💾 Boyut: ${(finalStats.dbSize / 1024 / 1024).toFixed(2)} MB`);
         
-        // Güvenli okuma
-        const dbData = await fs.readJson(dbPath);
-        
-        if (!dbData || !dbData.musicFiles) {
-            console.error('❌ Geçersiz veritabanı formatı');
-            return false;
-        }
-        
-        musicDatabase = dbData;
+        musicDatabase = sqliteDb;
         databaseLoadTime = Date.now();
-        console.log(`✅ Veritabanı yüklendi: ${musicDatabase.musicFiles.length} dosya`);                                                                        
+        
+        console.log(`✅ SQLite veritabanı yüklendi: ${finalStats.fileCount} dosya`);
+        
         return true;
     } catch (error) {
         console.error('❌ Veritabanı yükleme hatası:', error);
@@ -1348,6 +653,118 @@ async function loadDatabase() {
             path: error.path
         });
         return false;
+    }
+}
+
+// Global arama fonksiyonları - SimpleWordMatcher kullanıyor
+async function searchFile(filePath, options = {}) {
+    console.log(`🔍 SQLite searchFile çağrıldı: ${filePath}`);
+    
+    try {
+        // Veritabanı yüklü mü kontrol et
+        if (!musicDatabase) {
+            await loadDatabase();
+        }
+        
+        const startTime = Date.now();
+        const fileName = path.basename(filePath);
+        const normalizedFileName = sqliteDb.normalizeText(fileName);
+        
+        console.log(`🔍 Arama terimi: "${normalizedFileName}"`);
+        
+        // Kademeli arama algoritması
+        let results = sqliteDb.searchProgressive(normalizedFileName, 10);
+        
+        const processTime = Date.now() - startTime;
+        
+        if (results.length > 0) {
+            const bestMatch = results[0];
+            return {
+                found: true,
+                matches: results.map(result => ({
+                    path: result.path,
+                    fileName: result.fileName,
+                    similarity: result.similarity_score || 1.0
+                })),
+                bestMatch: {
+                    path: bestMatch.path,
+                    fileName: bestMatch.fileName,
+                    similarity: bestMatch.similarity_score || 1.0
+                },
+                matchType: 'benzerDosya',
+                processTime: processTime,
+                totalMatches: results.length
+            };
+        } else {
+            return {
+                found: false,
+                matches: [],
+                bestMatch: null,
+                matchType: 'bulunamadi',
+                processTime: processTime,
+                totalMatches: 0
+            };
+        }
+        
+    } catch (error) {
+        console.error('❌ searchFile hatası:', error);
+        return {
+            found: false,
+            matches: [],
+            bestMatch: null,
+            matchType: 'hata',
+            processTime: 0,
+            totalMatches: 0,
+            error: error.message
+        };
+    }
+}
+
+async function searchByQuery(query, options = {}) {
+    console.log(`🔍 SQLite searchByQuery çağrıldı: ${query}`);
+    
+    try {
+        // Veritabanı yüklü mü kontrol et
+        if (!musicDatabase) {
+            await loadDatabase();
+        }
+        
+        const startTime = Date.now();
+        const normalizedQuery = musicDatabase.normalizeText(query);
+        
+        console.log(`🔍 Arama terimi: "${normalizedQuery}"`);
+        
+        // 1. Basit arama
+        console.log(`🔍 DEBUG: musicDatabase:`, musicDatabase ? 'var' : 'null');
+        console.log(`🔍 DEBUG: Kademeli arama başlatılıyor...`);
+        let results = musicDatabase.searchProgressive(normalizedQuery, 20);
+        console.log(`🔍 DEBUG: Kademeli arama sonucu: ${results.length} adet`);
+        
+        const processTime = Date.now() - startTime;
+        
+        return {
+            found: results.length > 0,
+            matches: results.map(result => ({
+                path: result.path,
+                fileName: result.fileName,
+                similarity: result.similarity_score || 1.0
+            })),
+            totalMatches: results.length,
+            processTime: processTime,
+            query: query,
+            normalizedQuery: normalizedQuery
+        };
+        
+    } catch (error) {
+        console.error('❌ searchByQuery hatası:', error);
+        return {
+            found: false,
+            matches: [],
+            totalMatches: 0,
+            processTime: 0,
+            query: query,
+            error: error.message
+        };
     }
 }
 
@@ -1364,12 +781,15 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // API Endpoints
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', version: SERVER_VERSION, timestamp: new Date().toISOString() });
 });
 
 app.post('/api/search/files', async (req, res) => {
+    console.log('🚨 API ENDPOINT ÇAĞRILDI: /api/search/files');
     try {
         const { paths, options = {} } = req.body;
+        console.log('🚨 PATHS:', paths);
+        console.log('🚨 OPTIONS:', options);
         
         if (!Array.isArray(paths)) {
             return res.status(400).json({
@@ -1388,7 +808,9 @@ app.post('/api/search/files', async (req, res) => {
         };
         
         for (const searchPath of paths) {
+            console.log('🚨 SEARCHFILE ÇAĞIRILIYOR:', searchPath);
             const result = await searchFile(searchPath, options);
+            console.log('🚨 SEARCHFILE SONUCU:', result.found, result.matches?.length);
             results.push(result);
             
             if (result.found && result.matchType) {
@@ -1401,12 +823,14 @@ app.post('/api/search/files', async (req, res) => {
         
         // Sadeleştirilmiş istatistikler - duplikasyon kaldırıldı
         const processStats = {
-            totalFilesProcessed: musicDatabase ? musicDatabase.musicFiles.length : 0,
-            timestamp: new Date().toISOString()
+            totalFilesProcessed: musicDatabase ? musicDatabase.getFileCount() : 0,
+            timestamp: new Date().toISOString(),
+            serverVersion: SERVER_VERSION
         };
         
         res.json({
             status: 'success',
+            version: SERVER_VERSION,
             data: results,
             stats: {
                 totalProcessed: paths.length,
@@ -1429,6 +853,8 @@ app.post('/api/search/files', async (req, res) => {
     }
 });
 
+// DEPRECATED: GET /api/search kaldırıldı - POST /api/search/query kullanın
+
 // Yeni: Sorgu tabanlı arama endpointi
 app.post('/api/search/query', async (req, res) => {
     try {
@@ -1443,6 +869,7 @@ app.post('/api/search/query', async (req, res) => {
 
         res.json({
             status: 'success',
+            version: SERVER_VERSION,
             data: result,
             stats: {
                 totalProcessed: 1,
@@ -1455,12 +882,15 @@ app.post('/api/search/query', async (req, res) => {
         res.status(500).json({
             success: false,
             status: 'error',
+            version: SERVER_VERSION,
             message: 'Sorgu araması sırasında hata oluştu',
             error: error.message,
             details: error.stack
         });
     }
 });
+
+// DEPRECATED: Bu endpoint kaldırıldı - /api/search/query kullanın
 
 // Global missing files endpoint
 app.get('/api/playlistsong/global-missing', async (req, res) => {
@@ -1569,12 +999,16 @@ app.get('/api/playlistsong/global-missing', async (req, res) => {
                             missingFilePaths.add(filePath);
                             
                             // Sadece dosya yoksa ekle - benzerlik araması yapma
+                            // Artist ve title'ı birleştir
+                            const artist = song.$.artist || '';
+                            const title = song.$.title || '';
+                            const fullTitle = artist && title ? `${artist} - ${title}` : (artist || title || 'Bilinmeyen');
+                            
                             allMissingFiles.push({
                                 originalPath: filePath,
                                 playlistName: playlistName,
                                 playlistPath: playlistPath,
-                                artist: song.$.artist || 'Bilinmeyen',
-                                title: song.$.title || 'Bilinmeyen',
+                                fullTitle: fullTitle,
                                 isFileExists: false,
                                 found: false,
                                 foundPath: null,
@@ -2388,10 +1822,192 @@ app.post('/api/playlistsong/remove-from-all', async (req, res) => {
     }
 });
 
+// BASİT İNDEXLEYİCİ SINIFI
+class SimpleIndexer {
+    constructor() {
+        this.musicFiles = [];
+        this.indexedCount = 0;
+    }
+
+    /**
+     * Türkçe karakterleri normalize et
+     */
+    normalizeText(text) {
+        const charMap = {
+            "ğ": "g", "Ğ": "G", "ı": "i", "I": "I", "İ": "I", 
+            "ş": "s", "Ş": "S", "ç": "c", "Ç": "C", 
+            "ü": "u", "Ü": "U", "ö": "o", "Ö": "O"
+        };
+
+        let normalized = text;
+        
+        // NFKC normalizasyonu ve karakter dönüşümü
+        normalized = normalized.normalize("NFKC");
+        normalized = normalized.split('').map(c => charMap[c] || c).join('');
+        normalized = normalized.toLowerCase();
+        
+        // Sadece alfanumerik ve boşluk karakterlerini koru
+        normalized = normalized.replace(/[^a-z0-9\s]/g, ' ');
+        
+        // Çoklu boşlukları tek boşluğa çevir
+        normalized = normalized.replace(/\s+/g, ' ');
+        
+        return normalized.trim();
+    }
+
+    /**
+     * Dosya adından basit kelimeleri çıkar
+     */
+    extractSimpleWords(fileName) {
+        const fileNameWithoutExt = path.parse(fileName).name;
+        
+        // PARANTEZLERİ KALDIRMA - tüm kelimeleri al
+        const cleanedName = fileNameWithoutExt
+            .replace(/\s+/g, ' ')       // Çoklu boşlukları tek boşluğa
+            .trim();
+        
+        // Kelime ayırma - basit
+        const words = cleanedName
+            .split(/[-_\s\.\,\&\+\|\~\!\@\#\$\%\^\*\(\)\[\]\{\}]+/)
+            .map(word => word.trim())
+            .filter(word => word.length > 1)
+            .map(word => this.normalizeText(word))
+            .filter(word => word.length > 1);
+        
+        return words;
+    }
+
+    /**
+     * Klasör yolundan kelimeleri çıkar
+     */
+    extractFolderWords(filePath) {
+        const pathParts = path.dirname(filePath)
+            .split(path.sep)
+            .filter(p => p && p !== "." && !p.startsWith("/"));
+        
+        const folderWords = [];
+        for (const folder of pathParts) {
+            const normalizedFolder = this.normalizeText(folder);
+            const words = normalizedFolder.split(/\s+/).filter(w => w.length > 1);
+            folderWords.push(...words);
+        }
+        
+        return folderWords;
+    }
+
+    /**
+     * Tek dosyayı indexle
+     */
+    indexFile(filePath) {
+        try {
+            const fileName = path.basename(filePath);
+            const fileExt = path.extname(fileName).toLowerCase();
+            
+            // Desteklenen formatları kontrol et
+            const supportedFormats = ['.mp3', '.m4a', '.wav', '.flac', '.aac', '.mp4', '.avi', '.mkv'];
+            if (!supportedFormats.includes(fileExt)) {
+                return null;
+            }
+            
+            // Dosya kelimelerini çıkar
+            const fileWords = this.extractSimpleWords(fileName);
+            
+            // Klasör kelimelerini çıkar
+            const folderWords = this.extractFolderWords(filePath);
+            
+            // Tüm kelimeleri birleştir
+            const allWords = [...folderWords, ...fileWords];
+            
+            const indexedFile = {
+                path: filePath,
+                fileName: fileName,
+                normalizedFileName: this.normalizeText(path.parse(fileName).name)
+            };
+            
+            this.musicFiles.push(indexedFile);
+            this.indexedCount++;
+            
+            if (this.indexedCount % 1000 === 0) {
+                console.log(`📊 ${this.indexedCount} dosya indexlendi...`);
+            }
+            
+            return indexedFile;
+            
+        } catch (error) {
+            console.error(`❌ Dosya indexleme hatası: ${filePath} - ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Klasörü recursive olarak tara
+     */
+    async scanDirectory(dirPath) {
+        try {
+            const items = fs.readdirSync(dirPath);
+            
+            for (const item of items) {
+                const fullPath = path.join(dirPath, item);
+                const stat = fs.statSync(fullPath);
+                
+                if (stat.isDirectory()) {
+                    // Alt klasörü tara
+                    await this.scanDirectory(fullPath);
+                } else if (stat.isFile()) {
+                    // Dosyayı indexle
+                    this.indexFile(fullPath);
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Klasör tarama hatası: ${dirPath} - ${error.message}`);
+        }
+    }
+
+    /**
+     * Ana indexleme işlemi
+     */
+    async indexMusicDirectory(musicPath) {
+        console.log('🔍 BASİT İNDEXLEYİCİ BAŞLATILIYOR');
+        console.log('='.repeat(80));
+        console.log(`📁 Müzik klasörü: ${musicPath}`);
+        console.log('─'.repeat(80));
+        
+        const startTime = Date.now();
+        
+        try {
+            // Klasörü tara
+            await this.scanDirectory(musicPath);
+            
+            const endTime = Date.now();
+            const duration = endTime - startTime;
+            
+            console.log('\n✅ İNDEXLEME TAMAMLANDI');
+            console.log('─'.repeat(80));
+            console.log(`📊 Toplam dosya: ${this.indexedCount}`);
+            console.log(`⏱️ Süre: ${duration}ms (${(this.indexedCount / (duration / 1000)).toFixed(0)} dosya/sn)`);
+            
+            // JSON dosyasına kaydet - BASİT FORMAT
+            const outputData = this.musicFiles;
+            
+            const outputPath = path.join(__dirname, '../simple_musicfiles.db.json');
+            fs.writeFileSync(outputPath, JSON.stringify(outputData, null, 2));
+            
+            console.log(`💾 Veritabanı kaydedildi: ${outputPath}`);
+            console.log(`📁 Dosya boyutu: ${(fs.statSync(outputPath).size / 1024 / 1024).toFixed(2)} MB`);
+            
+            return outputData;
+            
+        } catch (error) {
+            console.error('❌ İndexleme hatası:', error.message);
+            return null;
+        }
+    }
+}
+
 // İndeks oluşturma endpoint'i
 app.post('/api/index/create', async (req, res) => {
     try {
-        const { musicFolder, virtualdjFolder } = req.body;
+        const { musicFolder } = req.body;
         
         if (!musicFolder) {
             return res.status(400).json({
@@ -2402,32 +2018,35 @@ app.post('/api/index/create', async (req, res) => {
         
         console.log(`🔄 İndeksleme başlatılıyor: ${musicFolder}`);
         
-        // MusicFileIndexer'ı import et ve kullan
-        const MusicFileIndexer = require('./indexer');
-        const indexer = new MusicFileIndexer();
+        // SimpleIndexer'ı kullan
+        const indexer = new SimpleIndexer();
         
         // İndeksleme işlemini başlat
-        const result = await indexer.indexMusicFiles(musicFolder);
+        const result = await indexer.indexMusicDirectory(musicFolder);
         
-        if (result.success) {
+        if (result) {
             // Veritabanını yeniden yükle
             musicDatabase = null;
             await loadDatabase();
             
-            console.log(`✅ İndeksleme tamamlandı: ${result.data.totalFiles} dosya`);
+            console.log(`✅ İndeksleme tamamlandı: ${result.totalFiles} dosya`);
             
             res.json({
                 success: true,
                 message: 'İndeksleme başarıyla tamamlandı',
-                data: result.data
+                data: {
+                    totalFiles: result.totalFiles,
+                    version: result.version,
+                    lastUpdate: result.lastUpdate,
+                    databaseSize: result.musicFiles ? result.musicFiles.length : 0
+                }
             });
         } else {
-            console.error(`❌ İndeksleme hatası: ${result.message}`);
+            console.error(`❌ İndeksleme hatası`);
             res.status(500).json({
                 success: false,
                 message: 'İndeks oluşturulurken hata oluştu',
-                error: result.message,
-                details: result.details
+                error: 'İndeksleme işlemi başarısız oldu'
             });
         }
     } catch (error) {
@@ -2443,28 +2062,24 @@ app.post('/api/index/create', async (req, res) => {
 // İndeks durumu endpoint'i
 app.get('/api/index/status', async (req, res) => {
     try {
-        const dbPath = path.join(__dirname, '../musicfiles.db.json');
-        
-        if (await fs.pathExists(dbPath)) {
-            const stats = await fs.stat(dbPath);
-            const dbData = JSON.parse(await fs.readFile(dbPath, 'utf8'));
-            
-            res.json({
-                success: true,
-                indexed: true,
-                fileCount: dbData.musicFiles ? dbData.musicFiles.length : 0,
-                lastModified: stats.mtime.toISOString(),
-                databaseSize: stats.size
-            });
-        } else {
-            res.json({
-                success: true,
-                indexed: false,
-                fileCount: 0,
-                lastModified: null,
-                databaseSize: 0
-            });
+        // Veritabanı yüklü mü kontrol et
+        if (!musicDatabase) {
+            await loadDatabase();
         }
+        
+        const stats = sqliteDb.getStats();
+        
+        res.json({
+            success: true,
+            version: SERVER_VERSION,
+            indexed: stats.fileCount > 0,
+            fileCount: stats.fileCount,
+            wordCount: stats.wordCount,
+            databaseSize: stats.dbSize,
+            databasePath: stats.dbPath,
+            lastModified: new Date().toISOString(),
+            databaseType: 'SQLite'
+        });
     } catch (error) {
         console.error('Index status error:', error);
         res.status(500).json({
@@ -2513,7 +2128,7 @@ app.post('/api/stream', async (req, res) => {
 // Server başlatma
 async function startServer() {
     try {
-        logInfo('Server başlatılıyor...', 'STARTUP');
+        logInfo(`Server başlatılıyor... v${SERVER_VERSION}`, 'STARTUP');
         
         // Veritabanını yükle
         const dbLoaded = await loadDatabase();
@@ -2525,7 +2140,7 @@ async function startServer() {
         // Server'ı başlat
         const server = app.listen(PORT, () => {
             logInfo(`🚀 Node.js API server başlatıldı: http://localhost:${PORT}`, 'STARTUP');
-            logInfo(`📊 Veritabanı: ${musicDatabase ? musicDatabase.musicFiles.length : 0} dosya`, 'STARTUP');
+            logInfo(`📊 Veritabanı: ${musicDatabase ? musicDatabase.getFileCount() : 0} dosya`, 'STARTUP');
         });
         
         // Graceful shutdown

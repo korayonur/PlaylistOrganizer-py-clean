@@ -88,12 +88,37 @@ cleanup() {
     
     # Tüm ilgili süreçleri temizle (sadece Node.js)
     log "İlgili süreçler temizleniyor..."
-    pkill -f "ng serve" 2>/dev/null || true
     
-    # Node.js süreçlerini temizle
+    # Angular/ng süreçlerini temizle
+    pkill -f "ng serve" 2>/dev/null || true
+    pkill -f "ng build" 2>/dev/null || true
+    pkill -f "ng test" 2>/dev/null || true
+    pkill -f "ng lint" 2>/dev/null || true
+    
+    # Node.js süreçlerini temizle (daha kapsamlı)
     pkill -f "node.*ng" 2>/dev/null || true
     pkill -f "node.*angular" 2>/dev/null || true
+    pkill -f "node.*serve" 2>/dev/null || true
+    pkill -f "node.*build" 2>/dev/null || true
+    pkill -f "node.*test" 2>/dev/null || true
+    pkill -f "node.*lint" 2>/dev/null || true
+    pkill -f "node.*start" 2>/dev/null || true
+    pkill -f "node.*dev" 2>/dev/null || true
+    
+    # Nodemon süreçlerini temizle
     pkill -f "nodemon.*server.js" 2>/dev/null || true
+    pkill -f "nodemon" 2>/dev/null || true
+    
+    # PlaylistOrganizer ile ilgili tüm Node.js süreçlerini temizle
+    pkill -f "node.*PlaylistOrganizer" 2>/dev/null || true
+    pkill -f "node.*playlist" 2>/dev/null || true
+    pkill -f "node.*music" 2>/dev/null || true
+    
+    # Proje dizininde çalışan tüm Node.js süreçlerini temizle
+    pkill -f "node.*$PROJECT_ROOT" 2>/dev/null || true
+    pkill -f "node.*$BACKEND_DIR" 2>/dev/null || true
+    pkill -f "node.*$FRONTEND_DIR" 2>/dev/null || true
+    
     # NOT: node.*server.js asla sonlandırma - nodemon sistemi
     
     # 2 saniye bekle
@@ -111,6 +136,27 @@ cleanup() {
     if [ ! -z "$REMAINING_4200" ]; then
         warning "Port 4200 hala kullanımda (PID: $REMAINING_4200), zorla durduruluyor..."
         kill -9 "$REMAINING_4200" 2>/dev/null || true
+    fi
+    
+    # Tüm Node.js süreçlerini son kontrol et
+    log "Son kontrol - kalan Node.js süreçleri taranıyor..."
+    REMAINING_NODE_PIDS=$(pgrep -f "node.*$PROJECT_ROOT" 2>/dev/null || true)
+    if [ ! -z "$REMAINING_NODE_PIDS" ]; then
+        warning "Proje dizininde kalan Node.js süreçleri bulundu: $REMAINING_NODE_PIDS"
+        for pid in $REMAINING_NODE_PIDS; do
+            warning "Node.js süreci zorla durduruluyor (PID: $pid)..."
+            kill -9 "$pid" 2>/dev/null || true
+        done
+    fi
+    
+    # Nodemon süreçlerini son kontrol et
+    REMAINING_NODEMON_PIDS=$(pgrep -f "nodemon" 2>/dev/null || true)
+    if [ ! -z "$REMAINING_NODEMON_PIDS" ]; then
+        warning "Kalan Nodemon süreçleri bulundu: $REMAINING_NODEMON_PIDS"
+        for pid in $REMAINING_NODEMON_PIDS; do
+            warning "Nodemon süreci zorla durduruluyor (PID: $pid)..."
+            kill -9 "$pid" 2>/dev/null || true
+        done
     fi
     
     success "Development süreçleri temizlendi"
@@ -141,6 +187,22 @@ fi
 # Önceki süreçleri temizle
 log "Önceki development süreçleri temizleniyor..."
 cleanup
+
+# Ek güvenlik - tüm Node.js süreçlerini kontrol et
+log "🔍 Ek güvenlik kontrolü - tüm Node.js süreçleri taranıyor..."
+ALL_NODE_PIDS=$(pgrep -f "node" 2>/dev/null || true)
+if [ ! -z "$ALL_NODE_PIDS" ]; then
+    log "Sistemde çalışan Node.js süreçleri bulundu: $ALL_NODE_PIDS"
+    for pid in $ALL_NODE_PIDS; do
+        # Sürecin çalıştığı dizini kontrol et
+        PROC_DIR=$(pwdx "$pid" 2>/dev/null | cut -d: -f2 | xargs 2>/dev/null || true)
+        if [[ "$PROC_DIR" == *"$PROJECT_ROOT"* ]]; then
+            warning "Proje dizininde çalışan Node.js süreci bulundu (PID: $pid, Dizin: $PROC_DIR)"
+            warning "Süreç zorla durduruluyor..."
+            kill -9 "$pid" 2>/dev/null || true
+        fi
+    done
+fi
 
 # Backend development başlatma
 log "🔧 Backend development server başlatılıyor (Node.js + nodemon)..."
@@ -175,11 +237,51 @@ if ! command -v nodemon &> /dev/null; then
     npm install -g nodemon
 fi
 
+# Nodemon konfigürasyonu oluştur (güncelleme algılama için)
+log "🔧 Nodemon konfigürasyonu oluşturuluyor..."
+cat > "$BACKEND_DIR/nodemon.json" << 'EOF'
+{
+  "watch": [
+    "*.js",
+    "*.json",
+    "database.js",
+    "migrate-to-sqlite.js"
+  ],
+  "ext": "js,json",
+  "ignore": [
+    "node_modules/",
+    "logs/",
+    "*.log",
+    "*.db",
+    "*.db-journal"
+  ],
+  "delay": 1000,
+  "verbose": true,
+  "restartable": "rs",
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "legacyWatch": false,
+  "signal": "SIGUSR2"
+}
+EOF
+success "Nodemon konfigürasyonu oluşturuldu"
+
 # Backend'i development modunda başlat (nodemon ile)
 log "Backend API development server başlatılıyor (hot reload)..."
-nodemon server.js > "$PROJECT_ROOT/logs/backend_dev.log" 2>&1 &
+# Console çıktılarını ekranda göster, aynı zamanda log dosyasına da yaz
+# Nodemon'u konfigürasyon dosyası ile başlat
+nodemon --config nodemon.json server.js 2>&1 | tee "$PROJECT_ROOT/logs/backend_dev.log" &
 BACKEND_PID=$!
 echo $BACKEND_PID > "$BACKEND_PID_FILE"
+
+# Nodemon'un başladığını doğrula
+sleep 2
+if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+    error "Nodemon başlatılamadı!"
+    exit 1
+fi
+success "Nodemon başlatıldı (PID: $BACKEND_PID)"
 
 # Backend'in hazır olmasını bekle
 log "⏳ Backend development server'ın hazır olması bekleniyor..."
@@ -209,7 +311,8 @@ fi
 
 # Frontend'i development modunda başlat (hot reload ile)
 log "Frontend development server başlatılıyor (hot reload)..."
-ng serve --port 4200 --host 0.0.0.0 --live-reload --watch --proxy-config proxy.conf.json > "$PROJECT_ROOT/logs/frontend_dev.log" 2>&1 &
+# Console çıktılarını ekranda göster, aynı zamanda log dosyasına da yaz
+ng serve --port 4200 --host 0.0.0.0 --live-reload --watch --proxy-config proxy.conf.json 2>&1 | tee "$PROJECT_ROOT/logs/frontend_dev.log" &
 FRONTEND_PID=$!
 echo $FRONTEND_PID > "$FRONTEND_PID_FILE"
 
@@ -240,9 +343,11 @@ echo ""
 echo -e "${PURPLE}🚀 Development Özellikleri:${NC}"
 echo -e "  • Backend: Node.js + Nodemon ile otomatik yeniden başlatma"
 echo -e "  • Frontend: Angular hot reload"
-echo -e "  • Dosya değişikliklerini otomatik algılama"
+echo -e "  • Dosya değişikliklerini otomatik algılama (nodemon.json ile)"
 echo -e "  • Geliştirici konsolu logları aktif"
 echo -e "  • Python kodu tamamen kaldırıldı - sadece Node.js"
+echo -e "  • Nodemon konfigürasyonu ile güvenilir güncelleme algılama"
+echo -e "  • Manuel yeniden başlatma: 'rs' yazıp Enter"
 echo ""
 echo -e "${YELLOW}Uygulamayı kapatmak için Ctrl+C tuşlayın${NC}"
 echo ""
@@ -264,6 +369,9 @@ fi
 
 # Süreçleri izle
 log "Development server'lar çalışıyor... (Ctrl+C ile kapatın)"
+log "💡 Nodemon güncelleme algılama aktif - dosya değişikliklerini otomatik algılar"
+log "💡 Manuel yeniden başlatma için: 'rs' yazıp Enter'a basın"
+
 while true; do
     # Backend kontrolü
     if [ -f "$BACKEND_PID_FILE" ]; then
@@ -281,6 +389,29 @@ while true; do
             error "Frontend development server beklenmedik şekilde durdu"
             break
         fi
+    fi
+    
+    # Nodemon durumunu kontrol et
+    NODEMON_PID=$(pgrep -f "nodemon.*server.js" 2>/dev/null || true)
+    if [ -z "$NODEMON_PID" ]; then
+        warning "Nodemon durdu, yeniden başlatılıyor..."
+        cd "$BACKEND_DIR"
+        nodemon --config nodemon.json server.js 2>&1 | tee "$PROJECT_ROOT/logs/backend_dev.log" &
+        NEW_BACKEND_PID=$!
+        echo $NEW_BACKEND_PID > "$BACKEND_PID_FILE"
+        success "Nodemon yeniden başlatıldı (PID: $NEW_BACKEND_PID)"
+    fi
+    
+    # Ek güvenlik - proje dizininde çalışan diğer Node.js süreçlerini kontrol et
+    ROGUE_NODE_PIDS=$(pgrep -f "node.*$PROJECT_ROOT" 2>/dev/null || true)
+    if [ ! -z "$ROGUE_NODE_PIDS" ]; then
+        for pid in $ROGUE_NODE_PIDS; do
+            # Bu PID'ler bizim kontrol ettiğimiz süreçler değilse
+            if [ "$pid" != "$BACKEND_PID" ] && [ "$pid" != "$FRONTEND_PID" ]; then
+                warning "Proje dizininde kontrolsüz Node.js süreci bulundu (PID: $pid), durduruluyor..."
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        done
     fi
     
     sleep 5
