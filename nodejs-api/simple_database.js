@@ -42,7 +42,6 @@ class SimpleSQLiteDatabase {
                 fileType TEXT,
                 size INTEGER,
                 modifiedTime TEXT,
-                mimeType TEXT,
                 createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
             )
@@ -60,7 +59,7 @@ class SimpleSQLiteDatabase {
     insertMusicFile(fileData) {
         const stmt = this.db.prepare(`
             INSERT OR REPLACE INTO music_files 
-            (path, fileName, normalizedFileName, extension, fileType, size, modifiedTime, mimeType)
+            (path, fileName, normalizedFileName, extension, fileType, size, modifiedTime)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
@@ -214,7 +213,7 @@ class SimpleSQLiteDatabase {
         try {
             const stmt = this.db.prepare(`
                 INSERT OR REPLACE INTO music_files 
-                (path, fileName, normalizedFileName, extension, fileType, size, modifiedTime, mimeType)
+                (path, fileName, normalizedFileName, extension, fileType, size, modifiedTime)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `);
             
@@ -226,7 +225,6 @@ class SimpleSQLiteDatabase {
                 fileData.fileType || null,
                 fileData.size || null,
                 fileData.modifiedTime || null,
-                fileData.mimeType || null
             );
             
             return result;

@@ -1919,8 +1919,7 @@ class SimpleIndexer {
                 extension: fileExt,
                 fileType: this.getFileType(fileExt),
                 size: stats.size,
-                modifiedTime: stats.mtime.toISOString(),
-                mimeType: this.getMimeType(fileExt)
+                modifiedTime: stats.mtime.toISOString()
             };
             
             this.musicFiles.push(indexedFile);
@@ -1950,22 +1949,6 @@ class SimpleIndexer {
         return 'unknown';
     }
 
-    /**
-     * MIME tipini belirle
-     */
-    getMimeType(extension) {
-        const mimeTypes = {
-            '.mp3': 'audio/mpeg',
-            '.wav': 'audio/wav',
-            '.m4a': 'audio/mp4',
-            '.flac': 'audio/flac',
-            '.aac': 'audio/aac',
-            '.mp4': 'video/mp4',
-            '.avi': 'video/x-msvideo',
-            '.mkv': 'video/x-matroska'
-        };
-        return mimeTypes[extension] || 'application/octet-stream';
-    }
 
     /**
      * Klasörü recursive olarak tara
