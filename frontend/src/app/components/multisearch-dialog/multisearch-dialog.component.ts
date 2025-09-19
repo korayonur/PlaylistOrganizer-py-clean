@@ -21,7 +21,7 @@ import { MatChipsModule } from "@angular/material/chips";
 import { MatDividerModule } from "@angular/material/divider";
 import { MatExpansionModule } from "@angular/material/expansion";
 import { MatCheckboxModule } from "@angular/material/checkbox";
-import { SearchResponse, SearchResult } from "../../models/api.model";
+import { SearchResponse, SearchResult, SearchInfo } from "../../models/api.model";
 import { firstValueFrom } from "rxjs";
 import { provideAnimations } from "@angular/platform-browser/animations";
 import { signal } from "@angular/core";

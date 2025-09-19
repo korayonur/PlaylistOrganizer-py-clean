@@ -1,3 +1,19 @@
+export interface SearchInfo {
+  originalQuery: string;
+  normalizedQuery: string;
+  totalWords: number;
+  matchedAt: 'exact' | 'partial' | 'single' | 'none';
+  matchedWords: number;
+  matchedWordIndex?: number;
+  matchedWord?: string;
+  searchStage: string;
+  searchStep: number;
+  searchStepDescription: string;
+  searchedTerm?: string;
+  inputType: 'query' | 'filePath';
+  inputValue: string;
+}
+
 export interface SearchResult {
   originalPath: string;
   found: boolean;
@@ -5,6 +21,7 @@ export interface SearchResult {
   foundPath?: string;
   algoritmaYontemi: string;
   processTime: string;
+  searchInfo?: SearchInfo;
   // Global mode için son okunan playlist bilgisi
   lastPlaylistName?: string;
   lastPlaylistPath?: string;
