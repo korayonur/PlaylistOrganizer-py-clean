@@ -459,6 +459,12 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
         this.removeUpdatedSongsFromUI(Array.from(updatedPaths));
       }
 
+      // Global stats'i güncelle - benzersiz eksik dosya sayısını azalt
+      if (this.globalStats && selectedResults.length > 0) {
+        this.globalStats.unique_missing_files = Math.max(0, this.globalStats.unique_missing_files - selectedResults.length);
+        console.log(`📊 Global stats güncellendi: ${selectedResults.length} dosya işlendi, kalan benzersiz eksik dosya: ${this.globalStats.unique_missing_files}`);
+      }
+
       // Modern mesaj sistemi
       this.showSaveSuccessMessage(selectedResults.length, globalStats);
 
