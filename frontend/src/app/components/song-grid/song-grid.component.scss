@@ -620,6 +620,65 @@ button {
   }
 }
 
+// Arama bilgileri
+.search-info {
+  margin-top: map.get($spacing, sm);
+  padding: map.get($spacing, sm);
+  background: rgba(var(--accent-rgb), 0.05);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: var(--border-radius-sm);
+  font-size: 0.9em;
+
+  .search-info-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: map.get($spacing, xs);
+    
+    .search-stage {
+      font-weight: 600;
+      color: map.get($colors, accent);
+      font-size: 1em;
+    }
+    
+    .search-step {
+      font-size: 0.85em;
+      color: map.get($colors, muted);
+      background: rgba(var(--accent-rgb), 0.1);
+      padding: 0.2em 0.6em;
+      border-radius: var(--border-radius-sm);
+    }
+  }
+
+  .search-details {
+    display: flex;
+    flex-direction: column;
+    gap: map.get($spacing, xs);
+
+    .search-detail {
+      display: flex;
+      align-items: center;
+      gap: map.get($spacing, xs);
+      font-size: 0.85em;
+
+      .label {
+        color: map.get($colors, muted);
+        font-weight: 500;
+        min-width: 120px;
+      }
+
+      .value {
+        color: map.get($colors, text);
+        font-family: var(--font-mono);
+        background: rgba(var(--surface-rgb), 0.5);
+        padding: 0.2em 0.4em;
+        border-radius: var(--border-radius-sm);
+        font-size: 0.9em;
+      }
+    }
+  }
+}
+
 .similar-files-table {
   font-size: 0.9em;
   border: 1px solid var(--border-color);

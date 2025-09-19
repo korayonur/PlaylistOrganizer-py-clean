@@ -80,6 +80,32 @@
                 </span>
               }
 
+              <!-- Arama Bilgileri -->
+              @if (song.searchInfo) {
+                <div class="search-info">
+                  <div class="search-info-header">
+                    <span class="search-stage">{{ song.searchInfo.searchStage }}</span>
+                    <span class="search-step">{{ song.searchInfo.searchStep }}. AŞAMA</span>
+                  </div>
+                  <div class="search-details">
+                    <div class="search-detail">
+                      <span class="label">Aranan:</span>
+                      <span class="value">{{ song.searchInfo.searchedTerm || song.searchInfo.normalizedQuery }}</span>
+                    </div>
+                    <div class="search-detail">
+                      <span class="label">Eşleşen Kelimeler:</span>
+                      <span class="value">{{ song.searchInfo.matchedWords }}/{{ song.searchInfo.totalWords }}</span>
+                    </div>
+                    @if (song.searchInfo.matchedWord) {
+                      <div class="search-detail">
+                        <span class="label">Bulunan Kelime:</span>
+                        <span class="value">{{ song.searchInfo.matchedWord }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+
               <!-- Benzer Dosyalar Tablosu -->
               @if (!song.isFileExists && song.similarFiles && song.similarFiles.length > 0) {
                 <div class="similar-files">

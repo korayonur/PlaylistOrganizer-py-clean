@@ -9,6 +9,22 @@ export interface SimilarFile {
   extensionMatch?: boolean;
 }
 
+export interface SearchInfo {
+  originalQuery: string;
+  normalizedQuery: string;
+  totalWords: number;
+  matchedAt: 'exact' | 'partial' | 'single' | 'none';
+  matchedWords: number;
+  matchedWordIndex?: number;
+  matchedWord?: string;
+  searchStage: string;
+  searchStep: number;
+  searchStepDescription: string;
+  searchedTerm?: string;
+  inputType: 'query' | 'filePath';
+  inputValue: string;
+}
+
 export interface Song {
   id?: string;
   filePath: string;
@@ -21,4 +37,5 @@ export interface Song {
   searchMessage?: string;
   searchTime?: number;
   similarFiles?: SimilarFile[];
+  searchInfo?: SearchInfo;
 }

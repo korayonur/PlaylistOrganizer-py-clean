@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output, signal, WritableSignal } from "@angular/core";
 import { CommonModule } from "@angular/common";
-import { Song, SimilarFile } from "../../models/song.model";
+import { Song, SimilarFile, SearchInfo } from "../../models/song.model";
 import { MusicPlayerService } from "../../services/music-player.service";
 import { HttpClient } from "@angular/common/http";
 import { DialogService, DialogResult } from "../../shared/services/dialog.service";
@@ -36,6 +36,7 @@ interface ApiSearchResponse {
   data: {
     results?: SearchResult[];
     searchTime?: number;
+    searchInfo?: SearchInfo;
   };
 }
 
@@ -194,6 +195,7 @@ export class SongGridComponent {
                   searchMessage: response.message,
                   similarFiles: undefined,
                   searchTime: response.data.searchTime,
+                  searchInfo: response.data.searchInfo,
                 };
                 return [...songs];
               });
@@ -241,6 +243,7 @@ export class SongGridComponent {
                   searchMessage: response.message,
                   similarFiles: transformedFiles.length > 0 ? transformedFiles : undefined,
                   searchTime: response.data.searchTime,
+                  searchInfo: response.data.searchInfo,
                 };
                 return [...songs];
               });
@@ -254,6 +257,7 @@ export class SongGridComponent {
                 searchMessage: response.message,
                 similarFiles: undefined,
                 searchTime: response.data.searchTime || 0,
+                searchInfo: response.data.searchInfo,
               };
               return [...songs];
             });
@@ -268,6 +272,7 @@ export class SongGridComponent {
               searchMessage: "API hatası",
               similarFiles: undefined,
               searchTime: 0,
+              searchInfo: undefined,
             };
             return [...songs];
           });
