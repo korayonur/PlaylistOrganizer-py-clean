@@ -1909,19 +1909,18 @@ class SimpleIndexer {
                 return null;
             }
             
-            // Dosya kelimelerini çıkar
-            const fileWords = this.extractSimpleWords(fileName);
-            
-            // Klasör kelimelerini çıkar
-            const folderWords = this.extractFolderWords(filePath);
-            
-            // Tüm kelimeleri birleştir
-            const allWords = [...folderWords, ...fileWords];
+            // Dosya istatistiklerini al
+            const stats = fs.statSync(filePath);
             
             const indexedFile = {
                 path: filePath,
                 fileName: fileName,
-                normalizedFileName: this.normalizeText(path.parse(fileName).name)
+                normalizedFileName: this.normalizeText(path.parse(fileName).name),
+                extension: fileExt,
+                fileType: this.getFileType(fileExt),
+                size: stats.size,
+                modifiedTime: stats.mtime.toISOString(),
+                mimeType: this.getMimeType(fileExt)
             };
             
             this.musicFiles.push(indexedFile);
@@ -1937,6 +1936,35 @@ class SimpleIndexer {
             console.error(`❌ Dosya indexleme hatası: ${filePath} - ${error.message}`);
             return null;
         }
+    }
+
+    /**
+     * Dosya tipini belirle
+     */
+    getFileType(extension) {
+        const audioExts = ['.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg', '.wma'];
+        const videoExts = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm'];
+        
+        if (audioExts.includes(extension)) return 'audio';
+        if (videoExts.includes(extension)) return 'video';
+        return 'unknown';
+    }
+
+    /**
+     * MIME tipini belirle
+     */
+    getMimeType(extension) {
+        const mimeTypes = {
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.m4a': 'audio/mp4',
+            '.flac': 'audio/flac',
+            '.aac': 'audio/aac',
+            '.mp4': 'video/mp4',
+            '.avi': 'video/x-msvideo',
+            '.mkv': 'video/x-matroska'
+        };
+        return mimeTypes[extension] || 'application/octet-stream';
     }
 
     /**
@@ -1964,10 +1992,37 @@ class SimpleIndexer {
     }
 
     /**
+     * Klasörü recursive olarak tara ve SQLite'a kaydet
+     */
+    async scanDirectoryToSQLite(dirPath, sqliteDb) {
+        try {
+            const items = fs.readdirSync(dirPath);
+            
+            for (const item of items) {
+                const fullPath = path.join(dirPath, item);
+                const stat = fs.statSync(fullPath);
+                
+                if (stat.isDirectory()) {
+                    // Alt klasörü tara
+                    await this.scanDirectoryToSQLite(fullPath, sqliteDb);
+                } else if (stat.isFile()) {
+                    // Dosyayı indexle ve SQLite'a kaydet
+                    const indexedFile = this.indexFile(fullPath);
+                    if (indexedFile) {
+                        sqliteDb.addFile(indexedFile);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`❌ SQLite klasör tarama hatası: ${dirPath} - ${error.message}`);
+        }
+    }
+
+    /**
      * Ana indexleme işlemi
      */
     async indexMusicDirectory(musicPath) {
-        console.log('🔍 BASİT İNDEXLEYİCİ BAŞLATILIYOR');
+        console.log('🔍 SQLite İNDEXLEYİCİ BAŞLATILIYOR');
         console.log('='.repeat(80));
         console.log(`📁 Müzik klasörü: ${musicPath}`);
         console.log('─'.repeat(80));
@@ -1975,30 +2030,33 @@ class SimpleIndexer {
         const startTime = Date.now();
         
         try {
-            // Klasörü tara
-            await this.scanDirectory(musicPath);
+            // SQLite veritabanını temizle ve yeniden oluştur
+            const sqliteDb = new SimpleSQLiteDatabase();
+            sqliteDb.clearDatabase(); // Mevcut verileri temizle
+            
+            // Klasörü tara ve SQLite'a kaydet
+            await this.scanDirectoryToSQLite(musicPath, sqliteDb);
             
             const endTime = Date.now();
             const duration = endTime - startTime;
             
-            console.log('\n✅ İNDEXLEME TAMAMLANDI');
+            console.log('\n✅ SQLite İNDEXLEME TAMAMLANDI');
             console.log('─'.repeat(80));
             console.log(`📊 Toplam dosya: ${this.indexedCount}`);
             console.log(`⏱️ Süre: ${duration}ms (${(this.indexedCount / (duration / 1000)).toFixed(0)} dosya/sn)`);
             
-            // JSON dosyasına kaydet - BASİT FORMAT
-            const outputData = this.musicFiles;
+            const stats = sqliteDb.getStats();
+            console.log(`💾 SQLite veritabanı: ${stats.fileCount} dosya, ${(stats.dbSize / 1024 / 1024).toFixed(2)} MB`);
             
-            const outputPath = path.join(__dirname, '../simple_musicfiles.db.json');
-            fs.writeFileSync(outputPath, JSON.stringify(outputData, null, 2));
-            
-            console.log(`💾 Veritabanı kaydedildi: ${outputPath}`);
-            console.log(`📁 Dosya boyutu: ${(fs.statSync(outputPath).size / 1024 / 1024).toFixed(2)} MB`);
-            
-            return outputData;
+            return {
+                totalFiles: this.indexedCount,
+                version: SERVER_VERSION,
+                lastUpdate: new Date().toISOString(),
+                musicFiles: this.musicFiles
+            };
             
         } catch (error) {
-            console.error('❌ İndexleme hatası:', error.message);
+            console.error('❌ SQLite indexleme hatası:', error.message);
             return null;
         }
     }
@@ -2029,16 +2087,17 @@ app.post('/api/index/create', async (req, res) => {
             musicDatabase = null;
             await loadDatabase();
             
-            console.log(`✅ İndeksleme tamamlandı: ${result.totalFiles} dosya`);
+            console.log(`✅ SQLite indeksleme tamamlandı: ${result.totalFiles} dosya`);
             
             res.json({
                 success: true,
-                message: 'İndeksleme başarıyla tamamlandı',
+                message: 'SQLite indeksleme başarıyla tamamlandı',
                 data: {
                     totalFiles: result.totalFiles,
                     version: result.version,
                     lastUpdate: result.lastUpdate,
-                    databaseSize: result.musicFiles ? result.musicFiles.length : 0
+                    databaseSize: musicDatabase ? musicDatabase.getFileCount() : 0,
+                    databaseType: 'SQLite'
                 }
             });
         } else {

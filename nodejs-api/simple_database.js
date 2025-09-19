@@ -198,6 +198,44 @@ class SimpleSQLiteDatabase {
         console.log('✅ Veritabanı temizlendi');
     }
 
+    // Veritabanını temizle
+    clearDatabase() {
+        try {
+            this.db.exec('DELETE FROM music_files');
+            console.log('🗑️ SQLite veritabanı temizlendi');
+        } catch (error) {
+            console.error('❌ Veritabanı temizleme hatası:', error);
+            throw error;
+        }
+    }
+
+    // Dosya ekle
+    addFile(fileData) {
+        try {
+            const stmt = this.db.prepare(`
+                INSERT OR REPLACE INTO music_files 
+                (path, fileName, normalizedFileName, extension, fileType, size, modifiedTime, mimeType)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            
+            const result = stmt.run(
+                fileData.path,
+                fileData.fileName,
+                fileData.normalizedFileName,
+                fileData.extension || null,
+                fileData.fileType || null,
+                fileData.size || null,
+                fileData.modifiedTime || null,
+                fileData.mimeType || null
+            );
+            
+            return result;
+        } catch (error) {
+            console.error('❌ Dosya ekleme hatası:', error);
+            throw error;
+        }
+    }
+
     // Veritabanını kapat
     close() {
         if (this.db) {
