@@ -214,7 +214,7 @@ class SimpleSQLiteDatabase {
             const stmt = this.db.prepare(`
                 INSERT OR REPLACE INTO music_files 
                 (path, fileName, normalizedFileName, extension, fileType, size, modifiedTime)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             `);
             
             const result = stmt.run(
