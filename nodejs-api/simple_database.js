@@ -86,9 +86,10 @@ class SimpleSQLiteDatabase {
         console.log(`🔍 Kelimeler: [${words.join(', ')}]`);
         
         // 1. Adım: Tam eşleşme
+        console.log(`🔍 1. AŞAMA: Tam eşleşme aranıyor: "${normalizedSearch}"`);
         let results = this.searchExact(normalizedSearch, limit);
         if (results.length > 0) {
-            console.log(`✅ Tam eşleşme: ${results.length} sonuç`);
+            console.log(`✅ 1. AŞAMADA BULUNDU: Tam eşleşme: ${results.length} sonuç`);
             return {
                 results: this.addScoring(results, words),
                 searchInfo: {
@@ -97,17 +98,22 @@ class SimpleSQLiteDatabase {
                     totalWords: words.length,
                     matchedAt: 'exact',
                     matchedWords: words.length,
-                    searchStage: '🎯 TAM EŞLEŞME - Tüm kelimeler bulundu'
+                    searchStage: '🎯 1. AŞAMA - TAM EŞLEŞME - Tüm kelimeler bulundu',
+                    searchStep: 1,
+                    searchStepDescription: 'Tam eşleşme araması'
                 }
             };
         }
+        console.log(`❌ 1. AŞAMA: Tam eşleşme bulunamadı`);
         
         // 2. Adım: Kelime azaltma (son kelimeyi çıkar)
         for (let i = words.length - 1; i >= 1; i--) {
             const partialTerm = words.slice(0, i).join(' ');
+            const stepNumber = words.length - i + 1;
+            console.log(`🔍 ${stepNumber}. AŞAMA: Kısmi eşleşme aranıyor: "${partialTerm}" (${i}/${words.length} kelime)`);
             results = this.searchExact(partialTerm, limit);
             if (results.length > 0) {
-                console.log(`✅ Kısmi eşleşme (${i} kelime): ${results.length} sonuç`);
+                console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Kısmi eşleşme (${i} kelime): ${results.length} sonuç`);
                 return {
                     results: this.addScoring(results, words),
                     searchInfo: {
@@ -116,18 +122,25 @@ class SimpleSQLiteDatabase {
                         totalWords: words.length,
                         matchedAt: 'partial',
                         matchedWords: i,
-                        searchStage: `📉 KISMİ EŞLEŞME - ${i}/${words.length} kelime bulundu`
+                        searchStage: `📉 ${stepNumber}. AŞAMA - KISMİ EŞLEŞME - ${i}/${words.length} kelime bulundu`,
+                        searchStep: stepNumber,
+                        searchStepDescription: `Kısmi eşleşme araması (${i} kelime)`,
+                        searchedTerm: partialTerm
                     }
                 };
             }
+            console.log(`❌ ${stepNumber}. AŞAMA: Kısmi eşleşme bulunamadı: "${partialTerm}"`);
         }
         
         // 3. Adım: Tek kelime arama
+        const singleWordStepStart = words.length + 1;
         for (let i = 0; i < words.length; i++) {
             const word = words[i];
+            const stepNumber = singleWordStepStart + i;
+            console.log(`🔍 ${stepNumber}. AŞAMA: Tek kelime aranıyor: "${word}" (${i + 1}/${words.length}. kelime)`);
             results = this.searchExact(word, limit);
             if (results.length > 0) {
-                console.log(`✅ Tek kelime eşleşme: ${results.length} sonuç`);
+                console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Tek kelime eşleşme: ${results.length} sonuç`);
                 return {
                     results: this.addScoring(results, words),
                     searchInfo: {
@@ -138,10 +151,14 @@ class SimpleSQLiteDatabase {
                         matchedWords: 1,
                         matchedWordIndex: i + 1,
                         matchedWord: word,
-                        searchStage: `🔍 TEK KELİME EŞLEŞME - ${i + 1}/${words.length}. kelime: "${word}"`
+                        searchStage: `🔍 ${stepNumber}. AŞAMA - TEK KELİME EŞLEŞME - ${i + 1}/${words.length}. kelime: "${word}"`,
+                        searchStep: stepNumber,
+                        searchStepDescription: `Tek kelime araması (${i + 1}/${words.length}. kelime)`,
+                        searchedTerm: word
                     }
                 };
             }
+            console.log(`❌ ${stepNumber}. AŞAMA: Tek kelime eşleşme bulunamadı: "${word}"`);
         }
         
         console.log(`❌ Hiçbir eşleşme bulunamadı`);
@@ -153,7 +170,9 @@ class SimpleSQLiteDatabase {
                 totalWords: words.length,
                 matchedAt: 'none',
                 matchedWords: 0,
-                searchStage: '❌ HİÇBİR EŞLEŞME BULUNAMADI'
+                searchStage: '❌ HİÇBİR EŞLEŞME BULUNAMADI',
+                searchStep: 0,
+                searchStepDescription: 'Tüm aşamalar denendi, sonuç bulunamadı'
             }
         };
     }
