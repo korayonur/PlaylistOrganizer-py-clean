@@ -74,6 +74,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   isLoading = false;
   error: string | null = null;
   isSearching = false;
+  isRefreshingDatabase = false;
   selectedItems = new Set<string>();
   playlistInfo = signal<{ name: string; path: string; category: string } | null>(null);
   globalMissingFiles: any[] = [];
@@ -462,6 +463,9 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
       // Modern mesaj sistemi
       this.showSaveSuccessMessage(selectedResults.length, globalStats);
 
+      // Veritabanını yenile
+      await this.refreshDatabase();
+
       // Seçimi temizle
       this.clearSelection();
 
@@ -491,6 +495,59 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
   getPlaylistPath(): string {
     return this.playlistInfo()?.path || "";
+  }
+
+  // Veritabanını yenile
+  async refreshDatabase(): Promise<void> {
+    try {
+      this.isRefreshingDatabase = true;
+      console.log('🔄 Veritabanı yenileniyor...');
+      
+      // Müzik klasörünü al
+      const musicFolder = this.configService.getMusicFolder();
+      
+      // Veritabanı yenileme isteği gönder
+      const response = await firstValueFrom(
+        this.http.post<any>(`${this.getApiUrl()}/index/create`, {
+          musicFolder: musicFolder
+        })
+      );
+      
+      if (response.success) {
+        console.log('✅ Veritabanı başarıyla yenilendi:', response.data);
+        
+        // Başarı mesajı göster
+        this.showDatabaseRefreshMessage(response.data);
+      } else {
+        console.warn('⚠️ Veritabanı yenileme uyarısı:', response.message);
+        this.showDatabaseRefreshWarning(response.message);
+      }
+    } catch (error) {
+      console.error('❌ Veritabanı yenileme hatası:', error);
+      this.showDatabaseRefreshError(error);
+    } finally {
+      this.isRefreshingDatabase = false;
+    }
+  }
+
+  // Veritabanı yenileme başarı mesajı
+  showDatabaseRefreshMessage(data: any): void {
+    const message = `Veritabanı başarıyla yenilendi! ${data.totalFiles} dosya indekslendi.`;
+    console.log('✅', message);
+    // Burada snackbar veya toast mesajı gösterebilirsin
+  }
+
+  // Veritabanı yenileme uyarı mesajı
+  showDatabaseRefreshWarning(message: string): void {
+    console.warn('⚠️', message);
+    // Burada uyarı mesajı gösterebilirsin
+  }
+
+  // Veritabanı yenileme hata mesajı
+  showDatabaseRefreshError(error: any): void {
+    const message = 'Veritabanı yenilenirken hata oluştu. Lütfen manuel olarak yenileyin.';
+    console.error('❌', message, error);
+    // Burada hata mesajı gösterebilirsin
   }
 
   // loadGlobalMissingFiles fonksiyonu kaldırıldı - veri zaten app.component.ts'den geliyor

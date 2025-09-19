@@ -9,7 +9,7 @@ const xml2js = require('xml2js');
 const SimpleSQLiteDatabase = require('./simple_database');
 
 // Server versiyonu
-const SERVER_VERSION = '4.3.0';
+const SERVER_VERSION = '4.3.3';
 
 // Logging sistemi
 const logDir = path.join(__dirname, 'logs');
@@ -669,13 +669,82 @@ async function searchFile(filePath, options = {}) {
         const startTime = Date.now();
         const fileName = path.basename(filePath);
         // Dosya uzantısını kaldır (sadece dosya adı)
-        const fileNameWithoutExt = path.parse(fileName).name;
+        let fileNameWithoutExt = path.parse(fileName).name;
+        
+        // Parantez içi sayıları temizle (örn: "song (1)" -> "song")
+        fileNameWithoutExt = fileNameWithoutExt.replace(/\s*\(\d+\)\s*$/, '');
+        
         const normalizedFileName = sqliteDb.normalizeText(fileNameWithoutExt);
         
-        console.log(`🔍 Arama terimi: "${normalizedFileName}"`);
+        console.log(`🔍 Dosya adı: "${fileNameWithoutExt}"`);
+        console.log(`🔍 Normalize edilmiş: "${normalizedFileName}"`);
         
-        // Kademeli arama algoritması
-        let searchResult = sqliteDb.searchProgressive(normalizedFileName, 10);
+        // Önce bu dosyayı veritabanında bul
+        const exactMatch = sqliteDb.searchExact(normalizedFileName, 1);
+        if (exactMatch.length === 0) {
+            console.log(`❌ Dosya veritabanında bulunamadı: "${normalizedFileName}"`);
+            console.log(`🔍 Benzer dosyalar aranıyor...`);
+            
+            // Dosya bulunamadıysa benzer dosyaları ara
+            let searchResult = sqliteDb.searchProgressive(normalizedFileName, 10);
+            let results = searchResult.results || [];
+            let searchInfo = searchResult.searchInfo || {};
+            
+            const processTime = Date.now() - startTime;
+            
+            if (results.length > 0) {
+                const bestMatch = results[0];
+                return {
+                    found: true,
+                    matches: results.map(result => ({
+                        path: result.path,
+                        fileName: result.fileName,
+                        similarity: result.similarity_score || 0
+                    })),
+                    bestMatch: {
+                        path: bestMatch.path,
+                        fileName: bestMatch.fileName,
+                        similarity: bestMatch.similarity_score || 0
+                    },
+                    matchType: 'benzerDosya',
+                    processTime: processTime,
+                    totalMatches: results.length,
+                    searchInfo: {
+                        ...searchInfo,
+                        inputType: 'filePath',
+                        inputValue: filePath
+                    }
+                };
+            } else {
+                return {
+                    found: false,
+                    matches: [],
+                    bestMatch: null,
+                    matchType: 'dosya_bulunamadi',
+                    processTime: processTime,
+                    totalMatches: 0,
+                    searchInfo: {
+                        originalQuery: filePath,
+                        normalizedQuery: normalizedFileName,
+                        totalWords: normalizedFileName.split(' ').filter(w => w.length > 0).length,
+                        matchedAt: 'none',
+                        matchedWords: 0,
+                        searchStage: '❌ DOSYA VE BENZER DOSYALAR BULUNAMADI',
+                        searchStep: 0,
+                        searchStepDescription: 'Dosya ve benzer dosyalar bulunamadı',
+                        inputType: 'filePath',
+                        inputValue: filePath
+                    }
+                };
+            }
+        }
+        
+        // Bulunan dosyanın normalizedFileName'ini kullanarak benzer dosyaları ara
+        const foundFile = exactMatch[0];
+        console.log(`✅ Dosya bulundu: "${foundFile.normalizedFileName}"`);
+        
+        // Kademeli arama algoritması - bulunan dosyanın adını kullan
+        let searchResult = sqliteDb.searchProgressive(foundFile.normalizedFileName, 10);
         let results = searchResult.results || [];
         let searchInfo = searchResult.searchInfo || {};
         

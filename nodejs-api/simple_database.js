@@ -139,6 +139,7 @@ class SimpleSQLiteDatabase {
                     searchedTerm: partialTerm
                 };
                 
+                // calculateSearchInfo'da orijinal tüm kelimeleri kullan
                 const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo);
                 
                 return {
@@ -260,7 +261,7 @@ class SimpleSQLiteDatabase {
      * SearchInfo hesaplama fonksiyonu - tüm arama türleri için ortak
      * @param {string} searchTerm - Orijinal arama terimi
      * @param {string} normalizedSearch - Normalize edilmiş arama terimi
-     * @param {Array} words - Arama terimindeki kelimeler
+     * @param {Array} words - Arama terimindeki kelimeler (kısmi veya tam)
      * @param {Array} results - SQL sonuçları
      * @param {Object} baseSearchInfo - Temel searchInfo objesi
      * @returns {Object} - Tamamlanmış searchInfo objesi
@@ -269,23 +270,25 @@ class SimpleSQLiteDatabase {
         const scoredResults = this.addScoring(results, words);
         const bestMatch = scoredResults[0];
         
-        // En iyi eşleşme bilgilerini hesapla
+        // En iyi eşleşme bilgilerini hesapla - ORİJİNAL TÜM KELİMELERE GÖRE
         let bestMatchWords = 0;
         let bestMatchSimilarity = 0;
         if (bestMatch) {
             const fileWords = bestMatch.normalizedFileName.split(' ').filter(w => w.length > 0);
-            words.forEach(originalWord => {
+            // Orijinal tüm kelimeleri kullan (normalizedSearch'ten)
+            const originalWords = normalizedSearch.split(' ').filter(w => w.length > 0);
+            originalWords.forEach(originalWord => {
                 if (fileWords.some(fileWord => fileWord === originalWord)) {
                     bestMatchWords++;
                 }
             });
-            bestMatchSimilarity = words.length > 0 ? bestMatchWords / words.length : 0;
+            bestMatchSimilarity = originalWords.length > 0 ? bestMatchWords / originalWords.length : 0;
         }
         
         return {
             ...baseSearchInfo,
             bestMatchWords: bestMatchWords,
-            bestMatchTotalWords: words.length,
+            bestMatchTotalWords: normalizedSearch.split(' ').filter(w => w.length > 0).length,
             bestMatchSimilarity: bestMatchSimilarity
         };
     }
