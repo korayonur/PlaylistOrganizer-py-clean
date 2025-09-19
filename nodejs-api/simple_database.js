@@ -150,12 +150,16 @@ class SimpleSQLiteDatabase {
             console.log(`❌ ${stepNumber}. AŞAMA: Kısmi eşleşme bulunamadı: "${partialTerm}"`);
         }
         
-        // 3. Adım: Tek kelime arama
+        // 3. Adım: Tek kelime arama (uzun kelimeleri öncelikle ara)
         const singleWordStepStart = words.length + 1;
-        for (let i = 0; i < words.length; i++) {
-            const word = words[i];
+        // Kelimeleri uzunluklarına göre sırala (uzun olanlar daha spesifik)
+        const sortedWords = [...words].sort((a, b) => b.length - a.length);
+        
+        for (let i = 0; i < sortedWords.length; i++) {
+            const word = sortedWords[i];
+            const originalIndex = words.indexOf(word);
             const stepNumber = singleWordStepStart + i;
-            console.log(`🔍 ${stepNumber}. AŞAMA: Tek kelime aranıyor: "${word}" (${i + 1}/${words.length}. kelime)`);
+            console.log(`🔍 ${stepNumber}. AŞAMA: Tek kelime aranıyor: "${word}" (uzunluk: ${word.length}, ${originalIndex + 1}/${words.length}. kelime)`);
             results = this.searchExact(word, limit);
             if (results.length > 0) {
                 console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Tek kelime eşleşme: ${results.length} sonuç`);
@@ -166,11 +170,11 @@ class SimpleSQLiteDatabase {
                     totalWords: words.length,
                     matchedAt: 'single',
                     matchedWords: 1,
-                    matchedWordIndex: i + 1,
+                    matchedWordIndex: originalIndex + 1,
                     matchedWord: word,
-                    searchStage: `🔍 ${stepNumber}. AŞAMA - TEK KELİME EŞLEŞME - ${i + 1}/${words.length}. kelime: "${word}"`,
+                    searchStage: `🔍 ${stepNumber}. AŞAMA - TEK KELİME EŞLEŞME - ${originalIndex + 1}/${words.length}. kelime: "${word}"`,
                     searchStep: stepNumber,
-                    searchStepDescription: `Tek kelime araması (${i + 1}/${words.length}. kelime)`,
+                    searchStepDescription: `Tek kelime araması (${originalIndex + 1}/${words.length}. kelime)`,
                     searchedTerm: word
                 };
                 
