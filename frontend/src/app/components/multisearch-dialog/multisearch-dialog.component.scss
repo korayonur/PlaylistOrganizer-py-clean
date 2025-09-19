@@ -882,3 +882,113 @@ mat-dialog-actions {
     }
   }
 }
+
+// Benzerlik Skoru Filtresi Stilleri
+.similarity-filter-container {
+  margin: 20px 0;
+  padding: 20px;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  .filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+
+    h3 {
+      margin: 0;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 500;
+    }
+  }
+
+  .filter-controls {
+    .selection-info {
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      background-color: rgba(76, 175, 80, 0.1);
+      border: 1px solid rgba(76, 175, 80, 0.3);
+      border-radius: 6px;
+      
+      .selection-count {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #4caf50;
+        font-weight: 500;
+        font-size: 14px;
+        
+        mat-icon {
+          font-size: 18px;
+          width: 18px;
+          height: 18px;
+        }
+      }
+    }
+    
+    .slider-container {
+      margin-bottom: 20px;
+
+      .slider-label {
+        display: block;
+        margin-bottom: 10px;
+        color: #fff;
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      .similarity-slider {
+        width: 100%;
+        margin: 10px 0;
+      }
+
+      .slider-labels {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 5px;
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+
+        span {
+          flex: 1;
+          text-align: center;
+        }
+      }
+    }
+
+    .threshold-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+
+      .threshold-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+
+        mat-icon {
+          font-size: 16px;
+          width: 16px;
+          height: 16px;
+        }
+      }
+    }
+  }
+}
+
+// Benzerlik skoru renklendirmesi
+.similarity-score {
+  font-weight: 600;
+  font-size: 14px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.1);
+}

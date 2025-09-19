@@ -12,6 +12,10 @@ export interface SearchInfo {
   searchedTerm?: string;
   inputType: 'query' | 'filePath';
   inputValue: string;
+  // En iyi eşleşme bilgileri
+  bestMatchWords?: number;
+  bestMatchTotalWords?: number;
+  bestMatchSimilarity?: number;
 }
 
 export interface SearchResult {

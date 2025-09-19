@@ -238,6 +238,67 @@
         </div>
       </div>
 
+      <!-- Benzerlik Skoru Filtresi -->
+      <div class="similarity-filter-container" *ngIf="!isSearching && !error && searchResults">
+        <div class="filter-header">
+          <h3>Benzerlik Skoru Filtresi</h3>
+          <button mat-stroked-button 
+                  [color]="showSimilarityFilter ? 'primary' : 'basic'"
+                  (click)="toggleSimilarityFilter()">
+            <mat-icon>{{ showSimilarityFilter ? 'filter_alt' : 'filter_alt_off' }}</mat-icon>
+            {{ showSimilarityFilter ? 'Filtreyi Kapat' : 'Filtreyi Aç' }}
+          </button>
+        </div>
+        
+        <div class="filter-controls" *ngIf="showSimilarityFilter">
+          <div class="selection-info" *ngIf="hasSelectedItems()">
+            <div class="selection-count">
+              <mat-icon>check_circle</mat-icon>
+              <span>{{ getSelectedCount() }} öğe otomatik seçildi ({{ (similarityThreshold * 100) | number:'1.0-0' }}% ve üzeri)</span>
+            </div>
+          </div>
+          
+          <div class="slider-container">
+            <label class="slider-label">
+              Minimum Benzerlik Skoru: {{ (similarityThreshold * 100) | number:'1.0-0' }}%
+            </label>
+            <input type="range" 
+                   min="0" 
+                   max="1" 
+                   step="0.05"
+                   [value]="similarityThreshold"
+                   (input)="onSliderChange($event)"
+                   class="similarity-slider">
+            <div class="slider-labels">
+              <span>0%</span>
+              <span>25%</span>
+              <span>50%</span>
+              <span>75%</span>
+              <span>100%</span>
+            </div>
+          </div>
+          
+          <div class="threshold-info">
+            <div class="threshold-item" [style.color]="getSimilarityColor(1.0)">
+              <mat-icon>check_circle</mat-icon>
+              <span>100% - Mükemmel Eşleşme</span>
+            </div>
+            <div class="threshold-item" [style.color]="getSimilarityColor(0.85)">
+              <mat-icon>star</mat-icon>
+              <span>85%+ - Çok Yüksek Benzerlik</span>
+            </div>
+            <div class="threshold-item" [style.color]="getSimilarityColor(0.7)">
+              <mat-icon>thumb_up</mat-icon>
+              <span>70%+ - Yüksek Benzerlik</span>
+            </div>
+            <div class="threshold-item" [style.color]="getSimilarityColor(0.5)">
+              <mat-icon>thumbs_up_down</mat-icon>
+              <span>50%+ - Orta Benzerlik</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Sonuç listesi -->
       <ng-container *ngIf="displayResults.length > 0">
         <div class="result-list">
@@ -287,6 +348,18 @@
                     <div class="search-detail">
                       <span class="label">Eşleşen Kelimeler:</span>
                       <span class="value">{{ result['searchInfo'].matchedWords }}/{{ result['searchInfo'].totalWords }}</span>
+                    </div>
+                    <div class="search-detail" *ngIf="result['searchInfo'].bestMatchWords">
+                      <span class="label">En İyi Eşleşme:</span>
+                      <span class="value">{{ result['searchInfo'].bestMatchWords }}/{{ result['searchInfo'].bestMatchTotalWords }} kelime</span>
+                    </div>
+                    <div class="search-detail" *ngIf="result['searchInfo'].bestMatchSimilarity">
+                      <span class="label">Benzerlik Skoru:</span>
+                      <span class="value similarity-score" 
+                            [style.color]="getSimilarityColor(result['searchInfo'].bestMatchSimilarity)"
+                            [title]="getSimilarityLabel(result['searchInfo'].bestMatchSimilarity)">
+                        {{ (result['searchInfo'].bestMatchSimilarity * 100) | number:'1.1-1' }}%
+                      </span>
                     </div>
                     <div class="search-detail" *ngIf="result['searchInfo'].matchedWord">
                       <span class="label">Bulunan Kelime:</span>

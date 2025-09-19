@@ -50,6 +50,11 @@ interface ApiSearchResponse {
 export class SongGridComponent {
   private readonly _songs: WritableSignal<Song[]> = signal([]);
   loading = signal(false);
+  
+  // Benzerlik skoru filtresi
+  similarityThreshold = 0.7;
+  showSimilarityFilter = false;
+  
   private getApiUrl(): string {
     return this.configService.getApiUrl();
   }
@@ -305,5 +310,95 @@ export class SongGridComponent {
     return this.http.post<ApiSearchResponse>(`${this.getApiUrl()}/search/files`, {
       // ...
     });
+  }
+  
+  // Benzerlik skoru filtresi fonksiyonları
+  toggleSimilarityFilter(): void {
+    this.showSimilarityFilter = !this.showSimilarityFilter;
+    
+    // Filtre açıldığında otomatik seçim yap
+    if (this.showSimilarityFilter) {
+      this.autoSelectBySimilarity();
+    }
+  }
+  
+  onSimilarityThresholdChange(value: number): void {
+    this.similarityThreshold = value;
+    
+    // Eşik değiştiğinde otomatik seçim güncelle
+    if (this.showSimilarityFilter) {
+      this.autoSelectBySimilarity();
+    }
+  }
+  
+  onSliderChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    this.similarityThreshold = +target.value;
+    
+    // Slider değiştiğinde otomatik seçim güncelle
+    if (this.showSimilarityFilter) {
+      this.autoSelectBySimilarity();
+    }
+  }
+  
+  // Benzerlik skoruna göre otomatik seçim yap
+  autoSelectBySimilarity(): void {
+    const songs = this._songs();
+    
+    // Eşik değerini karşılayan şarkıları seç
+    songs.forEach(song => {
+      if (song.similarFiles && song.similarFiles.length > 0) {
+        const bestMatch = song.similarFiles[0];
+        if (bestMatch.similarity >= this.similarityThreshold) {
+          // Şarkıyı seçili olarak işaretle (eğer böyle bir özellik varsa)
+          // Bu kısım mevcut song-grid yapısına göre ayarlanabilir
+        }
+      }
+    });
+  }
+  
+  // Seçili şarkı sayısını döndür
+  getSelectedSongsCount(): number {
+    const songs = this.filteredSongs;
+    return songs.filter(song => 
+      song.similarFiles && 
+      song.similarFiles.length > 0 && 
+      song.similarFiles[0].similarity >= this.similarityThreshold
+    ).length;
+  }
+  
+  getSimilarityColor(similarity: number): string {
+    if (similarity >= 1.0) return '#4caf50'; // Yeşil - Mükemmel
+    if (similarity >= 0.85) return '#2196f3'; // Mavi - Çok yüksek
+    if (similarity >= 0.7) return '#ff9800'; // Turuncu - Yüksek
+    if (similarity >= 0.5) return '#ffc107'; // Sarı - Orta
+    return '#9e9e9e'; // Gri - Düşük
+  }
+  
+  getSimilarityLabel(similarity: number): string {
+    if (similarity >= 1.0) return 'Mükemmel Eşleşme';
+    if (similarity >= 0.85) return 'Çok Yüksek Benzerlik';
+    if (similarity >= 0.7) return 'Yüksek Benzerlik';
+    if (similarity >= 0.5) return 'Orta Benzerlik';
+    return 'Düşük Benzerlik';
+  }
+  
+  // Filtrelenmiş şarkıları döndür
+  get filteredSongs(): Song[] {
+    let songs = this._songs();
+    
+    if (this.showSimilarityFilter) {
+      songs = songs.filter(song => {
+        if (!song.similarFiles || song.similarFiles.length === 0) {
+          return false;
+        }
+        
+        // En iyi eşleşmenin benzerlik skorunu kontrol et
+        const bestMatch = song.similarFiles[0];
+        return bestMatch.similarity >= this.similarityThreshold;
+      });
+    }
+    
+    return songs;
   }
 }

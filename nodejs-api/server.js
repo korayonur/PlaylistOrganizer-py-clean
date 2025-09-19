@@ -9,7 +9,7 @@ const xml2js = require('xml2js');
 const SimpleSQLiteDatabase = require('./simple_database');
 
 // Server versiyonu
-const SERVER_VERSION = '4.2.0';
+const SERVER_VERSION = '4.3.0';
 
 // Logging sistemi
 const logDir = path.join(__dirname, 'logs');
@@ -668,7 +668,9 @@ async function searchFile(filePath, options = {}) {
         
         const startTime = Date.now();
         const fileName = path.basename(filePath);
-        const normalizedFileName = sqliteDb.normalizeText(fileName);
+        // Dosya uzantısını kaldır (sadece dosya adı)
+        const fileNameWithoutExt = path.parse(fileName).name;
+        const normalizedFileName = sqliteDb.normalizeText(fileNameWithoutExt);
         
         console.log(`🔍 Arama terimi: "${normalizedFileName}"`);
         

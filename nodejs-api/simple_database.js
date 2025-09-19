@@ -80,7 +80,8 @@ class SimpleSQLiteDatabase {
     // Kademeli arama algoritması - sizin önerdiğiniz mantık
     searchProgressive(searchTerm, limit = 50) {
         const normalizedSearch = this.normalizeText(searchTerm);
-        const words = normalizedSearch.split(' ').filter(w => w.length > 0);
+        // Kelime tekrarlarını kaldır ve sırala
+        const words = [...new Set(normalizedSearch.split(' ').filter(w => w.length > 0))];
         
         console.log(`🔍 Kademeli Arama: "${normalizedSearch}"`);
         console.log(`🔍 Kelimeler: [${words.join(', ')}]`);
@@ -90,18 +91,23 @@ class SimpleSQLiteDatabase {
         let results = this.searchExact(normalizedSearch, limit);
         if (results.length > 0) {
             console.log(`✅ 1. AŞAMADA BULUNDU: Tam eşleşme: ${results.length} sonuç`);
+            
+            const baseSearchInfo = {
+                originalQuery: searchTerm,
+                normalizedQuery: normalizedSearch,
+                totalWords: words.length,
+                matchedAt: 'exact',
+                matchedWords: words.length,
+                searchStage: '🎯 1. AŞAMA - TAM EŞLEŞME - Tüm kelimeler bulundu',
+                searchStep: 1,
+                searchStepDescription: 'Tam eşleşme araması'
+            };
+            
+            const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo);
+            
             return {
                 results: this.addScoring(results, words),
-                searchInfo: {
-                    originalQuery: searchTerm,
-                    normalizedQuery: normalizedSearch,
-                    totalWords: words.length,
-                    matchedAt: 'exact',
-                    matchedWords: words.length,
-                    searchStage: '🎯 1. AŞAMA - TAM EŞLEŞME - Tüm kelimeler bulundu',
-                    searchStep: 1,
-                    searchStepDescription: 'Tam eşleşme araması'
-                }
+                searchInfo: searchInfo
             };
         }
         console.log(`❌ 1. AŞAMA: Tam eşleşme bulunamadı`);
@@ -114,19 +120,30 @@ class SimpleSQLiteDatabase {
             results = this.searchExact(partialTerm, limit);
             if (results.length > 0) {
                 console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Kısmi eşleşme (${i} kelime): ${results.length} sonuç`);
+                
+                // Arama terimindeki kelimeleri kullan (partialTerm)
+                const searchWords = partialTerm.split(' ').filter(w => w.length > 0);
+                const scoredResults = this.addScoring(results, searchWords);
+                const bestMatch = scoredResults[0];
+                const actualMatchedWords = bestMatch ? bestMatch.match_count : i;
+                
+                const baseSearchInfo = {
+                    originalQuery: searchTerm,
+                    normalizedQuery: normalizedSearch,
+                    totalWords: i, // Arama terimindeki kelime sayısı
+                    matchedAt: 'partial',
+                    matchedWords: actualMatchedWords,
+                    searchStage: `📉 ${stepNumber}. AŞAMA - KISMİ EŞLEŞME - ${actualMatchedWords}/${i} kelime bulundu`,
+                    searchStep: stepNumber,
+                    searchStepDescription: `Kısmi eşleşme araması (${actualMatchedWords} kelime)`,
+                    searchedTerm: partialTerm
+                };
+                
+                const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo);
+                
                 return {
-                    results: this.addScoring(results, words),
-                    searchInfo: {
-                        originalQuery: searchTerm,
-                        normalizedQuery: normalizedSearch,
-                        totalWords: words.length,
-                        matchedAt: 'partial',
-                        matchedWords: i,
-                        searchStage: `📉 ${stepNumber}. AŞAMA - KISMİ EŞLEŞME - ${i}/${words.length} kelime bulundu`,
-                        searchStep: stepNumber,
-                        searchStepDescription: `Kısmi eşleşme araması (${i} kelime)`,
-                        searchedTerm: partialTerm
-                    }
+                    results: scoredResults,
+                    searchInfo: searchInfo
                 };
             }
             console.log(`❌ ${stepNumber}. AŞAMA: Kısmi eşleşme bulunamadı: "${partialTerm}"`);
@@ -141,39 +158,49 @@ class SimpleSQLiteDatabase {
             results = this.searchExact(word, limit);
             if (results.length > 0) {
                 console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Tek kelime eşleşme: ${results.length} sonuç`);
+                
+                const baseSearchInfo = {
+                    originalQuery: searchTerm,
+                    normalizedQuery: normalizedSearch,
+                    totalWords: words.length,
+                    matchedAt: 'single',
+                    matchedWords: 1,
+                    matchedWordIndex: i + 1,
+                    matchedWord: word,
+                    searchStage: `🔍 ${stepNumber}. AŞAMA - TEK KELİME EŞLEŞME - ${i + 1}/${words.length}. kelime: "${word}"`,
+                    searchStep: stepNumber,
+                    searchStepDescription: `Tek kelime araması (${i + 1}/${words.length}. kelime)`,
+                    searchedTerm: word
+                };
+                
+                const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo);
+                
                 return {
                     results: this.addScoring(results, words),
-                    searchInfo: {
-                        originalQuery: searchTerm,
-                        normalizedQuery: normalizedSearch,
-                        totalWords: words.length,
-                        matchedAt: 'single',
-                        matchedWords: 1,
-                        matchedWordIndex: i + 1,
-                        matchedWord: word,
-                        searchStage: `🔍 ${stepNumber}. AŞAMA - TEK KELİME EŞLEŞME - ${i + 1}/${words.length}. kelime: "${word}"`,
-                        searchStep: stepNumber,
-                        searchStepDescription: `Tek kelime araması (${i + 1}/${words.length}. kelime)`,
-                        searchedTerm: word
-                    }
+                    searchInfo: searchInfo
                 };
             }
             console.log(`❌ ${stepNumber}. AŞAMA: Tek kelime eşleşme bulunamadı: "${word}"`);
         }
         
         console.log(`❌ Hiçbir eşleşme bulunamadı`);
+        
+        const baseSearchInfo = {
+            originalQuery: searchTerm,
+            normalizedQuery: normalizedSearch,
+            totalWords: words.length,
+            matchedAt: 'none',
+            matchedWords: 0,
+            searchStage: '❌ HİÇBİR EŞLEŞME BULUNAMADI',
+            searchStep: 0,
+            searchStepDescription: 'Tüm aşamalar denendi, sonuç bulunamadı'
+        };
+        
+        const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, [], baseSearchInfo);
+        
         return {
             results: [],
-            searchInfo: {
-                originalQuery: searchTerm,
-                normalizedQuery: normalizedSearch,
-                totalWords: words.length,
-                matchedAt: 'none',
-                matchedWords: 0,
-                searchStage: '❌ HİÇBİR EŞLEŞME BULUNAMADI',
-                searchStep: 0,
-                searchStepDescription: 'Tüm aşamalar denendi, sonuç bulunamadı'
-            }
+            searchInfo: searchInfo
         };
     }
 
@@ -206,18 +233,18 @@ class SimpleSQLiteDatabase {
             const searchWordCount = searchWords.length;
             const fileWordCount = fileWords.length;
             
-            // Eşleşen kelime sayısını hesapla
+            // Eşleşen kelime sayısını hesapla - tam eşleşme
             let matchCount = 0;
             const matchedWords = [];
             searchWords.forEach(searchWord => {
-                if (fileWords.some(fileWord => fileWord.includes(searchWord))) {
+                if (fileWords.some(fileWord => fileWord === searchWord)) {
                     matchCount++;
                     matchedWords.push(searchWord);
                 }
             });
             
-            // Puanlama: eşleşen kelime sayısı / dosya kelime sayısı
-            const similarity = matchCount / fileWordCount;
+            // Puanlama: eşleşen kelime sayısı / arama kelime sayısı (0-1 arası)
+            const similarity = searchWordCount > 0 ? matchCount / searchWordCount : 0;
             
             return {
                 ...result,
@@ -227,6 +254,40 @@ class SimpleSQLiteDatabase {
                 matched_words: matchedWords
             };
         }).sort((a, b) => b.similarity_score - a.similarity_score);
+    }
+
+    /**
+     * SearchInfo hesaplama fonksiyonu - tüm arama türleri için ortak
+     * @param {string} searchTerm - Orijinal arama terimi
+     * @param {string} normalizedSearch - Normalize edilmiş arama terimi
+     * @param {Array} words - Arama terimindeki kelimeler
+     * @param {Array} results - SQL sonuçları
+     * @param {Object} baseSearchInfo - Temel searchInfo objesi
+     * @returns {Object} - Tamamlanmış searchInfo objesi
+     */
+    calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo) {
+        const scoredResults = this.addScoring(results, words);
+        const bestMatch = scoredResults[0];
+        
+        // En iyi eşleşme bilgilerini hesapla
+        let bestMatchWords = 0;
+        let bestMatchSimilarity = 0;
+        if (bestMatch) {
+            const fileWords = bestMatch.normalizedFileName.split(' ').filter(w => w.length > 0);
+            words.forEach(originalWord => {
+                if (fileWords.some(fileWord => fileWord === originalWord)) {
+                    bestMatchWords++;
+                }
+            });
+            bestMatchSimilarity = words.length > 0 ? bestMatchWords / words.length : 0;
+        }
+        
+        return {
+            ...baseSearchInfo,
+            bestMatchWords: bestMatchWords,
+            bestMatchTotalWords: words.length,
+            bestMatchSimilarity: bestMatchSimilarity
+        };
     }
 
     // Tüm dosyaları getir

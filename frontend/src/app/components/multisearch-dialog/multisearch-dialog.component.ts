@@ -85,6 +85,10 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   }
   activeFilters: Set<string> = new Set();
   filteredResults: SearchResult[] | null = null;
+  
+  // Benzerlik skoru filtresi
+  similarityThreshold = 0.7; // Varsayılan eşik
+  showSimilarityFilter = false;
 
   // Grup seçim durumlarını tutacak map
   private groupSelectionState = new Map<string, boolean>();
@@ -627,7 +631,115 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   }
 
   get displayResults(): SearchResult[] {
-    return this.filteredResults || this.searchResults?.data || [];
+    let results = this.filteredResults || this.searchResults?.data || [];
+    
+    // Benzerlik skoru filtresi uygula
+    if (this.showSimilarityFilter) {
+      results = results.filter(result => {
+        if (!result.found || !result.searchInfo?.bestMatchSimilarity) {
+          return false;
+        }
+        
+        // En iyi eşleşmenin benzerlik skorunu kontrol et
+        return result.searchInfo.bestMatchSimilarity >= this.similarityThreshold;
+      });
+    }
+    
+    return results;
+  }
+
+  // Benzerlik skoru filtresi fonksiyonları
+  toggleSimilarityFilter(): void {
+    this.showSimilarityFilter = !this.showSimilarityFilter;
+    
+    // Filtre açıldığında otomatik seçim yap
+    if (this.showSimilarityFilter) {
+      this.autoSelectBySimilarity();
+    }
+  }
+  
+  onSimilarityThresholdChange(value: number): void {
+    this.similarityThreshold = value;
+    
+    // Eşik değiştiğinde otomatik seçim güncelle
+    if (this.showSimilarityFilter) {
+      this.autoSelectBySimilarity();
+    }
+  }
+  
+  onSliderChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    this.similarityThreshold = +target.value;
+    
+    // Slider değiştiğinde otomatik seçim güncelle
+    if (this.showSimilarityFilter) {
+      this.autoSelectBySimilarity();
+    }
+  }
+  
+  // Benzerlik skoruna göre otomatik seçim yap
+  autoSelectBySimilarity(): void {
+    if (!this.searchResults?.data) return;
+    
+    // Önce mevcut seçimleri temizle
+    this.selectedItems.clear();
+    
+    // Filtrelenmiş sonuçları al
+    const filteredResults = this.displayResults;
+    
+    // Eşik değerini karşılayan sonuçları seç
+    filteredResults.forEach(result => {
+      if (result.found && result.searchInfo?.bestMatchSimilarity) {
+        if (result.searchInfo.bestMatchSimilarity >= this.similarityThreshold) {
+          this.selectedItems.add(result.originalPath);
+        }
+      }
+    });
+    
+    // Grup seçim durumlarını güncelle
+    this.updateGroupSelectionStates();
+  }
+  
+  // Grup seçim durumlarını güncelle
+  updateGroupSelectionStates(): void {
+    if (!this.searchResults?.data) return;
+    
+    // Her grup için seçim durumunu kontrol et
+    const groupTypes = ['tamYolEsleme', 'ayniKlasorFarkliUzanti', 'farkliKlasor', 'farkliKlasorveUzanti', 'benzerDosya'];
+    
+    groupTypes.forEach(groupType => {
+      const groupResults = this.searchResults!.data!.filter(
+        (result: SearchResult) => result.matchType === groupType && result.found
+      );
+      
+      if (groupResults.length === 0) {
+        this.groupSelectionState.set(groupType, false);
+        return;
+      }
+      
+      // Bu gruptaki tüm sonuçlar seçili mi kontrol et
+      const allSelected = groupResults.every((result: SearchResult) => 
+        this.selectedItems.has(result.originalPath)
+      );
+      
+      this.groupSelectionState.set(groupType, allSelected);
+    });
+  }
+  
+  getSimilarityColor(similarity: number): string {
+    if (similarity >= 1.0) return '#4caf50'; // Yeşil - Mükemmel
+    if (similarity >= 0.85) return '#2196f3'; // Mavi - Çok yüksek
+    if (similarity >= 0.7) return '#ff9800'; // Turuncu - Yüksek
+    if (similarity >= 0.5) return '#ffc107'; // Sarı - Orta
+    return '#9e9e9e'; // Gri - Düşük
+  }
+  
+  getSimilarityLabel(similarity: number): string {
+    if (similarity >= 1.0) return 'Mükemmel Eşleşme';
+    if (similarity >= 0.85) return 'Çok Yüksek Benzerlik';
+    if (similarity >= 0.7) return 'Yüksek Benzerlik';
+    if (similarity >= 0.5) return 'Orta Benzerlik';
+    return 'Düşük Benzerlik';
   }
 
   // Grup seçimini değiştir
@@ -693,7 +805,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   }
 
   // Match type'ı eski formata dönüştür
-  private mapMatchType(matchType: string): string {
+  private mapMatchType(matchType: string): "tamYolEsleme" | "farkliKlasor" | "ayniKlasorFarkliUzanti" | "farkliKlasorveUzanti" | "benzerDosya" {
     switch (matchType) {
       case 'benzerDosya':
         return 'benzerDosya';

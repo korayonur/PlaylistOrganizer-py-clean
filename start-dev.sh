@@ -188,21 +188,24 @@ fi
 log "Önceki development süreçleri temizleniyor..."
 cleanup
 
-# Ek güvenlik - tüm Node.js süreçlerini kontrol et
-log "🔍 Ek güvenlik kontrolü - tüm Node.js süreçleri taranıyor..."
-ALL_NODE_PIDS=$(pgrep -f "node" 2>/dev/null || true)
-if [ ! -z "$ALL_NODE_PIDS" ]; then
-    log "Sistemde çalışan Node.js süreçleri bulundu: $ALL_NODE_PIDS"
-    for pid in $ALL_NODE_PIDS; do
-        # Sürecin çalıştığı dizini kontrol et
-        PROC_DIR=$(pwdx "$pid" 2>/dev/null | cut -d: -f2 | xargs 2>/dev/null || true)
-        if [[ "$PROC_DIR" == *"$PROJECT_ROOT"* ]]; then
-            warning "Proje dizininde çalışan Node.js süreci bulundu (PID: $pid, Dizin: $PROC_DIR)"
-            warning "Süreç zorla durduruluyor..."
-            kill -9 "$pid" 2>/dev/null || true
-        fi
-    done
-fi
+    # Ek güvenlik - sadece port kontrolü yap
+    log "🔍 Ek güvenlik kontrolü - port kontrolü yapılıyor..."
+    
+    # Port 50001 kontrolü
+    PORT_50001_PID=$(lsof -ti:50001 2>/dev/null || true)
+    if [ ! -z "$PORT_50001_PID" ]; then
+        warning "Port 50001'de çalışan süreç bulundu (PID: $PORT_50001_PID), durduruluyor..."
+        kill -9 "$PORT_50001_PID" 2>/dev/null || true
+        sleep 2
+    fi
+    
+    # Port 4200 kontrolü
+    PORT_4200_PID=$(lsof -ti:4200 2>/dev/null || true)
+    if [ ! -z "$PORT_4200_PID" ]; then
+        warning "Port 4200'de çalışan süreç bulundu (PID: $PORT_4200_PID), durduruluyor..."
+        kill -9 "$PORT_4200_PID" 2>/dev/null || true
+        sleep 2
+    fi
 
 # Backend development başlatma
 log "🔧 Backend development server başlatılıyor (Node.js + nodemon)..."
@@ -309,6 +312,12 @@ if [ ! -d "node_modules" ]; then
     npm install
 fi
 
+# Angular CLI kontrolü
+if ! command -v ng &> /dev/null; then
+    warning "Angular CLI bulunamadı, global olarak kuruluyor..."
+    npm install -g @angular/cli
+fi
+
 # Frontend'i development modunda başlat (hot reload ile)
 log "Frontend development server başlatılıyor (hot reload)..."
 # Console çıktılarını ekranda göster, aynı zamanda log dosyasına da yaz
@@ -402,17 +411,8 @@ while true; do
         success "Nodemon yeniden başlatıldı (PID: $NEW_BACKEND_PID)"
     fi
     
-    # Ek güvenlik - proje dizininde çalışan diğer Node.js süreçlerini kontrol et
-    ROGUE_NODE_PIDS=$(pgrep -f "node.*$PROJECT_ROOT" 2>/dev/null || true)
-    if [ ! -z "$ROGUE_NODE_PIDS" ]; then
-        for pid in $ROGUE_NODE_PIDS; do
-            # Bu PID'ler bizim kontrol ettiğimiz süreçler değilse
-            if [ "$pid" != "$BACKEND_PID" ] && [ "$pid" != "$FRONTEND_PID" ]; then
-                warning "Proje dizininde kontrolsüz Node.js süreci bulundu (PID: $pid), durduruluyor..."
-                kill -9 "$pid" 2>/dev/null || true
-            fi
-        done
-    fi
+    # Ek güvenlik - sadece port kontrolü yap (çok daha basit)
+    # Port kontrolü yapılmıyor - süreçler kendi kendine çalışsın
     
     sleep 5
 done
