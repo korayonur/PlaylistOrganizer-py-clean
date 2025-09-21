@@ -85,12 +85,24 @@ class SimpleSQLiteDatabase {
         
         console.log(`🔍 Kademeli Arama: "${normalizedSearch}"`);
         console.log(`🔍 Kelimeler: [${words.join(', ')}]`);
+        console.log(`🔍 YENİ ALGORİTMA: Sondan kelime azaltma + Tek kelime atlama optimizasyonu`);
+        
+        // Debug log dosyasına yaz
+        const fs = require('fs');
+        const path = require('path');
+        const logDir = path.join(__dirname, 'logs');
+        const logFile = path.join(logDir, `debug_${new Date().toISOString().split('T')[0]}.log`);
+        const logMessage = `[${new Date().toISOString()}] DEBUG PROGRESSIVE_SEARCH_START: "${searchTerm}" -> "${normalizedSearch}" -> [${words.join(', ')}]\n`;
+        fs.appendFileSync(logFile, logMessage);
+        console.log(`🔍 PROGRESSIVE_SEARCH_START: "${searchTerm}" -> "${normalizedSearch}" -> [${words.join(', ')}]`);
         
         // 1. Adım: Tam eşleşme
         console.log(`🔍 1. AŞAMA: Tam eşleşme aranıyor: "${normalizedSearch}"`);
         let results = this.searchExact(normalizedSearch, limit);
         if (results.length > 0) {
             console.log(`✅ 1. AŞAMADA BULUNDU: Tam eşleşme: ${results.length} sonuç`);
+            const exactMatchLog = `[${new Date().toISOString()}] DEBUG STAGE_1_EXACT_MATCH: ${results.length} results found\n`;
+            fs.appendFileSync(logFile, exactMatchLog);
             
             const baseSearchInfo = {
                 originalQuery: searchTerm,
@@ -103,45 +115,53 @@ class SimpleSQLiteDatabase {
                 searchStepDescription: 'Tam eşleşme araması'
             };
             
-            const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo);
+            const scoredResults = this.addScoring(results, words, words);
+            const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, scoredResults, baseSearchInfo);
             
             return {
-                results: this.addScoring(results, words),
+                results: scoredResults,
                 searchInfo: searchInfo
             };
         }
         console.log(`❌ 1. AŞAMA: Tam eşleşme bulunamadı`);
+        const noExactMatchLog = `[${new Date().toISOString()}] DEBUG STAGE_1_EXACT_MATCH: 0 results found\n`;
+        fs.appendFileSync(logFile, noExactMatchLog);
         
-        // 2. Adım: Kelime azaltma (son kelimeyi çıkar)
+        // 2. Adım: Kelime azaltma (sondan kelime azaltma)
         for (let i = words.length - 1; i >= 1; i--) {
+            // Sondan kelime azaltma (orijinal sıraya göre)
             const partialTerm = words.slice(0, i).join(' ');
             const stepNumber = words.length - i + 1;
-            console.log(`🔍 ${stepNumber}. AŞAMA: Kısmi eşleşme aranıyor: "${partialTerm}" (${i}/${words.length} kelime)`);
+            console.log(`🔍 ${stepNumber}. AŞAMA: Kısmi eşleşme aranıyor: "${partialTerm}" (${i}/${words.length} kelime) - sondan azaltma`);
             results = this.searchExact(partialTerm, limit);
             if (results.length > 0) {
                 console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Kısmi eşleşme (${i} kelime): ${results.length} sonuç`);
+                const partialMatchLog = `[${new Date().toISOString()}] DEBUG STAGE_${stepNumber}_PARTIAL_MATCH: ${results.length} results found for "${partialTerm}"\n`;
+                fs.appendFileSync(logFile, partialMatchLog);
                 
-                // Arama terimindeki kelimeleri kullan (partialTerm)
+                // Arama terimindeki kelimeleri kullan (partialTerm - sondan azaltma)
                 const searchWords = partialTerm.split(' ').filter(w => w.length > 0);
-                const scoredResults = this.addScoring(results, searchWords);
+                console.log(`🔍 DEBUG KISMİ EŞLEŞME: partialTerm = "${partialTerm}", searchWords = [${searchWords.join(', ')}], words = [${words.join(', ')}]`);
+                const scoredResults = this.addScoring(results, searchWords, words);
                 const bestMatch = scoredResults[0];
                 const actualMatchedWords = bestMatch ? bestMatch.match_count : i;
                 
                 const baseSearchInfo = {
                     originalQuery: searchTerm,
                     normalizedQuery: normalizedSearch,
-                    totalWords: i, // Arama terimindeki kelime sayısı
+                    totalWords: words.length, // Orijinal tüm kelime sayısı
                     matchedAt: 'partial',
                     matchedWords: actualMatchedWords,
-                    searchStage: `📉 ${stepNumber}. AŞAMA - KISMİ EŞLEŞME - ${actualMatchedWords}/${i} kelime bulundu`,
+                    searchStage: `📉 ${stepNumber}. AŞAMA - KISMİ EŞLEŞME - ${actualMatchedWords}/${words.length} kelime bulundu`,
                     searchStep: stepNumber,
                     searchStepDescription: `Kısmi eşleşme araması (${actualMatchedWords} kelime)`,
                     searchedTerm: partialTerm
                 };
                 
                 // calculateSearchInfo'da orijinal tüm kelimeleri kullan
-                const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo);
+                const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, scoredResults, baseSearchInfo, searchWords);
                 
+                console.log(`🔍 DEBUG KISMİ EŞLEŞME RETURN: scoredResults[0].similarity_score = ${scoredResults[0] ? scoredResults[0].similarity_score : 'null'}`);
                 return {
                     results: scoredResults,
                     searchInfo: searchInfo
@@ -150,8 +170,13 @@ class SimpleSQLiteDatabase {
             console.log(`❌ ${stepNumber}. AŞAMA: Kısmi eşleşme bulunamadı: "${partialTerm}"`);
         }
         
-        // 3. Adım: Tek kelime arama (uzun kelimeleri öncelikle ara)
+        // 3. Adım: Tek kelime arama (uzunluk sırasına göre)
+        // Optimizasyon: Tek kelimeye düştüğünde arama yapılmaz, direkt uzunluk sırasına geçer
         const singleWordStepStart = words.length + 1;
+        console.log(`🔍 ${singleWordStepStart}. AŞAMA: Tek kelimeye düştü, arama yapılmaz - direkt uzunluk sırasına geçiliyor`);
+        const singleWordSkipLog = `[${new Date().toISOString()}] DEBUG STAGE_${singleWordStepStart}_SINGLE_WORD_SKIP: Skipped single word search, proceeding to length-based sorting\n`;
+        fs.appendFileSync(logFile, singleWordSkipLog);
+        
         // Kelimeleri uzunluklarına göre sırala (uzun olanlar daha spesifik)
         const sortedWords = [...words].sort((a, b) => b.length - a.length);
         
@@ -163,6 +188,8 @@ class SimpleSQLiteDatabase {
             results = this.searchExact(word, limit);
             if (results.length > 0) {
                 console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Tek kelime eşleşme: ${results.length} sonuç`);
+                const singleWordLog = `[${new Date().toISOString()}] DEBUG STAGE_${stepNumber}_SINGLE_WORD: ${results.length} results found for "${word}"\n`;
+                fs.appendFileSync(logFile, singleWordLog);
                 
                 const baseSearchInfo = {
                     originalQuery: searchTerm,
@@ -178,10 +205,16 @@ class SimpleSQLiteDatabase {
                     searchedTerm: word
                 };
                 
-                const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo);
+                // calculateSearchInfo içinde addScoring yapıldı, o sonucu kullan
+                const scoredResults = this.addScoring(results, [word], words);
+                const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, scoredResults, baseSearchInfo, [word]);
+                
+                // Debug log dosyasına yaz
+                const logMessage = `[${new Date().toISOString()}] DEBUG PROGRESSIVE_SEARCH_RETURN: results_count=${scoredResults.length}, first_result_similarity=${scoredResults[0] ? scoredResults[0].similarity_score : 'null'}\n`;
+                fs.appendFileSync(logFile, logMessage);
                 
                 return {
-                    results: this.addScoring(results, words),
+                    results: scoredResults,
                     searchInfo: searchInfo
                 };
             }
@@ -232,32 +265,58 @@ class SimpleSQLiteDatabase {
     }
 
     // Puanlama ekle - adil sistem
-    addScoring(results, searchWords) {
+    addScoring(results, searchWords, originalWords = null) {
+        console.log(`🔍 DEBUG addScoring: searchWords = [${searchWords.join(', ')}] (${searchWords.length} kelime), originalWords = [${(originalWords || []).join(', ')}]`);
+        
+        // Debug log dosyasına yaz
+        const fs = require('fs');
+        const path = require('path');
+        const logDir = path.join(__dirname, 'logs');
+        const logFile = path.join(logDir, `debug_${new Date().toISOString().split('T')[0]}.log`);
+        const logMessage = `[${new Date().toISOString()}] DEBUG ADD_SCORING_START: searchWords=[${searchWords.join(', ')}], results_count=${results.length}, originalWords=[${(originalWords || []).join(', ')}]\n`;
+        fs.appendFileSync(logFile, logMessage);
+        
         return results.map(result => {
             const fileWords = result.normalizedFileName.split(' ').filter(w => w.length > 0);
-            const searchWordCount = searchWords.length;
+            // Orijinal kelimeler varsa onları kullan, yoksa searchWords kullan
+            const allOriginalWords = originalWords || searchWords;
+            const searchWordCount = allOriginalWords.length;
             const fileWordCount = fileWords.length;
             
-            // Eşleşen kelime sayısını hesapla - tam eşleşme
+            // Eşleşen kelime sayısını hesapla - ORİJİNAL TÜM KELİMELERE GÖRE
             let matchCount = 0;
             const matchedWords = [];
-            searchWords.forEach(searchWord => {
-                if (fileWords.some(fileWord => fileWord === searchWord)) {
+            allOriginalWords.forEach(originalWord => {
+                if (fileWords.some(fileWord => fileWord === originalWord)) {
                     matchCount++;
-                    matchedWords.push(searchWord);
+                    matchedWords.push(originalWord);
                 }
             });
             
-            // Puanlama: eşleşen kelime sayısı / arama kelime sayısı (0-1 arası)
+            // Debug log dosyasına yaz
+            const matchDetailLog = `[${new Date().toISOString()}] DEBUG MATCH_DETAIL: ${result.fileName} -> fileWords=[${fileWords.join(', ')}], allOriginalWords=[${allOriginalWords.join(', ')}], matchedWords=[${matchedWords.join(', ')}], matchCount=${matchCount}\n`;
+            fs.appendFileSync(logFile, matchDetailLog);
+            
+            // Puanlama: eşleşen kelime sayısı / orijinal arama kelime sayısı (0-1 arası)
             const similarity = searchWordCount > 0 ? matchCount / searchWordCount : 0;
             
-            return {
+            console.log(`🔍 DEBUG ${result.fileName}: ${matchCount}/${searchWordCount} = ${similarity}`);
+            
+            const scoredResult = {
                 ...result,
                 similarity_score: similarity,
                 match_count: matchCount,
                 total_words: fileWordCount,
                 matched_words: matchedWords
             };
+            
+            console.log(`🔍 DEBUG FINAL: ${result.fileName} -> similarity_score: ${scoredResult.similarity_score}, match_count: ${scoredResult.match_count}, total_words: ${scoredResult.total_words}, keys: ${Object.keys(scoredResult).join(', ')}`);
+            
+            // Debug log dosyasına yaz
+            const logMessage = `[${new Date().toISOString()}] DEBUG ADD_SCORING_RESULT: ${result.fileName} -> similarity_score: ${scoredResult.similarity_score}, match_count: ${scoredResult.match_count}, total_words: ${scoredResult.total_words}\n`;
+            fs.appendFileSync(logFile, logMessage);
+            
+            return scoredResult;
         }).sort((a, b) => b.similarity_score - a.similarity_score);
     }
 
@@ -270,14 +329,16 @@ class SimpleSQLiteDatabase {
      * @param {Object} baseSearchInfo - Temel searchInfo objesi
      * @returns {Object} - Tamamlanmış searchInfo objesi
      */
-    calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo) {
-        const scoredResults = this.addScoring(results, words);
-        const bestMatch = scoredResults[0];
+    calculateSearchInfo(searchTerm, normalizedSearch, words, results, baseSearchInfo, searchWords = null) {
+        // searchWords parametresi varsa onu kullan, yoksa words kullan
+        const scoringWords = searchWords || words;
+        console.log(`🔍 DEBUG calculateSearchInfo: searchWords = [${(searchWords || []).join(', ')}], words = [${words.join(', ')}], scoringWords = [${scoringWords.join(', ')}]`);
         
         // En iyi eşleşme bilgilerini hesapla - ORİJİNAL TÜM KELİMELERE GÖRE
         let bestMatchWords = 0;
         let bestMatchSimilarity = 0;
-        if (bestMatch) {
+        if (results.length > 0) {
+            const bestMatch = results[0];
             const fileWords = bestMatch.normalizedFileName.split(' ').filter(w => w.length > 0);
             // Orijinal tüm kelimeleri kullan (normalizedSearch'ten)
             const originalWords = normalizedSearch.split(' ').filter(w => w.length > 0);

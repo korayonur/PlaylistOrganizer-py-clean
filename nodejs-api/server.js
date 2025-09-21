@@ -9,7 +9,7 @@ const xml2js = require('xml2js');
 const SimpleSQLiteDatabase = require('./simple_database');
 
 // Server versiyonu
-const SERVER_VERSION = '4.3.3';
+const SERVER_VERSION = '4.5.5';
 
 // Logging sistemi
 const logDir = path.join(__dirname, 'logs');
@@ -39,6 +39,15 @@ function logError(error, context = '') {
 function logInfo(message, context = '') {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] INFO ${context}:`, message);
+}
+
+function logDebug(message, context = '') {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] DEBUG ${context}:`, message);
+    
+    // Debug log dosyasına yaz
+    const logFile = path.join(logDir, `debug_${new Date().toISOString().split('T')[0]}.log`);
+    fs.appendFileSync(logFile, `[${timestamp}] DEBUG ${context}: ${message}\n`);
 }
 
 // Geliştirilmiş Türkçe karakter haritası
@@ -674,19 +683,25 @@ async function searchFile(filePath, options = {}) {
         // Parantez içi sayıları temizle (örn: "song (1)" -> "song")
         fileNameWithoutExt = fileNameWithoutExt.replace(/\s*\(\d+\)\s*$/, '');
         
-        const normalizedFileName = sqliteDb.normalizeText(fileNameWithoutExt);
+        // Sonundaki sayıları da temizle (örn: "song 1" -> "song") - duplikasyon için
+        fileNameWithoutExt = fileNameWithoutExt.replace(/\s+\d+\s*$/, '');
+        
+        const normalizedFileName = musicDatabase.normalizeText(fileNameWithoutExt);
         
         console.log(`🔍 Dosya adı: "${fileNameWithoutExt}"`);
         console.log(`🔍 Normalize edilmiş: "${normalizedFileName}"`);
+        logDebug(`Files endpoint: fileNameWithoutExt = "${fileNameWithoutExt}", normalizedFileName = "${normalizedFileName}"`, 'FILES_DEBUG');
         
         // Önce bu dosyayı veritabanında bul
-        const exactMatch = sqliteDb.searchExact(normalizedFileName, 1);
+        console.log(`🔍 DEBUG searchFile: normalizedFileName = "${normalizedFileName}"`);
+        const exactMatch = musicDatabase.searchExact(normalizedFileName, 1);
+        console.log(`🔍 DEBUG searchFile: exactMatch.length = ${exactMatch.length}`);
         if (exactMatch.length === 0) {
             console.log(`❌ Dosya veritabanında bulunamadı: "${normalizedFileName}"`);
             console.log(`🔍 Benzer dosyalar aranıyor...`);
             
             // Dosya bulunamadıysa benzer dosyaları ara
-            let searchResult = sqliteDb.searchProgressive(normalizedFileName, 10);
+            let searchResult = musicDatabase.searchProgressive(normalizedFileName, 20);
             let results = searchResult.results || [];
             let searchInfo = searchResult.searchInfo || {};
             
@@ -699,12 +714,12 @@ async function searchFile(filePath, options = {}) {
                     matches: results.map(result => ({
                         path: result.path,
                         fileName: result.fileName,
-                        similarity: result.similarity_score || 0
+                        similarity: (logDebug(`${result.fileName} -> similarity_score: ${result.similarity_score}, keys: ${Object.keys(result).join(', ')}`, 'SERVER_DEBUG'), result.similarity_score || 1.0)
                     })),
                     bestMatch: {
                         path: bestMatch.path,
                         fileName: bestMatch.fileName,
-                        similarity: bestMatch.similarity_score || 0
+                        similarity: bestMatch.similarity_score || 1.0
                     },
                     matchType: 'benzerDosya',
                     processTime: processTime,
@@ -713,7 +728,9 @@ async function searchFile(filePath, options = {}) {
                         ...searchInfo,
                         inputType: 'filePath',
                         inputValue: filePath
-                    }
+                    },
+                    query: filePath,
+                    normalizedQuery: normalizedFileName
                 };
             } else {
                 return {
@@ -742,9 +759,10 @@ async function searchFile(filePath, options = {}) {
         // Bulunan dosyanın normalizedFileName'ini kullanarak benzer dosyaları ara
         const foundFile = exactMatch[0];
         console.log(`✅ Dosya bulundu: "${foundFile.normalizedFileName}"`);
+        console.log(`🔍 DEBUG searchFile: foundFile.normalizedFileName = "${foundFile.normalizedFileName}"`);
         
         // Kademeli arama algoritması - bulunan dosyanın adını kullan
-        let searchResult = sqliteDb.searchProgressive(foundFile.normalizedFileName, 10);
+        let searchResult = musicDatabase.searchProgressive(foundFile.normalizedFileName, 20);
         let results = searchResult.results || [];
         let searchInfo = searchResult.searchInfo || {};
         
@@ -757,7 +775,7 @@ async function searchFile(filePath, options = {}) {
                 matches: results.map(result => ({
                     path: result.path,
                     fileName: result.fileName,
-                    similarity: result.similarity_score || 1.0
+                    similarity: (logDebug(`${result.fileName} -> similarity_score: ${result.similarity_score}, keys: ${Object.keys(result).join(', ')}`, 'SERVER_DEBUG'), result.similarity_score || 1.0)
                 })),
                 bestMatch: {
                     path: bestMatch.path,
@@ -771,7 +789,9 @@ async function searchFile(filePath, options = {}) {
                     ...searchInfo,
                     inputType: 'filePath',
                     inputValue: filePath
-                }
+                },
+                query: filePath,
+                normalizedQuery: normalizedFileName
             };
         } else {
             return {
@@ -811,6 +831,7 @@ async function searchByQuery(query, options = {}) {
         const normalizedQuery = musicDatabase.normalizeText(query);
         
         console.log(`🔍 Arama terimi: "${normalizedQuery}"`);
+        logDebug(`Query endpoint: query = "${query}", normalizedQuery = "${normalizedQuery}"`, 'QUERY_DEBUG');
         
         // 1. Basit arama
         console.log(`🔍 DEBUG: musicDatabase:`, musicDatabase ? 'var' : 'null');
@@ -827,8 +848,13 @@ async function searchByQuery(query, options = {}) {
             matches: results.map(result => ({
                 path: result.path,
                 fileName: result.fileName,
-                similarity: result.similarity_score || 1.0
+                similarity: (logDebug(`${result.fileName} -> similarity_score: ${result.similarity_score}, keys: ${Object.keys(result).join(', ')}`, 'SERVER_DEBUG'), result.similarity_score || 1.0)
             })),
+            bestMatch: results.length > 0 ? {
+                path: results[0].path,
+                fileName: results[0].fileName,
+                similarity: results[0].similarity_score || 1.0
+            } : null,
             totalMatches: results.length,
             searchInfo: {
                 ...searchInfo,
