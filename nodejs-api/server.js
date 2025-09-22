@@ -447,7 +447,8 @@ class SimpleWordMatcher {
             candidates.push({
                 path: file.path,
                 similarity: similarity,
-                file: file
+                file: file,
+                matchedWords: exactMatches
             });
         }
     }
@@ -556,14 +557,25 @@ class SimpleWordMatcher {
             const targetWords = {
                 'file_words': file.fileWords || []
             };
-            
-            // calculateSimilarity kaldırıldı - artık inline hesaplama yapılıyor
-            
+
+            const searchFileWords = searchWords['file_words'] || [];
+            const targetFileWords = targetWords['file_words'] || [];
+
+            let exactMatches = 0;
+            for (const searchWord of searchFileWords) {
+                if (targetFileWords.includes(searchWord)) {
+                    exactMatches++;
+                }
+            }
+
+            const similarity = searchFileWords.length > 0 ? exactMatches / searchFileWords.length : 0;
+
             if (similarity >= threshold) {
                 candidates.push({
                     path: file.path,
                     similarity: similarity,
-                    file: file
+                    file: file,
+                    matchedWords: exactMatches
                 });
             }
         }

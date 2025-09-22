@@ -6,6 +6,12 @@ class SimpleSQLiteDatabase {
     constructor() {
         this.dbPath = path.join(__dirname, '../musicfiles.db');
         this.db = null;
+        this.statements = {};
+        this.debugSqliteSearch = process.env.DEBUG_SQLITE_SEARCH === '1';
+        this.logDir = path.join(__dirname, 'logs');
+        if (this.debugSqliteSearch) {
+            fs.ensureDirSync(this.logDir);
+        }
         this.initialize();
     }
 
@@ -22,12 +28,46 @@ class SimpleSQLiteDatabase {
             
             // Tabloları oluştur
             this.createTables();
+            this.prepareStatements();
             
             console.log('✅ Basit SQLite veritabanı başlatıldı:', this.dbPath);
         } catch (error) {
             console.error('❌ SQLite veritabanı başlatılamadı:', error);
             throw error;
         }
+    }
+
+    prepareStatements() {
+        this.statements.exact = this.db.prepare(`
+            SELECT * FROM music_files 
+            WHERE normalizedFileName = ?
+            ORDER BY LENGTH(normalizedFileName) ASC
+            LIMIT ?
+        `);
+
+        this.statements.prefix = this.db.prepare(`
+            SELECT * FROM music_files 
+            WHERE normalizedFileName LIKE ?
+            ORDER BY LENGTH(normalizedFileName) ASC
+            LIMIT ?
+        `);
+
+        this.statements.contains = this.db.prepare(`
+            SELECT * FROM music_files 
+            WHERE normalizedFileName LIKE ?
+            ORDER BY LENGTH(normalizedFileName) ASC
+            LIMIT ?
+        `);
+    }
+
+    writeDebugLog(message) {
+        if (!this.debugSqliteSearch) {
+            return;
+        }
+
+        const timestamp = new Date().toISOString();
+        const logFile = path.join(this.logDir, `debug_${timestamp.split('T')[0]}.log`);
+        fs.appendFile(logFile, `[${timestamp}] ${message}\n`).catch(() => {});
     }
 
     createTables() {
@@ -86,14 +126,7 @@ class SimpleSQLiteDatabase {
         console.log(`🔍 Kademeli Arama: "${normalizedSearch}"`);
         console.log(`🔍 Kelimeler: [${words.join(', ')}]`);
         console.log(`🔍 YENİ ALGORİTMA: Sondan kelime azaltma + Tek kelime atlama optimizasyonu`);
-        
-        // Debug log dosyasına yaz
-        const fs = require('fs');
-        const path = require('path');
-        const logDir = path.join(__dirname, 'logs');
-        const logFile = path.join(logDir, `debug_${new Date().toISOString().split('T')[0]}.log`);
-        const logMessage = `[${new Date().toISOString()}] DEBUG PROGRESSIVE_SEARCH_START: "${searchTerm}" -> "${normalizedSearch}" -> [${words.join(', ')}]\n`;
-        fs.appendFileSync(logFile, logMessage);
+        this.writeDebugLog(`DEBUG PROGRESSIVE_SEARCH_START: "${searchTerm}" -> "${normalizedSearch}" -> [${words.join(', ')}]`);
         console.log(`🔍 PROGRESSIVE_SEARCH_START: "${searchTerm}" -> "${normalizedSearch}" -> [${words.join(', ')}]`);
         
         // 1. Adım: Tam eşleşme
@@ -101,8 +134,7 @@ class SimpleSQLiteDatabase {
         let results = this.searchExact(normalizedSearch, limit);
         if (results.length > 0) {
             console.log(`✅ 1. AŞAMADA BULUNDU: Tam eşleşme: ${results.length} sonuç`);
-            const exactMatchLog = `[${new Date().toISOString()}] DEBUG STAGE_1_EXACT_MATCH: ${results.length} results found\n`;
-            fs.appendFileSync(logFile, exactMatchLog);
+            this.writeDebugLog(`DEBUG STAGE_1_EXACT_MATCH: ${results.length} results found`);
             
             const baseSearchInfo = {
                 originalQuery: searchTerm,
@@ -124,8 +156,7 @@ class SimpleSQLiteDatabase {
             };
         }
         console.log(`❌ 1. AŞAMA: Tam eşleşme bulunamadı`);
-        const noExactMatchLog = `[${new Date().toISOString()}] DEBUG STAGE_1_EXACT_MATCH: 0 results found\n`;
-        fs.appendFileSync(logFile, noExactMatchLog);
+        this.writeDebugLog('DEBUG STAGE_1_EXACT_MATCH: 0 results found');
         
         // 2. Adım: Kelime azaltma (sondan kelime azaltma)
         for (let i = words.length - 1; i >= 1; i--) {
@@ -136,8 +167,7 @@ class SimpleSQLiteDatabase {
             results = this.searchExact(partialTerm, limit);
             if (results.length > 0) {
                 console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Kısmi eşleşme (${i} kelime): ${results.length} sonuç`);
-                const partialMatchLog = `[${new Date().toISOString()}] DEBUG STAGE_${stepNumber}_PARTIAL_MATCH: ${results.length} results found for "${partialTerm}"\n`;
-                fs.appendFileSync(logFile, partialMatchLog);
+                this.writeDebugLog(`DEBUG STAGE_${stepNumber}_PARTIAL_MATCH: ${results.length} results found for "${partialTerm}"`);
                 
                 // Arama terimindeki kelimeleri kullan (partialTerm - sondan azaltma)
                 const searchWords = partialTerm.split(' ').filter(w => w.length > 0);
@@ -174,8 +204,7 @@ class SimpleSQLiteDatabase {
         // Optimizasyon: Tek kelimeye düştüğünde arama yapılmaz, direkt uzunluk sırasına geçer
         const singleWordStepStart = words.length + 1;
         console.log(`🔍 ${singleWordStepStart}. AŞAMA: Tek kelimeye düştü, arama yapılmaz - direkt uzunluk sırasına geçiliyor`);
-        const singleWordSkipLog = `[${new Date().toISOString()}] DEBUG STAGE_${singleWordStepStart}_SINGLE_WORD_SKIP: Skipped single word search, proceeding to length-based sorting\n`;
-        fs.appendFileSync(logFile, singleWordSkipLog);
+        this.writeDebugLog(`DEBUG STAGE_${singleWordStepStart}_SINGLE_WORD_SKIP: Skipped single word search, proceeding to length-based sorting`);
         
         // Kelimeleri uzunluklarına göre sırala (uzun olanlar daha spesifik)
         const sortedWords = [...words].sort((a, b) => b.length - a.length);
@@ -188,8 +217,7 @@ class SimpleSQLiteDatabase {
             results = this.searchExact(word, limit);
             if (results.length > 0) {
                 console.log(`✅ ${stepNumber}. AŞAMADA BULUNDU: Tek kelime eşleşme: ${results.length} sonuç`);
-                const singleWordLog = `[${new Date().toISOString()}] DEBUG STAGE_${stepNumber}_SINGLE_WORD: ${results.length} results found for "${word}"\n`;
-                fs.appendFileSync(logFile, singleWordLog);
+                this.writeDebugLog(`DEBUG STAGE_${stepNumber}_SINGLE_WORD: ${results.length} results found for "${word}"`);
                 
                 const baseSearchInfo = {
                     originalQuery: searchTerm,
@@ -209,9 +237,7 @@ class SimpleSQLiteDatabase {
                 const scoredResults = this.addScoring(results, [word], words);
                 const searchInfo = this.calculateSearchInfo(searchTerm, normalizedSearch, words, scoredResults, baseSearchInfo, [word]);
                 
-                // Debug log dosyasına yaz
-                const logMessage = `[${new Date().toISOString()}] DEBUG PROGRESSIVE_SEARCH_RETURN: results_count=${scoredResults.length}, first_result_similarity=${scoredResults[0] ? scoredResults[0].similarity_score : 'null'}\n`;
-                fs.appendFileSync(logFile, logMessage);
+                this.writeDebugLog(`DEBUG PROGRESSIVE_SEARCH_RETURN: results_count=${scoredResults.length}, first_result_similarity=${scoredResults[0] ? scoredResults[0].similarity_score : 'null'}`);
                 
                 return {
                     results: scoredResults,
@@ -242,39 +268,52 @@ class SimpleSQLiteDatabase {
         };
     }
 
-    // Basit LIKE sorgusu - çok hızlı
+    // Önce tam eşleşme, sonra prefix, en son substring taraması
     searchExact(term, limit) {
-        const stmt = this.db.prepare(`
-            SELECT * FROM music_files 
-            WHERE normalizedFileName LIKE ?
-            ORDER BY 
-                CASE 
-                    WHEN normalizedFileName LIKE ? THEN 1
-                    WHEN normalizedFileName LIKE ? THEN 2
-                    ELSE 3
-                END,
-                LENGTH(normalizedFileName) ASC
-            LIMIT ?
-        `);
-        
-        const pattern = `%${term}%`;
-        const exactMatch = `%${term}%`;
-        const startsWith = `${term}%`;
-        
-        return stmt.all(pattern, exactMatch, startsWith, limit);
+        if (!term) {
+            return [];
+        }
+
+        if (!this.statements.exact) {
+            this.prepareStatements();
+        }
+
+        const resolvedLimit = typeof limit === 'number' && limit > 0 ? limit : 50;
+        const results = [];
+        const seenPaths = new Set();
+
+        const pushRows = (rows) => {
+            for (const row of rows) {
+                if (seenPaths.has(row.path)) {
+                    continue;
+                }
+                seenPaths.add(row.path);
+                results.push(row);
+                if (results.length >= resolvedLimit) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        if (pushRows(this.statements.exact.all(term, resolvedLimit))) {
+            return results;
+        }
+
+        if (pushRows(this.statements.prefix.all(`${term}%`, resolvedLimit))) {
+            return results;
+        }
+
+        pushRows(this.statements.contains.all(`%${term}%`, resolvedLimit));
+
+        return results;
     }
 
     // Puanlama ekle - adil sistem
     addScoring(results, searchWords, originalWords = null) {
         console.log(`🔍 DEBUG addScoring: searchWords = [${searchWords.join(', ')}] (${searchWords.length} kelime), originalWords = [${(originalWords || []).join(', ')}]`);
         
-        // Debug log dosyasına yaz
-        const fs = require('fs');
-        const path = require('path');
-        const logDir = path.join(__dirname, 'logs');
-        const logFile = path.join(logDir, `debug_${new Date().toISOString().split('T')[0]}.log`);
-        const logMessage = `[${new Date().toISOString()}] DEBUG ADD_SCORING_START: searchWords=[${searchWords.join(', ')}], results_count=${results.length}, originalWords=[${(originalWords || []).join(', ')}]\n`;
-        fs.appendFileSync(logFile, logMessage);
+        this.writeDebugLog(`DEBUG ADD_SCORING_START: searchWords=[${searchWords.join(', ')}], results_count=${results.length}, originalWords=[${(originalWords || []).join(', ')}]`);
         
         return results.map(result => {
             const fileWords = result.normalizedFileName.split(' ').filter(w => w.length > 0);
@@ -294,8 +333,7 @@ class SimpleSQLiteDatabase {
             });
             
             // Debug log dosyasına yaz
-            const matchDetailLog = `[${new Date().toISOString()}] DEBUG MATCH_DETAIL: ${result.fileName} -> fileWords=[${fileWords.join(', ')}], allOriginalWords=[${allOriginalWords.join(', ')}], matchedWords=[${matchedWords.join(', ')}], matchCount=${matchCount}\n`;
-            fs.appendFileSync(logFile, matchDetailLog);
+            this.writeDebugLog(`DEBUG MATCH_DETAIL: ${result.fileName} -> fileWords=[${fileWords.join(', ')}], allOriginalWords=[${allOriginalWords.join(', ')}], matchedWords=[${matchedWords.join(', ')}], matchCount=${matchCount}`);
             
             // Puanlama: eşleşen kelime sayısı / orijinal arama kelime sayısı (0-1 arası)
             const similarity = searchWordCount > 0 ? matchCount / searchWordCount : 0;
@@ -313,8 +351,7 @@ class SimpleSQLiteDatabase {
             console.log(`🔍 DEBUG FINAL: ${result.fileName} -> similarity_score: ${scoredResult.similarity_score}, match_count: ${scoredResult.match_count}, total_words: ${scoredResult.total_words}, keys: ${Object.keys(scoredResult).join(', ')}`);
             
             // Debug log dosyasına yaz
-            const logMessage = `[${new Date().toISOString()}] DEBUG ADD_SCORING_RESULT: ${result.fileName} -> similarity_score: ${scoredResult.similarity_score}, match_count: ${scoredResult.match_count}, total_words: ${scoredResult.total_words}\n`;
-            fs.appendFileSync(logFile, logMessage);
+            this.writeDebugLog(`DEBUG ADD_SCORING_RESULT: ${result.fileName} -> similarity_score: ${scoredResult.similarity_score}, match_count: ${scoredResult.match_count}, total_words: ${scoredResult.total_words}`);
             
             return scoredResult;
         }).sort((a, b) => b.similarity_score - a.similarity_score);
@@ -431,6 +468,7 @@ class SimpleSQLiteDatabase {
             this.db.close();
             this.db = null;
         }
+        this.statements = {};
     }
 
     // Türkçe karakter normalizasyonu

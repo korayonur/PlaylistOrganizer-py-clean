@@ -1,12 +1,12 @@
 # VirtualDJ History Fix & Entegrasyon Planı (Güncel)
 
 ## 🎯 Amaç
-VirtualDJ History klasöründeki `.m3u` dosyalarını Node.js tabanlı altyapı ile tarayıp, bulunamayan parçaları mevcut `music_files` veritabanına dayanarak tespit etmek ve otomatik/manuel düzeltme akışları sağlamak. Python katmanı tamamen kaldırıldı; tüm işlevler Node.js + Angular stack'i üzerinde çalışacak.
+VirtualDJ History klasöründeki `.m3u` dosyalarını Node.js tabanlı altyapı ile tarayıp, bulunamayan parçaları mevcut `music_files` veritabanına dayanarak tespit etmek ve otomatik/manuel düzeltme akışları sağlamak. Tüm işlevler artık yalnızca Node.js + Angular stack'i üzerinde çalışacak.
 
 ## 🧱 Mimari Özeti
 - **Backend:** `nodejs-api/` altında Express + SQLite (`musicfiles.db`) ve yeni `history` servisleri.
 - **Veri Kaynağı:** `music_files` tablosu (path, fileName, normalizedFileName), mevcut indeksler, `SimpleSQLiteDatabase` fonksiyonları.
-- **Benzerlik Motoru:** Dosya adı bazlı eşleşme; artist/title ayrıştırması yok. `searchExact`, `searchProgressive` ve Levenshtein tabanlı skor hesapları kullanılacak.
+- **Benzerlik Motoru:** Dosya adı bazlı eşleşme; artist/title ayrıştırması yapılmaz. `searchExact`, `searchProgressive` ve Levenshtein tabanlı skor hesapları kullanılacak.
 - **Frontend:** Angular History modülü üzerinden tarama, öneri ve fix akışlarının yönetimi.
 
 ## 📂 History İşleme Katmanları
@@ -82,35 +82,33 @@ Aşağıdaki özet 2014–2025 arasında seçilen 10 `.m3u` dosyasının otomati
 
 | Dosya | Parça Sayısı | Öne Çıkan Uzantılar | External Volume | VDJ Cache | Genel Gözlemler |
 |-------|--------------|---------------------|-----------------|-----------|-----------------|
-| `2014/05/2014-05-29.m3u` | 18 | `.mp3` (17), `.m4a` (1) | 0 | 0 | Tüm yollar `~/Music/KorayMusics`; yalnızca dosya adıyla eşleşmek yeterli. |
+| `2014/05/2014-05-29.m3u` | 18 | `.mp3` (17), `.m4a` (1) | 0 | 0 | Tüm yollar `~/Music/KorayMusics`; dosya adıyla eşleşme yeterli. |
 | `2015/12/2015-12-31.m3u` | 110 | `.mp3`, `.mkv`, `.wma` | 80 | 0 | `/Volumes/DJKORAY` ağırlıklı; farklı klasör ve uzantı kombinasyonları kritik. |
-| `2016/05/2016-05-28.m3u` | 64 | `.mp3`, `.mkv`, `.mp4` | 13 | 0 | Hem yerel hem external karışık; dosya adları tutarlı. |
-| `2017/06/2017-06-01.m3u` | 48 | `.mp3`, `.mkv` | 0 | 0 | Tamamı yerel `KorayMusics`; metadata mevcut olsa da kullanılmayacak. |
+| `2016/05/2016-05-28.m3u` | 64 | `.mp3`, `.mkv`, `.mp4` | 13 | 0 | Yerel + external karışık; dosya adları tutarlı. |
+| `2017/06/2017-06-01.m3u` | 48 | `.mp3`, `.mkv` | 0 | 0 | Tamamı yerel `KorayMusics`; metadata kullanılmayacak. |
 | `2018-11-24.m3u` | 30 | `.mp4`, `.mkv`, `.flv` | 0 | 0 | Video ağırlıklı, tek klasör. |
-| `2019/03/2019-03-01.m3u` | 13 | `.vdjcache` (11), `.mkv` | 0 | 11 | Cache dosyaları yoğun; fix sırasında otomatik “yok say” kuralı gerekebilir. |
-| `2020/01/2020-01-01.m3u` | 34 | `.mp4`, `.ogg`, `.mp3` | 16 | 0 | Çok sayıda `/Volumes/DJKORAY` ve uzun klasör isimleri; normalize path kritik. |
-| `2021/05/2021-05-11.m3u` | 47 | `.m4a` (çoğunluk) | 0 | 0 | Yerel klasör + `Desktop/coptekiler`; dosya adları belirleyici. |
+| `2019/03/2019-03-01.m3u` | 13 | `.vdjcache` (11), `.mkv` | 0 | 11 | Cache dosyaları yoğun; otomatik ignore kuralı gerekli. |
+| `2020/01/2020-01-01.m3u` | 34 | `.mp4`, `.ogg`, `.mp3` | 16 | 0 | `/Volumes/DJKORAY` ve uzun klasör isimleri; normalize path kritik. |
+| `2021/05/2021-05-11.m3u` | 47 | `.m4a` çoğunlukta | 0 | 0 | Yerel klasör + `Desktop/coptekiler`; dosya adları belirleyici. |
 | `2024/07/2024-07-07.m3u` | 66 | `.m4a`, `.mp3`, `.flac` | 0 | 0 | Desktop ve Downloads kaynaklı; dosya adları benzersiz. |
 | `2025-09-15.m3u` | 88 | `.m4a`, `.mp3` | 0 | 0 | En yeni kayıtlar; büyük çoğunluk tek klasörde. |
 
 **Çıkarımlar:**
 - Dosya adları yıllar boyunca tutarlı, bu yüzden artist/title ayrıştırmasına gerek yok.
-- External volume (`/Volumes/DJKORAY`) özellikle eski yıllarda baskın; aktif disk takılı değilse eşleşme başarısız olabilir → benzerlik araması ve alternatif path üretimi şart.
+- External volume (`/Volumes/DJKORAY`) özellikle eski yıllarda baskın; disk takılı değilse eşleşme başarısız olabilir → benzerlik araması ve alternatif path üretimi şart.
 - `.vdjcache` dosyaları 2019 döneminde öne çıkıyor; bunları otomatik olarak "ignore" kategorisine almak faydalı.
 - Yeni yıllarda (2024–2025) dosyaların çoğu yerel klasörlerde; fix işlemleri büyük oranda aynı isimli dosyayı bulup path güncellemekten ibaret.
 
-## 🧹 Python Katmanının Kaldırılması
-- `py/` klasörü ve ilgili dosyalar (poetry, spec, README vb.) silindi.
-- README ve diğer belgelerden Python referansları temizlenecek.
-- CI/script akışları Node tabanlı hale getirilecek.
+## 🧹 Kod Tabanı Durumu
+- Python tabanlı katman tamamen kaldırıldı; `py/` klasörü ve bağlı tüm dosyalar silindi.
+- Belgeler ve yardımcı scriptler Node.js + Angular yaklaşımını referans alacak şekilde güncelleniyor.
 
 ## 🗺️ Yol Haritası
-1. **Temizlik:** Python referanslarını ve obsolete dokümanları temizleme (README vb.).
-2. **DB Genişletme:** History tabloları & migration kodu.
-3. **HistoryScanner + Repository:** `.m3u` parse ve veritabanına yazma.
-4. **HistoryMatchService:** Dosya adı bazlı eşleşme stratejilerinin implementasyonu.
-5. **API Katmanı:** REST uçları, request/response validation.
-6. **Frontend Modülü:** UI bileşenleri ve state yönetimi.
-7. **Test & Doğrulama:** Gerçek `.m3u` dosyalarıyla uçtan uca test, rollback senaryoları, backup doğrulama.
+1. History tabloları & migration kodu (`nodejs-api/history/history-migrations.js`).
+2. HistoryScanner + Repository implementasyonu ve testleri.
+3. HistoryMatchService: dosya adı bazlı eşleşme stratejilerinin uygulanması.
+4. API katmanı: REST uçları ve request/response doğrulamaları.
+5. Frontend History modülü: bileşenler, state yönetimi, UX detayları.
+6. Gerçek `.m3u` dosyalarıyla uçtan uca test, rollback senaryoları ve backup doğrulaması.
 
 Bu planla, tüm geliştirme Node.js + Angular ekosisteminde ilerleyecek ve eşleşme algoritması yalnızca dosya adı/klasör bilgisine dayanacaktır.
