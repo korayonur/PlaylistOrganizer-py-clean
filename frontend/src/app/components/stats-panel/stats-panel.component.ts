@@ -61,6 +61,15 @@ import { Song } from "../../models/song.model";
           <span class="settings-icon">⚙️</span>
           <strong>Ayarlar</strong>
         </button>
+
+        <button
+          class="history-button"
+          (click)="openHistory.emit()"
+          [disabled]="loading"
+        >
+          <span class="history-icon">🕘</span>
+          History Fix
+        </button>
       </div>
     </div>
   `,
@@ -214,6 +223,28 @@ import { Song } from "../../models/song.model";
         }
       }
 
+      .history-button {
+        padding: 0.5rem 1rem;
+        border: none;
+        border-radius: var(--border-radius-sm);
+        background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+        color: #fff;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        font-weight: 600;
+
+        &:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+        }
+
+        &:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+        }
+      }
+
       .settings-icon {
         margin-right: 0.5rem;
       }
@@ -228,6 +259,7 @@ export class StatsPanelComponent {
   @Output() repair = new EventEmitter<void>();
   @Output() openSettings = new EventEmitter<void>();
   @Output() showGlobalMissing = new EventEmitter<void>();
+  @Output() openHistory = new EventEmitter<void>();
 
   get foundCount(): number {
     return this.songs.filter((song) => song.isFileExists).length;

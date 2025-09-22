@@ -38,6 +38,7 @@ import { ConfigService } from "./services/config.service";
             (filterChange)="setFilter($event)"
             (repair)="handleMissingFiles()"
             (openSettings)="openSettingsDialog()"
+            (openHistory)="openHistoryDialog()"
             (showGlobalMissing)="handleGlobalMissingFiles()"
           >
           </app-stats-panel>
@@ -149,6 +150,14 @@ export class AppComponent {
     private configService: ConfigService,
   ) {
     console.log('🚀 App Component başlatıldı');
+  }
+
+  async openHistoryDialog(): Promise<void> {
+    const { HistoryDashboardComponent } = await import("./history/history-dashboard.component");
+    this.dialog.open(HistoryDashboardComponent, {
+      width: "760px",
+      panelClass: "history-dashboard-dialog"
+    });
   }
 
   private getApiUrl(): string {

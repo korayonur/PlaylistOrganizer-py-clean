@@ -7,6 +7,15 @@ const fs = require('fs-extra');
 const path = require('path');
 const xml2js = require('xml2js');
 const SimpleSQLiteDatabase = require('./simple_database');
+const {
+    HistoryScanner,
+    HistoryRepository,
+    HistoryMatchService,
+    HistoryFixService,
+    HistoryDatabaseMigrations,
+    HistoryService
+} = require('./history');
+const { randomUUID } = require('crypto');
 
 // Server versiyonu
 const SERVER_VERSION = '4.5.5';
@@ -15,6 +24,15 @@ const SERVER_VERSION = '4.5.5';
 const logDir = path.join(__dirname, 'logs');
 if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
+}
+
+// History tabloları için migration'ları başlat
+try {
+    const historyMigrations = new HistoryDatabaseMigrations();
+    historyMigrations.run();
+    logInfo('History tabloları hazırlandı', 'HistoryMigration');
+} catch (error) {
+    logError(error, 'HistoryMigration');
 }
 
 function logError(error, context = '') {
@@ -607,6 +625,103 @@ let databaseLoadTime = null;
 // SQLite veritabanı instance'ını oluştur
 const sqliteDb = new SimpleSQLiteDatabase();
 
+let historyService = null;
+function getHistoryService() {
+    if (!historyService) {
+        historyService = new HistoryService({
+            databaseInstance: sqliteDb
+        });
+    }
+    return historyService;
+}
+
+let historyScanJob = null;
+
+function getActiveHistoryJob() {
+    return historyScanJob;
+}
+
+function createHistoryJobRecord(fileList = [], options = {}) {
+    const id = typeof randomUUID === 'function' ? randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    historyScanJob = {
+        id,
+        status: 'running',
+        totalFiles: fileList.length,
+        processed: 0,
+        progress: fileList.length === 0 ? 100 : 0,
+        summaries: [],
+        lastFile: null,
+        startedAt: new Date().toISOString(),
+        completedAt: null,
+        error: null,
+        options: {
+            performMatching: options.performMatching !== false
+        }
+    };
+
+    if (fileList.length === 0) {
+        historyScanJob.status = 'completed';
+        historyScanJob.progress = 100;
+        historyScanJob.completedAt = new Date().toISOString();
+    }
+
+    return historyScanJob;
+}
+
+function startHistoryScanJob({ filePath, files, performMatching } = {}) {
+    if (historyScanJob && historyScanJob.status === 'running') {
+        return { ...historyScanJob, status: 'running' };
+    }
+
+    const service = getHistoryService();
+
+    let targetFiles = [];
+    if (Array.isArray(files) && files.length > 0) {
+        targetFiles = files;
+    } else if (typeof filePath === 'string' && filePath.length > 0) {
+        targetFiles = [filePath];
+    } else {
+        targetFiles = service.scanner.listHistoryFiles();
+    }
+
+    const jobOptions = {
+        performMatching: performMatching !== false
+    };
+
+    const job = createHistoryJobRecord(targetFiles, jobOptions);
+
+    if (job.status !== 'running') {
+        return job;
+    }
+
+    setImmediate(() => {
+        try {
+            for (const [index, targetFile] of targetFiles.entries()) {
+                const summary = service.scanSingleFile(targetFile, jobOptions);
+                historyScanJob.processed = index + 1;
+                historyScanJob.lastFile = targetFile;
+                historyScanJob.summaries.push(summary);
+                if (historyScanJob.totalFiles > 0) {
+                    historyScanJob.progress = Math.round((historyScanJob.processed / historyScanJob.totalFiles) * 100);
+                } else {
+                    historyScanJob.progress = 100;
+                }
+            }
+            historyScanJob.status = 'completed';
+            historyScanJob.progress = 100;
+            historyScanJob.completedAt = new Date().toISOString();
+        } catch (error) {
+            historyScanJob.status = 'error';
+            historyScanJob.error = error.message;
+            historyScanJob.errorStack = error.stack;
+            historyScanJob.completedAt = new Date().toISOString();
+            logError(error, 'HistoryScanJob');
+        }
+    });
+
+    return job;
+}
+
 async function loadDatabase() {
     try {
         console.log('📂 SQLite veritabanı yükleniyor...');
@@ -1010,6 +1125,207 @@ app.post('/api/search/query', async (req, res) => {
             error: error.message,
             details: error.stack
         });
+    }
+});
+
+// History işlemleri
+app.post('/api/history/scan', async (req, res) => {
+    try {
+        const job = startHistoryScanJob(req.body || {});
+
+        res.json({
+            status: job.status,
+            jobId: job.id,
+            progress: job.progress,
+            processed: job.processed,
+            totalFiles: job.totalFiles,
+            lastFile: job.lastFile,
+            summaries: job.summaries,
+            startedAt: job.startedAt,
+            completedAt: job.completedAt,
+            error: job.error,
+            options: job.options || {}
+        });
+    } catch (error) {
+        logError(error, 'HistoryScan');
+        res.status(500).json({ status: 'error', message: 'History taraması sırasında hata oluştu', error: error.message });
+    }
+});
+
+app.get('/api/history/scan/status', (req, res) => {
+    const job = getActiveHistoryJob();
+    if (!job) {
+        return res.json({
+            status: 'idle',
+            progress: 0,
+            processed: 0,
+            totalFiles: 0,
+            summaries: []
+        });
+    }
+
+    return res.json({
+        status: job.status,
+        jobId: job.id,
+        progress: job.progress,
+        processed: job.processed,
+        totalFiles: job.totalFiles,
+        lastFile: job.lastFile,
+        summaries: job.summaries,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        error: job.error,
+        options: job.options || {}
+    });
+});
+
+app.get('/api/history/files', (req, res) => {
+    try {
+        const service = getHistoryService();
+        const { limit, offset, search } = req.query;
+        const items = service.repository.listHistoryFiles({
+            limit: limit ? Number(limit) : undefined,
+            offset: offset ? Number(offset) : undefined,
+            search: search ? String(search) : undefined
+        });
+
+        res.json({ status: 'success', items });
+    } catch (error) {
+        logError(error, 'HistoryFiles');
+        res.status(500).json({ status: 'error', message: 'History dosyaları alınamadı', error: error.message });
+    }
+});
+
+app.get('/api/history/missing', (req, res) => {
+    try {
+        const service = getHistoryService();
+        const { limit, offset, status } = req.query;
+        const items = service.repository.listMissing({
+            limit: limit ? Number(limit) : undefined,
+            offset: offset ? Number(offset) : undefined,
+            status: status ? String(status) : undefined
+        });
+
+        res.json({ status: 'success', items });
+    } catch (error) {
+        logError(error, 'HistoryMissing');
+        res.status(500).json({ status: 'error', message: 'Eksik kayıtlar alınamadı', error: error.message });
+    }
+});
+
+app.get('/api/history/missing/:id', (req, res) => {
+    try {
+        const service = getHistoryService();
+        const item = service.repository.getMissingById(Number(req.params.id));
+        if (!item) {
+            return res.status(404).json({ status: 'error', message: 'Kayıt bulunamadı' });
+        }
+
+        let candidates = [];
+        if (item.candidate_paths) {
+            try {
+                candidates = JSON.parse(item.candidate_paths);
+            } catch (parseError) {
+                logError(parseError, 'HistoryMissingParse');
+            }
+        }
+
+        res.json({
+            status: 'success',
+            item: {
+                ...item,
+                candidate_paths: candidates
+            }
+        });
+    } catch (error) {
+        logError(error, 'HistoryMissingItem');
+        res.status(500).json({ status: 'error', message: 'Kayıt getirilemedi', error: error.message });
+    }
+});
+
+app.post('/api/history/fix', (req, res) => {
+    try {
+        const { trackId, newPath, similarity, method, missingId } = req.body || {};
+        if (!trackId || !newPath) {
+            return res.status(400).json({ status: 'error', message: 'trackId ve newPath zorunludur' });
+        }
+
+        const service = getHistoryService();
+        const fixService = new HistoryFixService({ repository: service.repository });
+
+        fixService.applyFix({
+            trackId,
+            newPath,
+            similarity,
+            method,
+            missingId
+        });
+
+        res.json({ status: 'success' });
+    } catch (error) {
+        logError(error, 'HistoryFix');
+        res.status(500).json({ status: 'error', message: 'Fix işlemi başarısız', error: error.message });
+    }
+});
+
+app.post('/api/history/fix/bulk', (req, res) => {
+    try {
+        const { fixes } = req.body || {};
+        if (!Array.isArray(fixes) || fixes.length === 0) {
+            return res.status(400).json({ status: 'error', message: 'fixes dizisi gereklidir' });
+        }
+
+        const service = getHistoryService();
+        const fixService = new HistoryFixService({ repository: service.repository });
+
+        const results = [];
+        for (const fix of fixes) {
+            try {
+                fixService.applyFix(fix);
+                results.push({ trackId: fix.trackId, status: 'success' });
+            } catch (innerError) {
+                logError(innerError, 'HistoryFixBulkItem');
+                results.push({ trackId: fix.trackId, status: 'error', message: innerError.message });
+            }
+        }
+
+        res.json({ status: 'success', results });
+    } catch (error) {
+        logError(error, 'HistoryFixBulk');
+        res.status(500).json({ status: 'error', message: 'Toplu fix işlemi başarısız', error: error.message });
+    }
+});
+
+app.post('/api/history/ignore', (req, res) => {
+    try {
+        const { missingId, trackId, reason } = req.body || {};
+        if (!missingId && !trackId) {
+            return res.status(400).json({ status: 'error', message: 'missingId veya trackId gereklidir' });
+        }
+
+        const service = getHistoryService();
+
+        if (missingId) {
+            service.repository.updateMissingSelection(missingId, {
+                selectedPath: null,
+                status: 'ignored'
+            });
+        }
+
+        if (trackId) {
+            service.repository.updateTrackMatch({
+                id: trackId,
+                status: 'ignored',
+                matchedPath: null,
+                matchMethod: reason || 'ignored',
+                similarity: null
+            });
+        }
+
+        res.json({ status: 'success' });
+    } catch (error) {
+        logError(error, 'HistoryIgnore');
+        res.status(500).json({ status: 'error', message: 'Ignore işlemi başarısız', error: error.message });
     }
 });
 
@@ -2312,6 +2628,9 @@ async function startServer() {
         process.on('SIGTERM', () => {
             logInfo('SIGTERM alındı, server kapatılıyor...', 'SHUTDOWN');
             server.close(() => {
+                if (historyService) {
+                    historyService.dispose();
+                }
                 logInfo('Server kapatıldı', 'SHUTDOWN');
                 process.exit(0);
             });
@@ -2320,6 +2639,9 @@ async function startServer() {
         process.on('SIGINT', () => {
             logInfo('SIGINT alındı, server kapatılıyor...', 'SHUTDOWN');
             server.close(() => {
+                if (historyService) {
+                    historyService.dispose();
+                }
                 logInfo('Server kapatıldı', 'SHUTDOWN');
                 process.exit(0);
             });
