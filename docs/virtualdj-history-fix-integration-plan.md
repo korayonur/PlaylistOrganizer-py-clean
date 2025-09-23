@@ -1,5 +1,7 @@
 # VirtualDJ History Fix & Entegrasyon Planı (Güncel)
 
+> ⚠️ **NOT:** VirtualDJ API modülü kaldırılmıştır. Bu doküman sadece referans amaçlıdır.
+
 ## 🎯 Amaç
 VirtualDJ History klasöründeki `.m3u` dosyalarını Node.js tabanlı altyapı ile tarayıp, bulunamayan parçaları mevcut `music_files` veritabanına dayanarak tespit etmek ve otomatik/manuel düzeltme akışları sağlamak. Tüm işlevler artık yalnızca Node.js + Angular stack'i üzerinde çalışacak.
 

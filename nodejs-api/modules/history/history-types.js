@@ -3,20 +3,13 @@
 /**
  * @typedef {Object} HistoryTrack
  * @property {number|null} id
- * @property {number} historyFileId
  * @property {string} originalPath
  * @property {string} normalizedName
- * @property {string|null} status
- * @property {string|null} matchedPath
- * @property {number|null} similarity
- * @property {string|null} matchMethod
- * @property {Object<string, any>|null} metadata
- */
-
-/**
- * @typedef {Object} HistoryScanOptions
- * @property {string} historyRoot
- * @property {boolean} [includeCache]
+ * @property {string} m3uFilePath
+ * @property {boolean} isMatched
+ * @property {number|null} matchedMusicFileId
+ * @property {string} createdAt
+ * @property {string} updatedAt
  */
 
 module.exports = {

@@ -106,7 +106,6 @@ cleanup() {
     pkill -f "node.*dev" 2>/dev/null || true
     
     # Nodemon süreçlerini temizle
-    pkill -f "nodemon.*server.js" 2>/dev/null || true
     pkill -f "nodemon" 2>/dev/null || true
     
     # PlaylistOrganizer ile ilgili tüm Node.js süreçlerini temizle
@@ -240,41 +239,19 @@ if ! command -v nodemon &> /dev/null; then
     npm install -g nodemon
 fi
 
-# Nodemon konfigürasyonu oluştur (güncelleme algılama için)
-log "🔧 Nodemon konfigürasyonu oluşturuluyor..."
-cat > "$BACKEND_DIR/nodemon.json" << 'EOF'
-{
-  "watch": [
-    "*.js",
-    "*.json",
-    "database.js",
-    "migrate-to-sqlite.js"
-  ],
-  "ext": "js,json",
-  "ignore": [
-    "node_modules/",
-    "logs/",
-    "*.log",
-    "*.db",
-    "*.db-journal"
-  ],
-  "delay": 1000,
-  "verbose": true,
-  "restartable": "rs",
-  "env": {
-    "NODE_ENV": "development"
-  },
-  "legacyWatch": false,
-  "signal": "SIGUSR2"
-}
-EOF
-success "Nodemon konfigürasyonu oluşturuldu"
+# Nodemon konfigürasyonu zaten mevcut (modüler yapı için)
+log "🔧 Nodemon konfigürasyonu kontrol ediliyor..."
+if [ ! -f "$BACKEND_DIR/nodemon.json" ]; then
+    error "nodemon.json bulunamadı! Modüler yapı için gerekli."
+    exit 1
+fi
+success "Nodemon konfigürasyonu mevcut"
 
 # Backend'i development modunda başlat (nodemon ile)
 log "Backend API development server başlatılıyor (hot reload)..."
 # Console çıktılarını ekranda göster, aynı zamanda log dosyasına da yaz
-# Nodemon'u konfigürasyon dosyası ile başlat
-nodemon --config nodemon.json server.js 2>&1 | tee "$PROJECT_ROOT/logs/backend_dev.log" &
+# Nodemon'u konfigürasyon dosyası ile başlat (modüler server)
+nodemon 2>&1 | tee "$PROJECT_ROOT/logs/backend_dev.log" &
 BACKEND_PID=$!
 echo $BACKEND_PID > "$BACKEND_PID_FILE"
 
@@ -401,11 +378,11 @@ while true; do
     fi
     
     # Nodemon durumunu kontrol et
-    NODEMON_PID=$(pgrep -f "nodemon.*server.js" 2>/dev/null || true)
+    NODEMON_PID=$(pgrep -f "nodemon" 2>/dev/null || true)
     if [ -z "$NODEMON_PID" ]; then
         warning "Nodemon durdu, yeniden başlatılıyor..."
         cd "$BACKEND_DIR"
-        nodemon --config nodemon.json server.js 2>&1 | tee "$PROJECT_ROOT/logs/backend_dev.log" &
+        nodemon 2>&1 | tee "$PROJECT_ROOT/logs/backend_dev.log" &
         NEW_BACKEND_PID=$!
         echo $NEW_BACKEND_PID > "$BACKEND_PID_FILE"
         success "Nodemon yeniden başlatıldı (PID: $NEW_BACKEND_PID)"

@@ -1,6 +1,47 @@
 # PlaylistOrganizer
 
-Bu proje, müzik çalma listelerinizi organize etmenize yardımcı olan bir uygulamadır. Proje iki ana bileşenden oluşmaktadır:
+Bu proje, müzik çalma listelerinizi organize etmenize yardımcı olan bir uygulamadır. 
+
+## 🚀 Modüler API Sistemi (v3.0 - Production Ready)
+
+### Yeni Mimari
+- **Modüler Yapı:** Her modül ayrı klasörde
+- **Unified Database:** Tek tracks tablosu ile basitleştirme
+- **Versiyon Sistemi:** Her modül için ayrı versiyon takibi
+- **Nodemon Desteği:** Kod değişikliklerinde otomatik yeniden başlatma
+    - **5 Modül:** History, Import, Playlist, Search, Analytics
+- **Code Cleanup:** %93 kod azalması (2,746 → 187 satır)
+
+### Hızlı Başlangıç
+```bash
+# Modüler server'ı başlat (Nodemon ile)
+./start-modular.sh
+
+# Veya manuel olarak
+cd nodejs-api
+npm start          # Production
+npm run dev        # Development (Nodemon)
+
+# Sistem durumu
+curl "http://localhost:50001/api/health"
+
+# Versiyon bilgileri
+curl "http://localhost:50001/api/version"
+```
+
+### Modüller
+- **History**: VirtualDJ history dosyalarını yönetme
+- **Import**: Müzik dosyalarını import etme  
+- **Playlist**: Playlist import ve yönetme (tracks tablosunda)
+- **Search**: Gelişmiş arama ve filtreleme
+- **Analytics**: İstatistik ve analiz raporları
+
+### API Koleksiyonu
+Tüm API'leri test etmek için `insomnia-modular-api-collection.json` dosyasını Insomnia'ya import edin.
+
+---
+
+Proje iki ana bileşenden oluşmaktadır:
 
 ## Proje Yapısı
 
