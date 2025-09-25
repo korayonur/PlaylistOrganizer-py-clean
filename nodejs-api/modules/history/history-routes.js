@@ -1,11 +1,10 @@
 'use strict';
 
 const express = require('express');
-const HistoryService = require('./history-service');
+const historyService = require('./history-service');
 const { getLogger } = require('../../shared/logger');
 
 const router = express.Router();
-const historyService = new HistoryService();
 const logger = getLogger().module('HistoryRoutes');
 
 /**
@@ -14,9 +13,10 @@ const logger = getLogger().module('HistoryRoutes');
  */
 router.post('/scan', async (req, res) => {
     try {
-        const { path: historyRoot } = req.body;
+        const { historyRoot } = req.body;
         
         logger.info(`🚀 History scan request: ${historyRoot || 'default'}`);
+        logger.info(`Request body:`, req.body);
         
         const result = await historyService.scanAndImport(historyRoot);
         
@@ -175,34 +175,6 @@ router.post('/match', (req, res) => {
     }
 });
 
-/**
- * POST /api/history/auto-match
- * Otomatik track eşleştirme
- */
-router.post('/auto-match', (req, res) => {
-    try {
-        logger.info('Otomatik track eşleştirme başlatılıyor');
-        
-        const result = historyService.performAutoMatch();
-        
-        if (result.success) {
-            res.json(result);
-        } else {
-            res.status(500).json(result);
-        }
-    } catch (error) {
-        logger.error(`Otomatik track eşleştirme hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
-        });
-        
-        res.status(500).json({
-            success: false,
-            message: 'Otomatik track eşleştirme hatası',
-            error: error.message
-        });
-    }
-});
 
 /**
  * DELETE /api/history/track/:id
@@ -309,6 +281,112 @@ router.post('/fix', (req, res) => {
         });
     }
 });
+
+/**
+ * POST /api/history/auto-match
+ * Otomatik track eşleştirme
+ */
+router.post('/auto-match', async (req, res) => {
+    try {
+        logger.info('Otomatik track eşleştirme başlatılıyor...');
+        
+        const result = await historyService.performAutoMatch();
+        logger.info('Auto-match result:', JSON.stringify(result, null, 2));
+        
+        if (result && result.success) {
+            res.json(result);
+        } else {
+            res.status(500).json(result || { success: false, message: 'No result returned' });
+        }
+    } catch (error) {
+        logger.error(`Otomatik eşleştirme hatası: ${error.message}`, {
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            message: 'Otomatik eşleştirme hatası',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/history/similarity-match
+ * Benzerlik eşleşmesi (ayrı endpoint)
+ */
+router.post('/similarity-match', async (req, res) => {
+    try {
+        const { threshold = 0.4, limit = 1000 } = req.body;
+        logger.info(`Benzerlik eşleşmesi başlatılıyor (threshold: ${threshold}, limit: ${limit})`);
+        
+        const matchedCount = historyService.performSimilarityMatch(threshold, limit);
+        
+        const result = {
+            success: true,
+            data: {
+                matchedCount,
+                threshold,
+                limit
+            },
+            message: `Benzerlik eşleşmesi tamamlandı: ${matchedCount} track eşleştirildi`
+        };
+        
+        res.json(result);
+    } catch (error) {
+        logger.error(`Benzerlik eşleşmesi hatası: ${error.message}`, {
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            message: 'Benzerlik eşleşmesi hatası',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * POST /api/history/word-similarity-match
+ * Kelime çıkartmalı benzerlik eşleşmesi
+ */
+router.post('/word-similarity-match', async (req, res) => {
+    try {
+        const { threshold = 0.6, limit = 1000 } = req.body;
+        logger.info(`Kelime çıkartmalı eşleşmesi başlatılıyor (threshold: ${threshold}, limit: ${limit})`);
+        console.log(`🚀 API çağrıldı: threshold=${threshold}, limit=${limit}`);
+        
+        const matchedCount = historyService.performWordSimilarityMatch(threshold, limit);
+        console.log(`📊 Sonuç: ${matchedCount} eşleşme`);
+        
+        const result = {
+            success: true,
+            data: {
+                matchedCount,
+                threshold,
+                limit
+            },
+            message: `Kelime çıkartmalı eşleşmesi tamamlandı: ${matchedCount} track eşleştirildi`
+        };
+        
+        res.json(result);
+    } catch (error) {
+        logger.error(`Kelime çıkartmalı eşleşmesi hatası: ${error.message}`, {
+            error: error.message,
+            stack: error.stack
+        });
+        
+        res.status(500).json({
+            success: false,
+            message: 'Kelime çıkartmalı eşleşmesi hatası',
+            error: error.message
+        });
+    }
+});
+
+// Test endpoint'i kaldırıldı - Gereksiz!
 
 /**
  * GET /api/history/fix-preview/:id

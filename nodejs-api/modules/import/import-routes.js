@@ -1,11 +1,10 @@
 'use strict';
 
 const express = require('express');
-const ImportService = require('./import-service');
+const importService = require('./import-service');
 const { getLogger } = require('../../shared/logger');
 
 const router = express.Router();
-const importService = new ImportService();
 const logger = getLogger().module('ImportRoutes');
 
 /**
@@ -25,7 +24,7 @@ router.get('/check', async (req, res) => {
 
         logger.info(`Import check isteği: ${dirPath}`);
         
-        const result = await importService.checkDirectory(dirPath);
+        const result = importService.checkDirectory(dirPath);
         
         res.json(result);
 
@@ -60,7 +59,7 @@ router.post('/scan', async (req, res) => {
 
         logger.info(`Import scan isteği: ${dirPath}`, { options });
         
-        const result = await importService.importDirectory(dirPath, options);
+        const result = await importService.scanAndImport(dirPath);
         
         if (result.success) {
             res.json(result);

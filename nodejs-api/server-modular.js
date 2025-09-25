@@ -12,6 +12,7 @@ const importRoutes = require('./modules/import/import-routes');
 const playlistRoutes = require('./modules/playlist/playlist-routes');
 const searchRoutes = require('./modules/search/search-routes');
 const analyticsRoutes = require('./modules/analytics/analytics-routes');
+const databaseModule = require('./modules/database');
 
 // Ortak servisleri import et
 const { getLogger } = require('./shared/logger');
@@ -38,7 +39,7 @@ app.get('/api/health', (req, res) => {
         status: 'OK',
         version: SERVER_VERSION,
         timestamp: new Date().toISOString(),
-            modules: ['history', 'import', 'playlist', 'search', 'analytics']
+            modules: ['history', 'import', 'playlist', 'search', 'analytics', 'database']
     });
 });
 
@@ -92,6 +93,7 @@ app.use('/api/import', importRoutes);
 app.use('/api/playlist', playlistRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/database', databaseModule.router);
 
 // 404 handler
 app.use((req, res) => {

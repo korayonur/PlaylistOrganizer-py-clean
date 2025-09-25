@@ -42,7 +42,7 @@ router.post('/query', async (req, res) => {
 
         // Arama geçmişini kaydet
         if (result.success) {
-            await searchService.saveSearchHistory(query, type, result.total);
+            // await searchService.saveSearchHistory(query, type, result.total);
         }
 
         res.json(result);
@@ -98,6 +98,43 @@ router.get('/suggestions', async (req, res) => {
 });
 
 // Search history kaldırıldı - basitlik için gereksiz
+
+// Kelime çıkartmalı benzerlik arama testi
+router.post('/test-word-similarity', async (req, res) => {
+    try {
+        const { searchQuery } = req.body;
+        
+        if (!searchQuery || searchQuery.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Arama terimi gerekli'
+            });
+        }
+
+        logger.info(`Kelime çıkartmalı benzerlik testi: ${searchQuery}`);
+        
+        const result = await searchService.performTestWordSimilaritySearch(searchQuery);
+        
+        res.json({
+            success: true,
+            data: result,
+            message: 'Kelime çıkartmalı benzerlik testi tamamlandı'
+        });
+
+    } catch (error) {
+        logger.error('Kelime çıkartmalı benzerlik test hatası', {
+            error: error.message,
+            stack: error.stack,
+            body: req.body
+        });
+
+        res.status(500).json({
+            success: false,
+            message: 'Kelime çıkartmalı benzerlik test hatası',
+            error: error.message
+        });
+    }
+});
 
 // Arama filtreleri
 router.get('/filters', async (req, res) => {
@@ -196,7 +233,7 @@ router.post('/advanced', async (req, res) => {
 
         // Arama geçmişini kaydet
         if (result.success) {
-            await searchService.saveSearchHistory(query, type, result.total);
+            // await searchService.saveSearchHistory(query, type, result.total);
         }
 
         res.json(result);

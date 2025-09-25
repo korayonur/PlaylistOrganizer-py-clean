@@ -1,12 +1,107 @@
 'use strict';
 
 const express = require('express');
-const PlaylistService = require('./playlist-service');
+const playlistService = require('./playlist-service');
 const { getLogger } = require('../../shared/logger');
 
 const router = express.Router();
-const playlistService = new PlaylistService();
 const logger = getLogger().module('PlaylistRoutes');
+
+/**
+ * POST /api/playlist/scan
+ * Playlist dosyalarını tara ve import et
+ */
+router.post('/scan', async (req, res) => {
+    try {
+        const { playlistRoot } = req.body;
+        
+        if (!playlistRoot) {
+            return res.status(400).json({
+                success: false,
+                message: 'playlistRoot parametresi gerekli'
+            });
+        }
+
+        logger.info(`Playlist scan isteği: ${playlistRoot}`);
+        const result = await playlistService.scanAndImport(playlistRoot);
+        
+        res.json(result);
+
+    } catch (error) {
+        logger.error('Playlist scan hatası', {
+            error: error.message,
+            stack: error.stack,
+            body: req.body
+        });
+
+        res.status(500).json({
+            success: false,
+            message: 'Playlist scan hatası',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/playlist/stats
+ * Playlist istatistikleri
+ */
+router.get('/stats', (req, res) => {
+    try {
+        logger.info('Playlist istatistikleri isteği');
+        const result = playlistService.getStats();
+        res.json({ success: true, stats: result });
+    } catch (error) {
+        logger.error(`Playlist istatistikleri hatası: ${error.message}`, { error: error.message });
+        res.status(500).json({
+            success: false,
+            message: 'Playlist istatistikleri hatası',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/playlist
+ * Tüm playlist'leri listele
+ */
+router.get('/', (req, res) => {
+    try {
+        const { limit = 50, offset = 0 } = req.query;
+        logger.info(`Playlist listeleme isteği: limit=${limit}, offset=${offset}`);
+        
+        // Playlist'leri tracks tablosundan al
+        const playlists = playlistService.db.prepare(`
+            SELECT DISTINCT source_file as path,
+                            COUNT(*) as trackCount,
+                            MIN(created_at) as createdAt
+            FROM tracks
+            WHERE source = ?
+            GROUP BY source_file
+            ORDER BY createdAt DESC
+            LIMIT ? OFFSET ?
+        `).all('playlist', parseInt(limit), parseInt(offset));
+
+        const total = playlistService.db.prepare('SELECT COUNT(DISTINCT source_file) as count FROM tracks WHERE source = ?').get('playlist').count;
+
+        res.json({
+            success: true,
+            data: {
+                playlists,
+                total,
+                limit: parseInt(limit),
+                offset: parseInt(offset)
+            }
+        });
+    } catch (error) {
+        logger.error(`Playlist listeleme hatası: ${error.message}`, { error: error.message });
+        res.status(500).json({
+            success: false,
+            message: 'Playlist listeleme hatası',
+            error: error.message
+        });
+    }
+});
 
 // M3U dosyalarını tarar ve import eder
 router.post('/scan-m3u', async (req, res) => {
@@ -274,6 +369,70 @@ router.delete('/clear', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Playlist temizleme hatası',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * GET /api/playlist/:pathBase64/tracks
+ * Belirli bir playlist'in track'lerini listele
+ */
+router.get('/:pathBase64/tracks', (req, res) => {
+    try {
+        const { pathBase64 } = req.params;
+        const playlistPath = Buffer.from(pathBase64, 'base64').toString('utf8');
+        const { limit, offset } = req.query;
+
+        logger.info(`Playlist track listeleme isteği: path=${playlistPath}, limit=${limit}, offset=${offset}`);
+        const result = playlistService.getPlaylistTracks(playlistPath, { limit: parseInt(limit), offset: parseInt(offset) });
+        res.json(result);
+    } catch (error) {
+        logger.error(`Playlist track listeleme hatası: ${error.message}`, { error: error.message });
+        res.status(500).json({
+            success: false,
+            message: 'Playlist track listeleme hatası',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * DELETE /api/playlist/:pathBase64
+ * Belirli bir playlist'i siler
+ */
+router.delete('/:pathBase64', (req, res) => {
+    try {
+        const { pathBase64 } = req.params;
+        const playlistPath = Buffer.from(pathBase64, 'base64').toString('utf8');
+
+        logger.info(`Playlist silme isteği: path=${playlistPath}`);
+        const result = playlistService.deletePlaylist(playlistPath);
+        res.json(result);
+    } catch (error) {
+        logger.error(`Playlist silme hatası: ${error.message}`, { error: error.message });
+        res.status(500).json({
+            success: false,
+            message: 'Playlist silme hatası',
+            error: error.message
+        });
+    }
+});
+
+/**
+ * DELETE /api/playlist/clear
+ * Tüm playlist'leri temizler
+ */
+router.delete('/clear', (req, res) => {
+    try {
+        logger.warn('Tüm playlist\'leri temizleme isteği');
+        const result = playlistService.clearAllPlaylists();
+        res.json(result);
+    } catch (error) {
+        logger.error(`Tüm playlist\'leri temizleme hatası: ${error.message}`, { error: error.message });
+        res.status(500).json({
+            success: false,
+            message: 'Tüm playlist\'leri temizleme hatası',
             error: error.message
         });
     }
