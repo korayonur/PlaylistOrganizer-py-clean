@@ -2,75 +2,43 @@
 
 const express = require('express');
 const importService = require('./import-service');
-const { getLogger } = require('../../shared/logger');
+// const { getLogger } = require('../../shared/logger'); // Artık gerek yok - console.log kullanıyoruz
 
 const router = express.Router();
-const logger = getLogger().module('ImportRoutes');
+// const logger = getLogger().module('ImportRoutes'); // Artık gerek yok - console.log kullanıyoruz
 
-/**
- * GET /api/import/check
- * Klasör kontrolü yap
- */
-router.get('/check', async (req, res) => {
-    try {
-        const { path: dirPath } = req.query;
-        
-        if (!dirPath) {
-            return res.status(400).json({
-                success: false,
-                message: 'Path parametresi gerekli'
-            });
-        }
-
-        logger.info(`Import check isteği: ${dirPath}`);
-        
-        const result = importService.checkDirectory(dirPath);
-        
-        res.json(result);
-
-    } catch (error) {
-        logger.error(`Import check hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
-        });
-        
-        res.status(500).json({
-            success: false,
-            message: 'Import check hatası',
-            error: error.message
-        });
-    }
-});
 
 /**
  * POST /api/import/scan
- * Klasörü tara ve import et
+ * Klasörü tara ve import et (asenkron)
  */
 router.post('/scan', async (req, res) => {
     try {
-        const { path: dirPath, options = {} } = req.body;
+        console.log(`🚀 VirtualDJ import scan isteği`);
         
-        if (!dirPath) {
-            return res.status(400).json({
-                success: false,
-                message: 'Path parametresi gerekli'
-            });
-        }
-
-        logger.info(`Import scan isteği: ${dirPath}`, { options });
-        
-        const result = await importService.scanAndImport(dirPath);
-        
-        if (result.success) {
-            res.json(result);
-        } else {
-            res.status(500).json(result);
-        }
-    } catch (error) {
-        logger.error(`Import scan hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
+        // Hemen response döndür
+        res.json({
+            success: true,
+            message: 'Import süreci başlatıldı',
+            data: {
+                status: 'started',
+                message: 'Import arka planda çalışıyor, /api/import/status ile durumu kontrol edebilirsiniz'
+            }
         });
+        
+        // Import'u arka planda başlat
+        setImmediate(async () => {
+            try {
+                console.log(`🚀 Arka plan import süreci başlatılıyor...`);
+                const result = await importService.scanAndImport();
+                console.log(`✅ Arka plan import tamamlandı:`, result);
+            } catch (error) {
+                console.error(`❌ Arka plan import hatası:`, error);
+            }
+        });
+        
+    } catch (error) {
+        console.error(`❌ Import scan hatası: ${error.message}`);
         
         res.status(500).json({
             success: false,
@@ -82,33 +50,17 @@ router.post('/scan', async (req, res) => {
 
 /**
  * GET /api/import/status
- * Import durumunu kontrol et
+ * Import durumunu kontrol et (tüm tablo sayıları + progress)
  */
 router.get('/status', async (req, res) => {
     try {
-        const { path: dirPath } = req.query;
+        console.log(`📊 Import durum kontrolü`);
         
-        if (!dirPath) {
-            return res.status(400).json({
-                success: false,
-                message: 'Path parametresi gerekli'
-            });
-        }
-
-        logger.info(`Import durum kontrolü: ${dirPath}`);
+        const result = await importService.getImportStatus();
         
-        const result = await importService.checkImportStatus(dirPath);
-        
-        if (result.success) {
-            res.json(result);
-        } else {
-            res.status(500).json(result);
-        }
+        res.json(result);
     } catch (error) {
-        logger.error(`Import durum kontrolü hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
-        });
+        console.error(`❌ Import durum kontrolü hatası: ${error.message}`);
         
         res.status(500).json({
             success: false,
@@ -124,7 +76,7 @@ router.get('/status', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
     try {
-        logger.info('Import istatistikleri isteniyor');
+        console.log(`📈 Import istatistikleri isteniyor`);
         
         const result = importService.getImportStats();
         
@@ -134,10 +86,7 @@ router.get('/stats', async (req, res) => {
             res.status(500).json(result);
         }
     } catch (error) {
-        logger.error(`Import istatistik hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
-        });
+        console.error(`❌ Import istatistik hatası: ${error.message}`);
         
         res.status(500).json({
             success: false,
@@ -155,7 +104,7 @@ router.get('/sessions', async (req, res) => {
     try {
         const { limit = 10 } = req.query;
         
-        logger.info(`Son import session'lar isteniyor`, { limit });
+        console.log(`📋 Son import session'lar isteniyor (limit: ${limit})`);
         
         const result = importService.getRecentSessions(parseInt(limit));
         
@@ -165,10 +114,7 @@ router.get('/sessions', async (req, res) => {
             res.status(500).json(result);
         }
     } catch (error) {
-        logger.error(`Import session listesi hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
-        });
+        console.error(`❌ Import session listesi hatası: ${error.message}`);
         
         res.status(500).json({
             success: false,
@@ -178,110 +124,7 @@ router.get('/sessions', async (req, res) => {
     }
 });
 
-/**
- * POST /api/import/verify
- * Import doğrulama
- */
-router.post('/verify', async (req, res) => {
-    try {
-        const { path: dirPath } = req.body;
-        
-        if (!dirPath) {
-            return res.status(400).json({
-                success: false,
-                message: 'Path parametresi gerekli'
-            });
-        }
 
-        logger.info(`Import doğrulama: ${dirPath}`);
-        
-        const result = await importService.verifyImport(dirPath);
-        
-        if (result.success) {
-            res.json(result);
-        } else {
-            res.status(500).json(result);
-        }
-    } catch (error) {
-        logger.error(`Import doğrulama hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
-        });
-        
-        res.status(500).json({
-            success: false,
-            message: 'Import doğrulama hatası',
-            error: error.message
-        });
-    }
-});
 
-/**
- * DELETE /api/import/session/:id
- * Import session'ı sil
- */
-router.delete('/session/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const sessionId = parseInt(id);
-        
-        if (isNaN(sessionId)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Geçersiz session ID'
-            });
-        }
-
-        logger.info(`Import session siliniyor: ${sessionId}`);
-        
-        const result = importService.deleteSession(sessionId);
-        
-        if (result.success) {
-            res.json(result);
-        } else {
-            res.status(500).json(result);
-        }
-    } catch (error) {
-        logger.error(`Import session silme hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
-        });
-        
-        res.status(500).json({
-            success: false,
-            message: 'Import session silme hatası',
-            error: error.message
-        });
-    }
-});
-
-/**
- * DELETE /api/import/clear
- * Tüm import session'larını temizle
- */
-router.delete('/clear', async (req, res) => {
-    try {
-        logger.info('Tüm import session\'lar temizleniyor');
-        
-        const result = importService.clearAllSessions();
-        
-        if (result.success) {
-            res.json(result);
-        } else {
-            res.status(500).json(result);
-        }
-    } catch (error) {
-        logger.error(`Import session temizleme hatası: ${error.message}`, {
-            error: error.message,
-            stack: error.stack
-        });
-        
-        res.status(500).json({
-            success: false,
-            message: 'Import session temizleme hatası',
-            error: error.message
-        });
-    }
-});
 
 module.exports = router;

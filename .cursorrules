@@ -1,0 +1,46 @@
+# CURSOR RULES - PlaylistOrganizer-py
+
+## HATA LOGLAMA KURALLARI
+- Hata durumunda önce log'ları kontrol et:
+  1. Backend console log'u
+  2. Error log dosyaları (backend/logs/)
+  3. API response error details
+  4. Database connection status
+- Hata çözümü için log analizi zorunlu.
+- Server console logları dahil her şey loglanmalı.
+- SQLite3 hata loglarını oku ve kök sorunu bul.
+
+## TERMINAL KOMUT KURALLARI
+- Terminal komutlarında karmaşık echo ifadeleri kullanma.
+- Basit, tek amaçlı komutlar tercih et.
+- Echo yerine printf veya doğrudan komut çıktısı kullan.
+
+## KLASÖR KONTROL KURALLARI
+- Bir komut çalıştırmadan önce, bir dosya oluşturmadan önce, bir paket kurulum yapmadan önce doğru klasörde olduğunu mutlaka kontrol et.
+- Çünkü projede bir çok klasör ve proje yapısı var (frontend, backend vs).
+- Klasör kontrol yapmadan kurarsan yanlışlıkla ana klasör yada alakasız yerlere işlem yaparsın bu çok tehlikeli.
+
+## DOSYA GÜVENLİK KURALLARI
+- Silme işlemlerinde önce mv komutu ile .trash/ klasörüne taşı.
+- rm kullanmadan önce kullanıcı onayı al ve hangi dosyaların silineceğini bildir.
+
+## DİL KURALLARI
+- Always respond in Türkçe
+
+## SORUN ÇÖZME METODOLOJİSİ
+- Olasılık üzerinden ilerleme YASAK.
+- SQLite3 hata loglarını oku ve kök sorunu bul.
+- Console logları dahil her şeyi logla.
+- Hata loglama sistemini düzelt ve dosyaya yazma ekle.
+- Kök sebepten çöz, olasılık üzerinden değil.
+
+## IMPORT İŞLEMLERİ KURALLARI
+- VirtualDJ klasörü ile import testleri yap.
+- Müzik dosyalarını import et.
+- curl ile çalıştır.
+- Gerçek klasör ile test yap.
+
+## KOD TEMİZLİK KURALLARI
+- Gereksiz kodları temizle.
+- Eski sistemden kalma kodları kaldır.
+- Modüler yapıyı koru.

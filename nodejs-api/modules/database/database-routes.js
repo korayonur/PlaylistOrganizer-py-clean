@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { getDatabase } = require('../../shared/database');
-const { getLogger } = require('../../shared/logger');
+// const { getLogger } = require('../../shared/logger'); // Artık gerek yok - console.log kullanıyoruz
 
-const logger = getLogger('Database');
-const db = getDatabase();
+// const logger = getLogger('Database'); // Artık gerek yok - console.log kullanıyoruz
+const dbManager = getDatabase();
+const db = dbManager.getDatabase();
 
 /**
  * Database yönetim API'leri
@@ -14,7 +15,7 @@ const db = getDatabase();
 // Database durumu
 router.get('/status', (req, res) => {
     try {
-        const stats = db.getStats();
+        const stats = dbManager.getStats();
         res.json({
             success: true,
             data: {
@@ -22,13 +23,13 @@ router.get('/status', (req, res) => {
                 tables: {
                     music_files: stats.musicFiles,
                     tracks: stats.tracks,
-                    import_sessions: db.execute('SELECT COUNT(*) as count FROM import_sessions').count
+                    import_sessions: dbManager.execute('SELECT COUNT(*) as count FROM import_sessions').count
                 }
             },
             message: 'Database durumu alındı'
         });
     } catch (error) {
-        logger.error('Database durumu hatası:', error);
+        console.error(`❌ Database durumu hatası: ${error.message}`);
         res.status(500).json({
             success: false,
             message: 'Database durumu alınamadı',
@@ -37,65 +38,19 @@ router.get('/status', (req, res) => {
     }
 });
 
-// Tüm tabloları sil
-router.delete('/tables', (req, res) => {
-    try {
-        logger.info('Tüm tablolar siliniyor...');
-        
-        // Foreign key constraints'leri geçici olarak devre dışı bırak
-        db.execute('PRAGMA foreign_keys = OFF');
-        
-        // Tüm tabloları sil
-        const tables = ['tracks', 'music_files', 'import_sessions'];
-        for (const table of tables) {
-            db.execute(`DROP TABLE IF EXISTS ${table}`);
-            logger.info(`✅ ${table} tablosu silindi`);
-        }
-        
-        // Index'leri de sil
-        db.execute('DROP INDEX IF EXISTS idx_music_files_path');
-        db.execute('DROP INDEX IF EXISTS idx_music_files_fileNameOnly');
-        db.execute('DROP INDEX IF EXISTS idx_music_files_normalized');
-        db.execute('DROP INDEX IF EXISTS idx_tracks_path');
-        db.execute('DROP INDEX IF EXISTS idx_tracks_fileNameOnly');
-        db.execute('DROP INDEX IF EXISTS idx_tracks_normalized');
-        db.execute('DROP INDEX IF EXISTS idx_tracks_source');
-        db.execute('DROP INDEX IF EXISTS idx_tracks_matched');
-        db.execute('DROP INDEX IF EXISTS idx_tracks_source_id');
-        
-        // Foreign key constraints'leri tekrar etkinleştir
-        db.execute('PRAGMA foreign_keys = ON');
-        
-        logger.info('✅ Tüm tablolar başarıyla silindi');
-        
-        res.json({
-            success: true,
-            message: 'Tüm tablolar başarıyla silindi',
-            data: {
-                deletedTables: tables,
-                timestamp: new Date().toISOString()
-            }
-        });
-    } catch (error) {
-        logger.error('Tablo silme hatası:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Tablo silme hatası',
-            error: error.message
-        });
-    }
-});
+// GÜVENLİK RİSKİ: Tüm tabloları silme endpoint'i kaldırıldı!
+// Bu endpoint production'da tehlikeli olabilir.
 
 // Tüm tabloları oluştur
 router.post('/tables', (req, res) => {
     try {
-        logger.info('Tüm tablolar oluşturuluyor...');
+        console.log(`🏗️ Tüm tablolar oluşturuluyor...`);
         
         // Database manager'ın createTables metodunu çağır
-        db.createTables();
-        db.prepareStatements();
+        dbManager.createTables();
+        dbManager.prepareStatements();
         
-        logger.info('✅ Tüm tablolar başarıyla oluşturuldu');
+        console.log(`✅ Tüm tablolar başarıyla oluşturuldu`);
         
         res.json({
             success: true,
@@ -117,7 +72,7 @@ router.post('/tables', (req, res) => {
             }
         });
     } catch (error) {
-        logger.error('Tablo oluşturma hatası:', error);
+        console.error(`❌ Tablo oluşturma hatası: ${error.message}`);
         res.status(500).json({
             success: false,
             message: 'Tablo oluşturma hatası',
@@ -126,75 +81,28 @@ router.post('/tables', (req, res) => {
     }
 });
 
-// Database'i tamamen resetle (sil + oluştur)
-router.post('/reset', (req, res) => {
-    try {
-        logger.info('Database tamamen resetleniyor...');
-        
-        // Önce tüm tabloları sil
-        db.execute('PRAGMA foreign_keys = OFF');
-        const tables = ['tracks', 'music_files', 'import_sessions'];
-        for (const table of tables) {
-            db.execute(`DROP TABLE IF EXISTS ${table}`);
-        }
-        
-        // Index'leri sil
-        const indexes = [
-            'idx_music_files_path', 'idx_music_files_fileNameOnly', 'idx_music_files_normalized',
-            'idx_tracks_path', 'idx_tracks_fileNameOnly', 'idx_tracks_normalized',
-            'idx_tracks_source', 'idx_tracks_matched', 'idx_tracks_source_id'
-        ];
-        for (const index of indexes) {
-            db.execute(`DROP INDEX IF EXISTS ${index}`);
-        }
-        
-        // Tabloları yeniden oluştur
-        db.createTables();
-        db.prepareStatements();
-        
-        db.execute('PRAGMA foreign_keys = ON');
-        
-        logger.info('✅ Database başarıyla resetlendi');
-        
-        res.json({
-            success: true,
-            message: 'Database başarıyla resetlendi',
-            data: {
-                action: 'reset',
-                deletedTables: tables,
-                createdTables: tables,
-                timestamp: new Date().toISOString()
-            }
-        });
-    } catch (error) {
-        logger.error('Database reset hatası:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Database reset hatası',
-            error: error.message
-        });
-    }
-});
+// GÜVENLİK RİSKİ: Database reset endpoint'i kaldırıldı!
+// Bu endpoint production'da tehlikeli olabilir.
 
 // Belirli tablo silme endpoint'i kaldırıldı - Güvenlik riski!
 
 // Database optimize et
 router.post('/optimize', (req, res) => {
     try {
-        logger.info('Database optimize ediliyor...');
+        console.log(`⚡ Database optimize ediliyor...`);
         
         // VACUUM işlemi
-        db.execute('VACUUM');
+        dbManager.execute('VACUUM');
         
         // ANALYZE işlemi
-        db.execute('ANALYZE');
+        dbManager.execute('ANALYZE');
         
         // WAL modunu optimize et
-        db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+        dbManager.execute('PRAGMA wal_checkpoint(TRUNCATE)');
         
-        const stats = db.getStats();
+        const stats = dbManager.getStats();
         
-        logger.info('✅ Database başarıyla optimize edildi');
+        console.log(`✅ Database başarıyla optimize edildi`);
         
         res.json({
             success: true,
@@ -206,7 +114,7 @@ router.post('/optimize', (req, res) => {
             }
         });
     } catch (error) {
-        logger.error('Database optimize hatası:', error);
+        console.error(`❌ Database optimize hatası: ${error.message}`);
         res.status(500).json({
             success: false,
             message: 'Database optimize hatası',
@@ -221,14 +129,15 @@ router.post('/optimize', (req, res) => {
  */
 router.get('/views', (req, res) => {
     try {
-        const db = getDatabase();
-        const views = db.query(`
+        const dbManager = getDatabase();
+        const db = dbManager.getDatabase();
+        const views = db.prepare(`
             SELECT name, sql 
             FROM sqlite_master 
             WHERE type = 'view' 
             AND name LIKE 'v_%'
             ORDER BY name
-        `);
+        `).all();
         
         res.json({
             success: true,
@@ -242,7 +151,7 @@ router.get('/views', (req, res) => {
             message: `${views.length} view bulundu`
         });
     } catch (error) {
-        logger.error('View listesi hatası:', error);
+        console.error(`❌ View listesi hatası: ${error.message}`);
         res.status(500).json({
             success: false,
             message: 'View listesi alınamadı',
@@ -267,11 +176,12 @@ router.get('/views', (req, res) => {
  */
 router.get('/views/summary', (req, res) => {
     try {
-        const db = getDatabase();
-        const summary = db.query(`
-            SELECT * FROM v_all_matches_summary
+        const dbManager = getDatabase();
+        const db = dbManager.getDatabase();
+        const summary = db.prepare(`
+            SELECT * FROM v_all_matches_summary_optimized
             ORDER BY match_count DESC
-        `);
+        `).all();
         
         res.json({
             success: true,
@@ -282,7 +192,7 @@ router.get('/views/summary', (req, res) => {
             message: 'Eşleşme özeti getirildi'
         });
     } catch (error) {
-        logger.error('Eşleşme özeti hatası:', error);
+        console.error(`❌ Eşleşme özeti hatası: ${error.message}`);
         res.status(500).json({
             success: false,
             message: 'Eşleşme özeti alınamadı',

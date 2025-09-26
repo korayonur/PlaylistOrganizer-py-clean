@@ -6,16 +6,56 @@ const path = require('path');
 /**
  * Ortak Logging Sistemi
  * Tüm modüller için merkezi log yönetimi
+ * Console.log'ları otomatik olarak log dosyasına yazar
  */
 class Logger {
     constructor() {
         this.logDir = path.join(__dirname, '../logs');
         this.ensureLogDir();
+        this.interceptConsole();
     }
 
     ensureLogDir() {
         if (!fs.existsSync(this.logDir)) {
             fs.mkdirSync(this.logDir, { recursive: true });
+        }
+    }
+
+    // Console.log'ları yakala ve log dosyasına yaz
+    interceptConsole() {
+        const originalConsoleLog = console.log;
+        const originalConsoleError = console.error;
+        const originalConsoleWarn = console.warn;
+
+        // Console.log'u yakala
+        console.log = (...args) => {
+            originalConsoleLog(...args);
+            this.writeConsoleToFile('CONSOLE', args.join(' '));
+        };
+
+        // Console.error'u yakala
+        console.error = (...args) => {
+            originalConsoleError(...args);
+            this.writeConsoleToFile('ERROR', args.join(' '));
+        };
+
+        // Console.warn'u yakala
+        console.warn = (...args) => {
+            originalConsoleWarn(...args);
+            this.writeConsoleToFile('WARN', args.join(' '));
+        };
+    }
+
+    // Console mesajlarını log dosyasına yaz
+    writeConsoleToFile(level, message) {
+        const timestamp = new Date().toISOString();
+        const logFile = path.join(this.logDir, `${level.toLowerCase()}_${new Date().toISOString().split('T')[0]}.log`);
+        const formattedMessage = `[${timestamp}] ${level}: ${message}`;
+        
+        try {
+            fs.appendFileSync(logFile, formattedMessage + '\n');
+        } catch (error) {
+            // Log yazma hatası olursa sessizce geç
         }
     }
 
@@ -36,20 +76,33 @@ class Logger {
 
     info(message, context = {}) {
         const formattedMessage = this.formatMessage('INFO', message, context);
-        console.log(formattedMessage);
+        // Sadece dosyaya yaz, console.log'u tetikleme
         this.writeToFile('INFO', message, context);
+        // Orijinal console.log'u kullan (intercept edilmiş değil)
+        process.stdout.write(formattedMessage + '\n');
+    }
+
+    // Console.log'ları da log dosyasına yaz
+    console(message, context = {}) {
+        const formattedMessage = this.formatMessage('CONSOLE', message, context);
+        console.log(formattedMessage);
+        this.writeToFile('CONSOLE', message, context);
     }
 
     error(message, context = {}) {
         const formattedMessage = this.formatMessage('ERROR', message, context);
-        console.error(formattedMessage);
+        // Sadece dosyaya yaz, console.error'u tetikleme
         this.writeToFile('ERROR', message, context);
+        // Orijinal console.error'u kullan (intercept edilmiş değil)
+        process.stderr.write(formattedMessage + '\n');
     }
 
     warn(message, context = {}) {
         const formattedMessage = this.formatMessage('WARN', message, context);
-        console.warn(formattedMessage);
+        // Sadece dosyaya yaz, console.warn'u tetikleme
         this.writeToFile('WARN', message, context);
+        // Orijinal console.warn'u kullan (intercept edilmiş değil)
+        process.stderr.write(formattedMessage + '\n');
     }
 
     debug(message, context = {}) {

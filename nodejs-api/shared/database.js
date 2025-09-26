@@ -1,49 +1,28 @@
-'use strict';
-
 const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs-extra');
 
-/**
- * Ortak Database Katmanı
- * Tüm modüller için merkezi veritabanı yönetimi
- */
-class DatabaseManager {
+class CleanDatabaseManager {
     constructor() {
         this.dbPath = path.join(__dirname, '../../musicfiles.db');
-        this.db = null;
-        this.statements = {};
         this.initialize();
     }
 
     initialize() {
         try {
-            // Veritabanı dosyasını oluştur veya aç
             this.db = new Database(this.dbPath);
-            
-            // WAL modunu etkinleştir (performans için)
             this.db.pragma('journal_mode = WAL');
-            this.db.pragma('synchronous = NORMAL');
-            this.db.pragma('cache_size = 10000');
-            this.db.pragma('temp_store = MEMORY');
-            
-        // UDF fonksiyonları kaldırıldı
-            
-            // Tabloları oluştur
             this.createTables();
-            this.prepareStatements();
-            
-            console.log('✅ Ortak Database Manager başlatıldı:', this.dbPath);
+            // this.createViews(); // Geçici olarak devre dışı
+            console.log('✅ Database başarıyla başlatıldı');
         } catch (error) {
-            console.error('❌ Database Manager başlatılamadı:', error);
+            console.error('❌ Database başlatılamadı:', error.message);
             throw error;
         }
     }
 
-    // UDF fonksiyonları kaldırıldı - JavaScript yaklaşımı kullanılıyor
-
     createTables() {
-        // Music files tablosu (mevcut)
+        // Music files tablosu
         this.db.exec(`
             CREATE TABLE IF NOT EXISTS music_files (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,10 +34,10 @@ class DatabaseManager {
                 size INTEGER,
                 modifiedTime INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
+            );
         `);
 
-        // Tracks tablosu (unified)
+        // Tracks tablosu (temizlenmiş)
         this.db.exec(`
             CREATE TABLE IF NOT EXISTS tracks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,312 +45,298 @@ class DatabaseManager {
                 fileName TEXT NOT NULL,
                 fileNameOnly TEXT NOT NULL,
                 normalizedFileName TEXT NOT NULL,
-                source TEXT NOT NULL, -- 'history', 'playlist'
-                source_id INTEGER, -- history_track_id veya playlist_id
-                source_file TEXT, -- m3u_file_path veya playlist_name
-                track_order INTEGER, -- playlist'teki sıra
-                is_matched BOOLEAN DEFAULT 0,
-                matched_music_file_id INTEGER,
+                source TEXT NOT NULL,
+                source_file TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (matched_music_file_id) REFERENCES music_files(id)
-            )
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
         `);
 
-        // Import sessions tablosu (yeni)
+        // Import sessions tablosu
         this.db.exec(`
             CREATE TABLE IF NOT EXISTS import_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                path TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'scanning',
+                path TEXT,
                 total_files INTEGER DEFAULT 0,
                 processed_files INTEGER DEFAULT 0,
                 added_files INTEGER DEFAULT 0,
                 skipped_files INTEGER DEFAULT 0,
                 error_files INTEGER DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                completed_at DATETIME
-            )
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
         `);
 
-        // Playlists tablosu kaldırıldı - tracks tablosundan sorgulanabilir
-
-
-        // Index'ler oluştur
+        // Similarity fix suggestions tablosu
         this.db.exec(`
-            CREATE INDEX IF NOT EXISTS idx_music_files_path ON music_files(path);
-            CREATE INDEX IF NOT EXISTS idx_music_files_fileName ON music_files(fileName);
-            CREATE INDEX IF NOT EXISTS idx_music_files_fileNameOnly ON music_files(fileNameOnly);
-            CREATE INDEX IF NOT EXISTS idx_music_files_normalized ON music_files(normalizedFileName);
-            CREATE INDEX IF NOT EXISTS idx_tracks_path ON tracks(path);
-            CREATE INDEX IF NOT EXISTS idx_tracks_fileName ON tracks(fileName);
-            CREATE INDEX IF NOT EXISTS idx_tracks_fileNameOnly ON tracks(fileNameOnly);
-            CREATE INDEX IF NOT EXISTS idx_tracks_normalized ON tracks(normalizedFileName);
-            CREATE INDEX IF NOT EXISTS idx_tracks_source ON tracks(source);
-            CREATE INDEX IF NOT EXISTS idx_tracks_matched ON tracks(is_matched);
-            CREATE INDEX IF NOT EXISTS idx_tracks_source_id ON tracks(source_id);
+            CREATE TABLE IF NOT EXISTS similarity_fix_suggestions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                track_id INTEGER NOT NULL,
+                suggested_music_file_id INTEGER NOT NULL,
+                similarity_score REAL NOT NULL,
+                match_type TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (track_id) REFERENCES tracks (id),
+                FOREIGN KEY (suggested_music_file_id) REFERENCES music_files (id)
+            );
         `);
-
-        // View'ları oluştur
-        this.createViews();
     }
 
     createViews() {
-        // 1. Exact Path Match View - Tam yol eşleşmesi
-        this.db.exec(`
-            CREATE VIEW IF NOT EXISTS v_exact_path_matches AS
-            SELECT 
-                t.id as track_id,
-                t.path as track_path,
-                t.fileName as track_fileName,
-                t.source as track_source,
-                t.source_file as track_source_file,
-                mf.id as music_file_id,
-                mf.path as music_file_path,
-                mf.fileName as music_file_name,
-                'exact_path' as match_type,
-                1.0 as match_confidence,
-                t.created_at as matched_at
-            FROM tracks t
-            INNER JOIN music_files mf ON t.path = mf.path
-            WHERE t.is_matched = 1
-        `);
-
-        // 2. Filename Match View - Dosya adı eşleşmesi
-        this.db.exec(`
-            CREATE VIEW IF NOT EXISTS v_filename_matches AS
-            SELECT 
-                t.id as track_id,
-                t.path as track_path,
-                t.fileName as track_fileName,
-                t.source as track_source,
-                t.source_file as track_source_file,
-                mf.id as music_file_id,
-                mf.path as music_file_path,
-                mf.fileName as music_file_name,
-                'filename' as match_type,
-                0.9 as match_confidence,
-                t.updated_at as matched_at
-            FROM tracks t
-            INNER JOIN music_files mf ON t.fileName = mf.fileName
-            WHERE t.is_matched = 1
-            AND t.path != mf.path  -- Exact path değil
-        `);
-
-        // 3. Filename-Only Match View - Uzantısız dosya adı eşleşmesi
-        this.db.exec(`
-            CREATE VIEW IF NOT EXISTS v_filename_only_matches AS
-            SELECT 
-                t.id as track_id,
-                t.path as track_path,
-                t.fileName as track_fileName,
-                t.fileNameOnly as track_fileNameOnly,
-                t.source as track_source,
-                t.source_file as track_source_file,
-                mf.id as music_file_id,
-                mf.path as music_file_path,
-                mf.fileName as music_file_name,
-                mf.fileNameOnly as music_file_nameOnly,
-                'filename_only' as match_type,
-                0.8 as match_confidence,
-                t.updated_at as matched_at
-            FROM tracks t
-            INNER JOIN music_files mf ON t.fileNameOnly = mf.fileNameOnly
-            WHERE t.is_matched = 1
-            AND t.path != mf.path  -- Exact path değil
-            AND t.fileName != mf.fileName  -- Filename match değil
-        `);
-
-        // 4. Unmatched Tracks View - Eşleşmemiş track'ler
-        this.db.exec(`
-            CREATE VIEW IF NOT EXISTS v_unmatched_tracks AS
-            SELECT 
-                t.id as track_id,
-                t.path as track_path,
-                t.fileName as track_fileName,
-                t.fileNameOnly as track_fileNameOnly,
-                t.normalizedFileName as track_normalized,
-                t.source as track_source,
-                t.source_file as track_source_file,
-                t.created_at,
-                'unmatched' as status
-            FROM tracks t
-            WHERE t.is_matched = 0
-        `);
-
-        // 5. All Matches Summary View - Tüm eşleşmelerin özeti
-        this.db.exec(`
-            CREATE VIEW IF NOT EXISTS v_all_matches_summary AS
-            SELECT 
-                match_type,
-                COUNT(*) as match_count,
-                AVG(match_confidence) as avg_confidence,
-                MIN(matched_at) as first_match,
-                MAX(matched_at) as last_match
-            FROM (
-                SELECT 'exact_path' as match_type, match_confidence, matched_at FROM v_exact_path_matches
-                UNION ALL
-                SELECT 'filename' as match_type, match_confidence, matched_at FROM v_filename_matches
-                UNION ALL
-                SELECT 'filename_only' as match_type, match_confidence, matched_at FROM v_filename_only_matches
-            ) matches
-            GROUP BY match_type
-        `);
-
-        console.log('✅ Eşleşme view\'ları oluşturuldu (5 view)');
+        // View'lar manuel olarak oluşturuldu, bu metod boş
+        console.log('Viewlar manuel olarak olusturuldu');
     }
 
-    prepareStatements() {
-        // Music files için hazır sorgular
-        this.statements.musicFiles = {
-            insert: this.db.prepare(`
-                INSERT OR REPLACE INTO music_files 
-                (path, fileName, fileNameOnly, normalizedFileName, extension, size, modifiedTime)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `),
-            findByPath: this.db.prepare(`
-                SELECT * FROM music_files WHERE path = ?
-            `),
-            findByFileName: this.db.prepare(`
-                SELECT * FROM music_files WHERE fileName = ?
-            `),
-            findByFileNameOnly: this.db.prepare(`
-                SELECT * FROM music_files WHERE fileNameOnly = ?
-            `),
-            findByNormalized: this.db.prepare(`
-                SELECT * FROM music_files WHERE normalizedFileName = ?
-            `),
-            count: this.db.prepare(`
-                SELECT COUNT(*) as count FROM music_files
-            `)
-        };
-
-        // Tracks için hazır sorgular (unified)
-        this.statements.tracks = {
-            insert: this.db.prepare(`
-                INSERT INTO tracks 
-                (path, fileName, fileNameOnly, normalizedFileName, source, source_id, source_file, track_order, is_matched, matched_music_file_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `),
-            findByPath: this.db.prepare(`
-                SELECT * FROM tracks WHERE path = ?
-            `),
-            findByFileName: this.db.prepare(`
-                SELECT * FROM tracks WHERE fileName = ?
-            `),
-            findByFileNameOnly: this.db.prepare(`
-                SELECT * FROM tracks WHERE fileNameOnly = ?
-            `),
-            findByNormalized: this.db.prepare(`
-                SELECT * FROM tracks WHERE normalizedFileName = ?
-            `),
-            findBySource: this.db.prepare(`
-                SELECT * FROM tracks WHERE source = ? AND source_id = ?
-            `),
-            findUnmatched: this.db.prepare(`
-                SELECT * FROM tracks WHERE is_matched = 0
-            `),
-            findMatched: this.db.prepare(`
-                SELECT * FROM tracks WHERE is_matched = 1
-            `),
-            findAll: this.db.prepare(`
-                SELECT * FROM tracks ORDER BY created_at DESC
-            `),
-            count: this.db.prepare(`
-                SELECT COUNT(*) as count FROM tracks
-            `),
-            countMatched: this.db.prepare(`
-                SELECT COUNT(*) as count FROM tracks WHERE is_matched = 1
-            `),
-            countUnmatched: this.db.prepare(`
-                SELECT COUNT(*) as count FROM tracks WHERE is_matched = 0
-            `),
-            countBySource: this.db.prepare(`
-                SELECT COUNT(*) as count FROM tracks WHERE source = ?
-            `)
-        };
-
-        // Import sessions için hazır sorgular
-        this.statements.importSessions = {
-            insert: this.db.prepare(`
-                INSERT INTO import_sessions 
-                (path, status, total_files, processed_files, added_files, skipped_files, error_files)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `),
-            update: this.db.prepare(`
-                UPDATE import_sessions 
-                SET status = ?, processed_files = ?, added_files = ?, skipped_files = ?, error_files = ?, completed_at = ?
-                WHERE id = ?
-            `),
-            findById: this.db.prepare(`
-                SELECT * FROM import_sessions WHERE id = ?
-            `),
-            findByPath: this.db.prepare(`
-                SELECT * FROM import_sessions WHERE path = ? ORDER BY created_at DESC LIMIT 1
-            `)
-        };
-
-        // Playlists statements kaldırıldı
-
+    getDatabase() {
+        return this.db;
     }
 
-    // Transaction wrapper
-    transaction(callback) {
-        const transaction = this.db.transaction(callback);
-        return transaction;
+    getCounts() {
+        return {
+            musicFiles: this.db.prepare('SELECT COUNT(*) as count FROM music_files').get().count,
+            historyTracks: this.db.prepare('SELECT COUNT(*) as count FROM tracks').get().count,
+            playlists: 0, // Geçici olarak 0
+            dbSize: this.getDatabaseSize(),
+            similarity_suggestions: 0, // Geçici olarak 0
+            exact_path_matches: 0, // Geçici olarak 0
+            filename_matches: 0, // Geçici olarak 0
+            filename_only_matches: 0, // Geçici olarak 0
+            normalized_matches: 0, // Geçici olarak 0
+            unmatched_tracks: 0 // Geçici olarak 0
+        };
     }
 
-    // Generic query method
-    query(sql, params = []) {
+    getStats() {
+        return this.getCounts();
+    }
+
+    /**
+     * Veritabanı boyutunu al
+     */
+    getDatabaseSize() {
         try {
-            const stmt = this.db.prepare(sql);
-            return stmt.all(params);
+            const fs = require('fs');
+            const path = require('path');
+            const dbPath = path.join(__dirname, '../../musicfiles.db');
+            const stats = fs.statSync(dbPath);
+            return Math.round(stats.size / 1024 / 1024 * 100) / 100; // MB cinsinden
         } catch (error) {
-            console.error('Database query error:', error);
-            throw error;
+            return 0;
         }
     }
 
-    // Generic execute method
+    /**
+     * SQL sorgusu çalıştır (execute wrapper)
+     */
     execute(sql, params = []) {
+        const stmt = this.db.prepare(sql);
+        if (params.length > 0) {
+            return stmt.get(...params);
+        }
+        return stmt.get();
+    }
+
+    // =====================================================
+    // OPTİMİZE EDİLMİŞ METODLAR
+    // =====================================================
+
+    /**
+     * Tam eşleşen kayıtları getir (optimize edilmiş)
+     */
+    getExactMatches(limit = 50, offset = 0) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM v_exact_path_matches_optimized
+            ORDER BY track_created_at DESC
+            LIMIT ? OFFSET ?
+        `);
+        return stmt.all(limit, offset);
+    }
+
+    /**
+     * Tam eşleşmeyen kayıtları getir (optimize edilmiş)
+     */
+    getNonExactMatches(limit = 50, offset = 0) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM v_filename_matches_optimized
+            ORDER BY track_created_at DESC
+            LIMIT ? OFFSET ?
+        `);
+        return stmt.all(limit, offset);
+    }
+
+    /**
+     * Dosya adı eşleşen kayıtları getir (optimize edilmiş)
+     */
+    getFilenameMatches(limit = 50, offset = 0) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM v_filename_matches_optimized
+            ORDER BY track_created_at DESC
+            LIMIT ? OFFSET ?
+        `);
+        return stmt.all(limit, offset);
+    }
+
+    /**
+     * Sadece dosya adı eşleşen kayıtları getir (optimize edilmiş)
+     */
+    getFilenameOnlyMatches(limit = 50, offset = 0) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM v_filename_only_matches_optimized
+            ORDER BY track_created_at DESC
+            LIMIT ? OFFSET ?
+        `);
+        return stmt.all(limit, offset);
+    }
+
+    /**
+     * Normalize edilmiş dosya adı eşleşen kayıtları getir (optimize edilmiş)
+     */
+    getNormalizedMatches(limit = 50, offset = 0) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM v_normalized_matches_optimized
+            ORDER BY track_created_at DESC
+            LIMIT ? OFFSET ?
+        `);
+        return stmt.all(limit, offset);
+    }
+
+    /**
+     * Eşleşmeyen kayıtları getir (optimize edilmiş)
+     */
+    getUnmatchedTracks(limit = 50, offset = 0) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM v_unmatched_tracks_optimized
+            ORDER BY track_created_at DESC
+            LIMIT ? OFFSET ?
+        `);
+        return stmt.all(limit, offset);
+    }
+
+    /**
+     * Tüm eşleşmelerin özetini getir (optimize edilmiş)
+     */
+    getAllMatchesSummary() {
+        const stmt = this.db.prepare(`
+            SELECT * FROM v_all_matches_summary_optimized
+            ORDER BY match_count DESC
+        `);
+        return stmt.all();
+    }
+
+    /**
+     * Müzik dosyası ekle
+     */
+    addMusicFile(fileData) {
         try {
-            const stmt = this.db.prepare(sql);
-            return stmt.run(params);
+            const stmt = this.db.prepare(`
+                INSERT INTO music_files (path, fileName, fileNameOnly, normalizedFileName, extension, size, modifiedTime)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `);
+            
+            const result = stmt.run(
+                fileData.path,
+                fileData.fileName,
+                fileData.fileNameOnly,
+                fileData.normalizedFileName,
+                fileData.extension,
+                fileData.size,
+                fileData.modifiedTime
+            );
+            
+            return { success: true, id: result.lastInsertRowid };
         } catch (error) {
-            console.error('Database execute error:', error);
+            if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+                return { success: false, message: 'Dosya zaten mevcut' };
+            }
             throw error;
         }
     }
 
-    // Get prepared statement
-    getStatement(category, name) {
-        if (!this.statements[category] || !this.statements[category][name]) {
-            throw new Error(`Statement not found: ${category}.${name}`);
+    /**
+     * Track ekle
+     */
+    addTrack(trackData) {
+        try {
+            const stmt = this.db.prepare(`
+                INSERT INTO tracks (path, fileName, fileNameOnly, normalizedFileName, source, source_file)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `);
+            
+            const result = stmt.run(
+                trackData.path,
+                trackData.fileName,
+                trackData.fileNameOnly,
+                trackData.normalizedFileName,
+                trackData.source,
+                trackData.source_file
+            );
+            
+            return { success: true, id: result.lastInsertRowid };
+        } catch (error) {
+            throw error;
         }
-        return this.statements[category][name];
     }
 
-    // Close database connection
+    /**
+     * Import session oluştur
+     */
+    createImportSession(path, totalFiles) {
+        try {
+            const stmt = this.db.prepare(`
+                INSERT INTO import_sessions (path, total_files, processed_files, added_files, skipped_files, error_files)
+                VALUES (?, ?, 0, 0, 0, 0)
+            `);
+            
+            const result = stmt.run(path, totalFiles);
+            return result.lastInsertRowid;
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Import session güncelle
+     */
+    updateImportSession(sessionId, updates) {
+        try {
+            const stmt = this.db.prepare(`
+                UPDATE import_sessions 
+                SET processed_files = ?, added_files = ?, skipped_files = ?, error_files = ?
+                WHERE id = ?
+            `);
+            
+            stmt.run(
+                updates.processed_files || 0,
+                updates.added_files || 0,
+                updates.skipped_files || 0,
+                updates.error_files || 0,
+                sessionId
+            );
+            
+            return { success: true };
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    /**
+     * Import session'ları getir
+     */
+    getImportSessions(limit = 50, offset = 0) {
+        const stmt = this.db.prepare(`
+            SELECT * FROM import_sessions
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        `);
+        return stmt.all(limit, offset);
+    }
+
+    /**
+     * Database'i kapat
+     */
     close() {
         if (this.db) {
             this.db.close();
-            console.log('✅ Database connection closed');
         }
-    }
-
-    // Get database statistics
-    getStats() {
-        const musicFilesCount = this.statements.musicFiles.count.get().count;
-        const tracksCount = this.statements.tracks.count.get().count;
-        
-        const dbSize = fs.statSync(this.dbPath).size;
-
-        return {
-            musicFiles: musicFilesCount,
-            tracks: tracksCount,
-            dbSize,
-            dbPath: this.dbPath
-        };
     }
 }
 
@@ -380,12 +345,12 @@ let dbInstance = null;
 
 function getDatabase() {
     if (!dbInstance) {
-        dbInstance = new DatabaseManager();
+        dbInstance = new CleanDatabaseManager();
     }
     return dbInstance;
 }
 
 module.exports = {
-    DatabaseManager,
+    CleanDatabaseManager,
     getDatabase
 };

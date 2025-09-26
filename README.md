@@ -1,142 +1,90 @@
-# PlaylistOrganizer
+# 🎵 Playlist Organizer - Full Stack Music Management System
 
-Bu proje, müzik çalma listelerinizi organize etmenize yardımcı olan bir uygulamadır. 
+## 📋 Proje Açıklaması
+Müzik dosyalarını organize eden, M3U playlist'lerini düzenleyen ve VirtualDJ ile entegre çalışan full-stack uygulama.
 
-## 🚀 Modüler API Sistemi (v3.0 - Production Ready)
+## 🏗️ Proje Yapısı
+```
+PlaylistOrganizer-py/
+├── package.json                 # Workspace ana yapılandırması
+├── node_modules/               # Workspace bağımlılıkları
+├── musicfiles.db              # Ana SQLite veritabanı
+├── frontend/                   # Angular Frontend
+│   ├── package.json
+│   ├── node_modules/
+│   └── src/
+├── nodejs-api/                 # Node.js Backend API
+│   ├── package.json
+│   ├── node_modules/
+│   ├── server-modular.js
+│   └── modules/
+└── docs/                       # Dokümantasyon
+```
 
-### Yeni Mimari
-- **Modüler Yapı:** Her modül ayrı klasörde
-- **Unified Database:** Tek tracks tablosu ile basitleştirme
-- **Versiyon Sistemi:** Her modül için ayrı versiyon takibi
-- **Nodemon Desteği:** Kod değişikliklerinde otomatik yeniden başlatma
-    - **5 Modül:** History, Import, Playlist, Search, Analytics
-- **Code Cleanup:** %93 kod azalması (2,746 → 187 satır)
+## 🚀 Hızlı Başlangıç
 
-### Hızlı Başlangıç
+### Tüm Sistemi Başlat
 ```bash
-# Modüler server'ı başlat (Nodemon ile)
-./start-modular.sh
-
-# Veya manuel olarak
-cd nodejs-api
-npm start          # Production
-npm run dev        # Development (Nodemon)
-
-# Sistem durumu
-curl "http://localhost:50001/api/health"
-
-# Versiyon bilgileri
-curl "http://localhost:50001/api/version"
+npm run start:all
 ```
 
-### Modüller
-- **History**: VirtualDJ history dosyalarını yönetme
-- **Import**: Müzik dosyalarını import etme  
-- **Playlist**: Playlist import ve yönetme (tracks tablosunda)
-- **Search**: Gelişmiş arama ve filtreleme
-- **Analytics**: İstatistik ve analiz raporları
-
-### API Koleksiyonu
-Tüm API'leri test etmek için `insomnia-modular-api-collection.json` dosyasını Insomnia'ya import edin.
-
----
-
-Proje iki ana bileşenden oluşmaktadır:
-
-## Proje Yapısı
-
-```
-PlaylistOrganizer/
-├── frontend/     # Angular tabanlı web uygulaması (Frontend)
-└── py/          # Python tabanlı backend ve masaüstü uygulaması
-```
-
-## Bileşenler
-
-### Web Uygulaması (frontend/)
-- Modern ve kullanıcı dostu arayüz
-- Çalma listesi yönetimi
-- Müzik dosyası organizasyonu
-- Gerçek zamanlı güncellemeler
-
-Geliştirme için:
+### Sadece Backend
 ```bash
-cd frontend
-npm install
-ng serve
+npm start
+# veya
+npm run start:backend
 ```
 
-### Backend ve Masaüstü Uygulaması (py/)
-- FastAPI tabanlı REST API
-- Clean Architecture ve Domain Driven Design
-- pywebview tabanlı masaüstü uygulaması
-  - Minimal ve hafif yapı
-  - Tüm platformlarda native destek (ARM64 dahil)
-  - Sistem kaynaklarını verimli kullanım
-  - Kolay kurulum ve yapılandırma
-- Yerel dosya sistemi entegrasyonu
-- Müzik dosyası metadata işleme
-- JSON tabanlı veri depolama
-
-Geliştirme için:
+### Sadece Frontend
 ```bash
-cd py
-poetry install
-poetry run python -m py  # Masaüstü uygulaması için
-poetry run python apiserver.py  # Backend API için
+npm run start:frontend
 ```
 
-## Teknik Detaylar
+### Development Mode
+```bash
+npm run dev:all
+```
 
-### Masaüstü Uygulama Mimarisi
-Uygulama başlangıçta Chromium Embedded Framework (CEF) kullanılarak geliştirildi, ancak daha sonra aşağıdaki avantajlar nedeniyle pywebview'a geçiş yapıldı:
+## 📊 Sistem Durumu
+```bash
+npm run status
+```
 
-- **Minimal Yapı**: pywebview, sistemin yerel web görüntüleyicisini kullanarak daha hafif ve verimli bir çözüm sunar
-- **Platform Desteği**: Tüm platformlarda (Windows, macOS, Linux) ve mimarilerde (x86_64, ARM64) sorunsuz çalışır
-- **Kolay Entegrasyon**: Basit API yapısı sayesinde hızlı geliştirme ve kolay bakım
-- **Düşük Kaynak Kullanımı**: Native web görüntüleyici kullanımı sayesinde minimum sistem kaynağı tüketimi
-- **Hızlı Başlangıç**: Küçük boyutlu bağımlılıklar ve basit kurulum süreci
+## 🔧 Geliştirme
 
-## Geliştirme Ortamı Gereksinimleri
+### Bağımlılıkları Yükle
+```bash
+npm run install:all
+```
 
-### Frontend Gereksinimleri
-- Node.js 18+
-- Angular CLI
-- npm veya yarn
-- Web tarayıcı (Chrome/Firefox önerilir)
+### Temizle
+```bash
+npm run clean
+```
 
-### Backend Gereksinimleri
-- Python 3.11+
-- Poetry (Python paket yöneticisi)
-- pip (Python paket yöneticisi)
-- Sistem gereksinimleri:
-  - macOS: Xcode Command Line Tools
-  - Linux: python3-dev, build-essential
-  - Windows: Visual C++ Build Tools
+## 🌐 Erişim
+- **Backend API:** http://localhost:50001
+- **Frontend:** http://localhost:4200
+- **Health Check:** http://localhost:50001/api/health
 
-### IDE Önerileri
-- Visual Studio Code
-  - Python eklentisi
-  - Angular Language Service
-  - ESLint
-  - Black Formatter
-- PyCharm Professional (alternatif)
+## 📚 API Endpoints
+- `/api/health` - Sistem durumu
+- `/api/database/status` - Veritabanı durumu
+- `/api/similarity/suggestions` - Benzerlik önerileri
+- `/api/import/sessions` - Import oturumları
 
-## Geliştirme Planı
+## 🗄️ Veritabanı
+- **SQLite:** `musicfiles.db`
+- **Tablo:** `music_files`, `tracks`, `similarity_fix_suggestions`
+- **Views:** Optimize edilmiş eşleşme view'ları
 
-1. Angular uygulamasının backend servislerinin geliştirilmesi
-2. Eski Node.js backend'in Python'a taşınması
-3. Masaüstü uygulamasının WebView entegrasyonu
-4. Veri modellerinin senkronizasyonu
+## 🛠️ Teknolojiler
+- **Frontend:** Angular 18
+- **Backend:** Node.js + Express
+- **Veritabanı:** SQLite3
+- **Package Manager:** npm (Workspace)
 
-## Katkıda Bulunma
-
-1. Bu depoyu fork edin
-2. Yeni bir branch oluşturun (`git checkout -b feature/yeniOzellik`)
-3. Değişikliklerinizi commit edin (`git commit -m 'Yeni özellik: Açıklama'`)
-4. Branch'inizi push edin (`git push origin feature/yeniOzellik`)
-5. Bir Pull Request oluşturun
-
-## Lisans
-
-Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICENSE) dosyasına bakın.
+## 📝 Notlar
+- Workspace yapısı sayesinde tüm projeler tek yerden yönetilir
+- Her alt proje kendi bağımlılıklarını korur
+- Ana klasörden tüm komutlar çalıştırılabilir
