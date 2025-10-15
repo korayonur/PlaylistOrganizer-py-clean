@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit } from '@angular/core';
+import { Component, Inject, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -24,6 +24,18 @@ interface IndexingResult {
   data?: any;
 }
 
+interface ImportStatus {
+  success: boolean;
+  data: {
+    totalFiles: number;
+    processedFiles: number;
+    musicFiles: number;
+    tracks: number;
+    isComplete: boolean;
+    progress?: number; // Yüzde
+  };
+}
+
 @Component({
   selector: 'app-settings-dialog',
   standalone: true,
@@ -41,7 +53,7 @@ interface IndexingResult {
   templateUrl: './settings-dialog.component.html',
   styleUrl: './settings-dialog.component.scss'
 })
-export class SettingsDialogComponent implements OnInit {
+export class SettingsDialogComponent implements OnInit, OnDestroy {
   settings: Settings = {
     music_folder: '',
     virtualdj_root: ''
@@ -50,6 +62,15 @@ export class SettingsDialogComponent implements OnInit {
   isIndexing = false;
   errorMessage = '';
   indexingResult: IndexingResult | null = null;
+  
+  // İlerleme takibi için değişkenler
+  private statusInterval: any;
+  importProgress = 0;
+  importStats = {
+    musicFiles: 0,
+    tracks: 0,
+    totalFiles: 0
+  };
 
   constructor(
     private dialogRef: MatDialogRef<SettingsDialogComponent>,
@@ -70,11 +91,15 @@ export class SettingsDialogComponent implements OnInit {
   loadSettings(): void {
     this.isLoading = true;
     this.errorMessage = '';
-    this.http.get<Settings>(`${this.getApiUrl()}/settings`).subscribe({
-      next: (settings) => {
-        this.settings = settings;
+    this.http.get<any>(`${this.getApiUrl()}/database/settings`).subscribe({
+      next: (response) => {
+        this.settings = {
+          music_folder: response.music_folder,
+          virtualdj_root: response.virtualdj_root,
+          last_updated: response.last_updated
+        };
         this.isLoading = false;
-        console.log('Ayarlar yüklendi:', settings);
+        console.log('Ayarlar yüklendi:', this.settings);
       },
       error: (error) => {
         console.error('Ayarlar yüklenirken hata oluştu:', error);
@@ -85,54 +110,142 @@ export class SettingsDialogComponent implements OnInit {
   }
 
   indexDatabase(): void {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [INFO] [FRONTEND] [INIT] indexDatabase() çağrıldı`);
+    
     this.isIndexing = true;
     this.indexingResult = null;
+    this.importProgress = 0;
+    this.importStats = { musicFiles: 0, tracks: 0, totalFiles: 0 };
     
-    const requestData = {
-      musicFolder: this.settings.music_folder,
-      virtualdjFolder: this.settings.virtualdj_root
-    };
+    const apiUrl = `${this.getApiUrl()}/import/scan`;
+    console.log(`[${timestamp}] [DEBUG] [FRONTEND] [API] Request gönderiliyor: ${apiUrl}`);
     
-    this.http.post<any>(`${this.getApiUrl()}/index/create`, requestData).subscribe({
+    // Import'u başlat
+    this.http.post<any>(apiUrl, {}).subscribe({
       next: (response) => {
-        this.isIndexing = false;
+        const responseTime = new Date().toISOString();
+        console.log(`[${responseTime}] [INFO] [FRONTEND] [SUCCESS] Response alındı:`, response);
         
         if (response.success) {
-          this.indexingResult = {
-            status: 'success',
-            message: response.message || 'İndeksleme başarılı!',
-            data: response
-          };
-          
-          this.snackBar.open('Veritabanı başarıyla indekslendi', 'Tamam', {
-            duration: 3000
-          });
+          console.log(`[${responseTime}] [INFO] [FRONTEND] [POLL] Status polling başlatılıyor...`);
+          // Polling başlat - her 1 saniyede durum kontrol et
+          this.startStatusPolling();
         } else {
+          console.log(`[${responseTime}] [ERROR] [FRONTEND] [FAIL] Import başlatılamadı:`, response);
+          this.isIndexing = false;
           this.indexingResult = {
             status: 'error',
-            message: response.message || 'İndeksleme sırasında bir hata oluştu.',
+            message: 'Import başlatılamadı',
             data: response
           };
         }
       },
       error: (error) => {
+        const errorTime = new Date().toISOString();
+        console.error(`[${errorTime}] [ERROR] [FRONTEND] [API] Import scan error:`, error);
         this.isIndexing = false;
-        console.error('İndeksleme sırasında hata oluştu:', error);
-        
         this.indexingResult = {
           status: 'error',
-          message: error.error?.detail?.message || 'İndeksleme sırasında bir hata oluştu. Lütfen tekrar deneyin.',
+          message: error.message || 'Import başlatılamadı',
           data: error
         };
       }
     });
   }
 
+  startStatusPolling(): void {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [INFO] [FRONTEND] [POLL] startStatusPolling() çağrıldı`);
+    
+    this.statusInterval = setInterval(() => {
+      const pollTime = new Date().toISOString();
+      console.log(`[${pollTime}] [DEBUG] [FRONTEND] [POLL] Polling tick - checkImportStatus çağrılıyor`);
+      this.checkImportStatus();
+    }, 1000);
+    
+    console.log(`[${timestamp}] [INFO] [FRONTEND] [POLL] ✅ Polling başlatıldı, interval ID: ${this.statusInterval}`);
+  }
+
+  checkImportStatus(): void {
+    const timestamp = new Date().toISOString();
+    const apiUrl = `${this.getApiUrl()}/import/status`;
+    
+    this.http.get<any>(apiUrl).subscribe({
+      next: (response) => {
+        const responseTime = new Date().toISOString();
+        
+        if (response.success && response.data) {
+          // Backend response yapısına göre mapping
+          const data = response.data;
+          
+          this.importStats = {
+            musicFiles: data.database?.musicFiles || 0,
+            tracks: data.database?.tracks || 0,
+            totalFiles: data.progress?.total || 0
+          };
+          
+          // İlerleme yüzdesini al
+          this.importProgress = data.progress?.percentage || 0;
+          
+          console.log(`[${responseTime}] [INFO] [FRONTEND] [STATUS] Import durumu:`, {
+            status: data.status,
+            progress: this.importProgress,
+            stats: this.importStats
+          });
+          
+          // Tamamlandı mı?
+          if (data.status === 'completed') {
+            console.log(`[${responseTime}] [INFO] [FRONTEND] [COMPLETE] Import tamamlandı!`);
+            this.stopStatusPolling();
+            this.isIndexing = false;
+            this.indexingResult = {
+              status: 'success',
+              message: `İndeksleme başarıyla tamamlandı! ${data.progress.added} dosya eklendi.`,
+              data: data
+            };
+            this.snackBar.open('Veritabanı başarıyla indekslendi', 'Tamam', {
+              duration: 3000
+            });
+          }
+        } else {
+          console.log(`[${responseTime}] [WARN] [FRONTEND] [STATUS] Geçersiz response:`, response);
+        }
+      },
+      error: (error) => {
+        const errorTime = new Date().toISOString();
+        console.error(`[${errorTime}] [ERROR] [FRONTEND] [STATUS] Status kontrolü hatası:`, error);
+        this.stopStatusPolling();
+        this.isIndexing = false;
+        this.indexingResult = {
+          status: 'error',
+          message: 'Durum kontrolü sırasında hata oluştu',
+          data: error
+        };
+      }
+    });
+  }
+
+  stopStatusPolling(): void {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] [INFO] [FRONTEND] [POLL] stopStatusPolling() çağrıldı`);
+    
+    if (this.statusInterval) {
+      clearInterval(this.statusInterval);
+      this.statusInterval = null;
+      console.log(`[${timestamp}] [INFO] [FRONTEND] [POLL] ✅ Polling durduruldu`);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.stopStatusPolling();
+  }
+
   saveSettings(): void {
     this.isLoading = true;
     this.errorMessage = '';
 
-    this.http.post<any>(`${this.getApiUrl()}/settings`, this.settings).subscribe({
+    this.http.post<any>(`${this.getApiUrl()}/database/settings`, this.settings).subscribe({
       next: (response) => {
         this.isLoading = false;
         console.log('Ayarlar kaydedildi:', response);

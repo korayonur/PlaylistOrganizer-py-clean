@@ -35,24 +35,16 @@ import { Song } from "../../models/song.model";
         </button>
       </div>
       <div class="action-buttons">
-        <!-- Global Eksik Dosyalar Butonu -->
+        <!-- Fix Suggestions Butonu -->
         <button
-          class="global-missing-button"
-          (click)="showGlobalMissing.emit()"
+          class="fix-suggestions-button"
+          (click)="openFixSuggestions.emit()"
           [disabled]="loading"
         >
-          <span class="global-icon">🌐</span>
-          Tüm Eksik Dosyaları Göster
+          <span class="fix-icon">🔧</span>
+          Fix Önerileri
         </button>
 
-        <button
-          class="repair-button"
-          [disabled]="loading || missingCount === 0"
-          (click)="repair.emit()"
-        >
-          {{ loading ? "Onarılıyor..." : "Eksik Dosyaları Onar" }}
-        </button>
-        
         <button
           class="settings-button"
           (click)="openSettings.emit()"
@@ -60,15 +52,6 @@ import { Song } from "../../models/song.model";
         >
           <span class="settings-icon">⚙️</span>
           <strong>Ayarlar</strong>
-        </button>
-
-        <button
-          class="history-button"
-          (click)="openHistory.emit()"
-          [disabled]="loading"
-        >
-          <span class="history-icon">🕘</span>
-          History Fix
         </button>
       </div>
     </div>
@@ -142,8 +125,9 @@ import { Song } from "../../models/song.model";
         flex-wrap: wrap;
       }
 
-      .global-missing-button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+      .fix-suggestions-button {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         color: white;
         border: none;
         padding: 0.5rem 1rem;
@@ -155,11 +139,11 @@ import { Song } from "../../models/song.model";
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        box-shadow: 0 4px 15px rgba(240, 147, 251, 0.3);
 
         &:hover:not(:disabled) {
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+          box-shadow: 0 6px 20px rgba(240, 147, 251, 0.4);
         }
 
         &:active {
@@ -172,31 +156,10 @@ import { Song } from "../../models/song.model";
         }
       }
 
-      .global-icon {
+      .fix-icon {
         font-size: 1.2em;
       }
 
-      .repair-button {
-        padding: 0.5rem 1rem;
-        border: none;
-        border-radius: var(--border-radius-sm);
-        background: var(--accent-color);
-        color: var(--text-color);
-        cursor: pointer;
-        transition: all var(--transition-fast);
-        font-weight: 500;
-
-        &:hover:not(:disabled) {
-          background: var(--hover-color);
-          transform: translateY(-1px);
-        }
-
-        &:disabled {
-          background: var(--text-muted);
-          cursor: not-allowed;
-          transform: none;
-        }
-      }
 
       .settings-button {
         padding: 0.5rem 1rem;
@@ -223,31 +186,7 @@ import { Song } from "../../models/song.model";
         }
       }
 
-      .history-button {
-        padding: 0.5rem 1rem;
-        border: none;
-        border-radius: var(--border-radius-sm);
-        background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
-        color: #fff;
-        cursor: pointer;
-        transition: all var(--transition-fast);
-        font-weight: 600;
 
-        &:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
-        }
-
-        &:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-          transform: none;
-        }
-      }
-
-      .settings-icon {
-        margin-right: 0.5rem;
-      }
     `,
   ],
 })
@@ -256,10 +195,8 @@ export class StatsPanelComponent {
   @Input() loading = false;
   @Input() currentFilter: "all" | "exists" | "missing" = "all";
   @Output() filterChange = new EventEmitter<"all" | "exists" | "missing">();
-  @Output() repair = new EventEmitter<void>();
   @Output() openSettings = new EventEmitter<void>();
-  @Output() showGlobalMissing = new EventEmitter<void>();
-  @Output() openHistory = new EventEmitter<void>();
+  @Output() openFixSuggestions = new EventEmitter<void>();
 
   get foundCount(): number {
     return this.songs.filter((song) => song.isFileExists).length;

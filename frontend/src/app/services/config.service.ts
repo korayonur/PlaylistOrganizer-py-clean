@@ -2,12 +2,16 @@ import { Injectable, signal } from "@angular/core";
 import { AppConfig, DEFAULT_CONFIG } from "../shared/config/app.config";
 import { HttpClient } from "@angular/common/http";
 import { environment } from "../../environments/environment";
+import { Observable, of } from "rxjs";
+import { map, catchError } from "rxjs/operators";
 
 @Injectable({
   providedIn: "root",
 })
 export class ConfigService {
   private readonly config = signal<AppConfig>(DEFAULT_CONFIG);
+  private configLoaded = false;
+
   constructor(private http: HttpClient) {
     this.loadConfig();
   }
@@ -21,6 +25,44 @@ export class ConfigService {
     } catch (error) {
       console.error("Ayarlar yüklenirken hata:", error);
     }
+  }
+
+  /**
+   * Backend'den config bilgilerini yükle
+   */
+  loadConfigFromBackend(): Observable<void> {
+    return this.http.get<any>(`${environment.apiUrl}/database/config`).pipe(
+      map(response => {
+        if (response.success) {
+          const backendConfig: AppConfig = {
+            paths: {
+              musicFolder: response.data.paths.music,
+              playlistFolder: response.data.paths.virtualDJ + '/Folders'
+            },
+            supportedFormats: {
+              audio: response.data.extensions.music,
+              playlist: response.data.extensions.playlist
+            }
+          };
+          this.config.set(backendConfig);
+          localStorage.setItem('app_config', JSON.stringify(backendConfig));
+          this.configLoaded = true;
+          console.log('✅ Backend config başarıyla yüklendi:', backendConfig);
+        }
+      }),
+      catchError(err => {
+        console.warn('⚠️ Backend config yüklenemedi, varsayılan kullanılıyor:', err);
+        this.configLoaded = false;
+        return of(void 0);
+      })
+    );
+  }
+
+  /**
+   * Config'in backend'den yüklenip yüklenmediğini kontrol et
+   */
+  isConfigLoadedFromBackend(): boolean {
+    return this.configLoaded;
   }
 
   saveConfig(newConfig: Partial<AppConfig>): void {

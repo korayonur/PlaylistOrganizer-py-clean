@@ -36,10 +36,8 @@ import { ConfigService } from "./services/config.service";
             [loading]="loading()"
             [currentFilter]="currentFilter()"
             (filterChange)="setFilter($event)"
-            (repair)="handleMissingFiles()"
             (openSettings)="openSettingsDialog()"
-            (openHistory)="openHistoryDialog()"
-            (showGlobalMissing)="handleGlobalMissingFiles()"
+            (openFixSuggestions)="openFixSuggestionsDialog()"
           >
           </app-stats-panel>
         </div>
@@ -58,7 +56,6 @@ import { ConfigService } from "./services/config.service";
             [isLoading]="loading()"
             (accept)="handleAcceptAlternative()"
             (reject)="handleRejectAlternative()"
-            (repair)="handleMissingFiles()"
           >
           </app-song-grid>
         </div>
@@ -152,13 +149,6 @@ export class AppComponent {
     console.log('🚀 App Component başlatıldı');
   }
 
-  async openHistoryDialog(): Promise<void> {
-    const { HistoryDashboardComponent } = await import("./history/history-dashboard.component");
-    this.dialog.open(HistoryDashboardComponent, {
-      width: "760px",
-      panelClass: "history-dashboard-dialog"
-    });
-  }
 
   private getApiUrl(): string {
     return this.configService.getApiUrl();
@@ -204,64 +194,6 @@ export class AppComponent {
     }
   }
 
-  async handleMissingFiles() {
-    const currentSongs = this.playlistContent();
-    this.loading.set(true);
-    this.error.set(null);
-
-    try {
-      const missingPaths = currentSongs
-        .filter((song) => !song.isFileExists)
-        .map((song) => song.filePath);
-
-      if (missingPaths.length === 0) {
-        this.error.set("Onarılacak eksik dosya bulunamadı");
-        return;
-      }
-
-      const selectedPlaylist = this.selectedPlaylist();
-      if (!selectedPlaylist) {
-        this.error.set("Playlist seçili değil");
-        return;
-      }
-
-      const dialogRef = this.dialog.open(MultisearchDialogComponent, {
-        width: "1400px",
-        maxWidth: "95vw",
-        data: {
-          paths: missingPaths,
-          playlistPath: selectedPlaylist.path,
-          category: selectedPlaylist.type,
-        },
-      });
-
-      const result = await dialogRef.afterClosed().toPromise();
-
-      if (result?.success) {
-        const currentPlaylist = this.selectedPlaylist();
-        if (currentPlaylist) {
-          await this.loadPlaylistContent(currentPlaylist.path);
-        }
-
-        // Global güncelleme sonuçlarını göster
-        if (result.globalStats) {
-          const stats = result.globalStats;
-          const message = `✅ Global güncelleme tamamlandı!\n\n` +
-            `📊 İstatistikler:\n` +
-            `• Kontrol edilen playlist: ${stats.total_playlists_checked}\n` +
-            `• Güncellenen playlist: ${stats.updated_playlists}\n` +
-            `• Toplam güncellenen şarkı: ${stats.total_songs_updated}\n\n` +
-            `🎉 Artık tüm playlist'lerinizde aynı dosyalar otomatik olarak güncellenmiş durumda!`;
-          
-          alert(message);
-        }
-      }
-    } catch (error) {
-      this.error.set("Eksik dosyalar kontrol edilirken bir hata oluştu");
-    } finally {
-      this.loading.set(false);
-    }
-  }
 
   handleAcceptAlternative(): void {
     // TODO: Implement
@@ -271,59 +203,6 @@ export class AppComponent {
     // TODO: Implement
   }
 
-  async handleGlobalMissingFiles(): Promise<void> {
-    this.loading.set(true);
-    this.error.set(null);
-
-    try {
-      // Global eksik dosyaları getir
-      const response: any = await firstValueFrom(
-        this.http.get(`${this.getApiUrl()}/playlistsong/global-missing`)
-      );
-
-      if (response.success && response.missing_files.length > 0) {
-        // Global eksik dosyalar dialog'unu aç
-        const dialogRef = this.dialog.open(MultisearchDialogComponent, {
-          width: "1400px",
-          maxWidth: "95vw",
-          data: {
-            paths: response.missing_files.map((file: any) => file.originalPath),
-            playlistPath: "global", // Global işlem için özel değer
-            category: "global",
-            globalMissingFiles: response.missing_files,
-            globalStats: {
-              total_missing_files: response.total_missing_files,
-              unique_missing_files: response.unique_missing_files,
-              playlists_checked: response.playlists_checked
-            }
-          },
-        });
-
-        const result = await dialogRef.afterClosed().toPromise();
-
-        if (result?.success) {
-          // Global güncelleme sonuçlarını göster
-          if (result.globalStats) {
-            const stats = result.globalStats;
-            const message = `✅ Global eksik dosyalar düzeltildi!\n\n` +
-              `📊 İstatistikler:\n` +
-              `• Kontrol edilen playlist: ${stats.total_playlists_checked}\n` +
-              `• Güncellenen playlist: ${stats.updated_playlists}\n` +
-              `• Toplam güncellenen şarkı: ${stats.total_songs_updated}\n\n` +
-              `🎉 Tüm playlist'lerinizdeki eksik dosyalar otomatik olarak düzeltildi!`;
-            
-            alert(message);
-          }
-        }
-      } else {
-        this.error.set("Tüm playlist'lerde eksik dosya bulunamadı");
-      }
-    } catch (error) {
-      this.error.set("Global eksik dosyalar yüklenirken bir hata oluştu");
-    } finally {
-      this.loading.set(false);
-    }
-  }
 
   openSettingsDialog(): void {
     const dialogRef = this.dialog.open(SettingsDialogComponent, {
@@ -341,5 +220,26 @@ export class AppComponent {
         }
       }
     });
+  }
+
+  async openFixSuggestionsDialog(): Promise<void> {
+    const { FixSuggestionsComponent } = await import("./components/fix-suggestions/fix-suggestions.component");
+    
+    const dialogRef = this.dialog.open(FixSuggestionsComponent, {
+      width: "95vw",
+      maxWidth: "95vw",
+      height: "90vh",
+      panelClass: "fix-suggestions-dialog"
+    });
+
+    const result = await dialogRef.afterClosed().toPromise();
+
+    if (result?.success) {
+      // Fix uygulandıysa, mevcut playlist'i yeniden yükle
+      const currentPlaylist = this.selectedPlaylist();
+      if (currentPlaylist && currentPlaylist.type !== 'folder') {
+        await this.loadPlaylistContent(currentPlaylist.path);
+      }
+    }
   }
 }

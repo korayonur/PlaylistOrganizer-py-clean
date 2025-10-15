@@ -89,7 +89,6 @@ export class SongGridComponent {
 
   @Output() accept = new EventEmitter<Song>();
   @Output() reject = new EventEmitter<Song>();
-  @Output() repair = new EventEmitter<void>();
   @Output() selectSimilarFile = new EventEmitter<{
     song: Song;
     similarFile: SimilarFile;
@@ -301,7 +300,7 @@ export class SongGridComponent {
       .openMultisearchDialog(paths, "", "")
       .subscribe((result: DialogResult<string[]>) => {
         if (result?.success) {
-          this.repair.emit();
+          // Repair event removed - using Fix Suggestions system instead
         }
       });
   }

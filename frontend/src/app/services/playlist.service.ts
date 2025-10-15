@@ -12,8 +12,6 @@ import { ConfigService } from './config.service';
   providedIn: "root",
 })
 export class PlaylistService {
-  private readonly PLAYLISTS_ROOT = "/Users/koray/Library/Application Support/VirtualDJ/Folders";
-
   constructor(
     private readonly http: HttpClient,
     private readonly configService: ConfigService
@@ -24,6 +22,13 @@ export class PlaylistService {
 
   private getApiUrl(): string {
     return this.configService.getApiUrl();
+  }
+
+  /**
+   * Playlist root path'ini config'den al
+   */
+  get playlistsRoot(): string {
+    return this.configService.getPlaylistFolder();
   }
 
   getPlaylists(): Observable<PlaylistResponse> {

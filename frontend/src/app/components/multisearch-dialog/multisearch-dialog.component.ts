@@ -856,7 +856,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
   // Playlist yolunu kısalt - VirtualDJ root'tan sonrasını göster
   getShortPlaylistPath(fullPath: string): string {
-    const virtualDJRoot = '/Users/koray/Library/Application Support/VirtualDJ';
+    const virtualDJRoot = this.configService.getConfig().paths.playlistFolder.replace('/Folders', '');
     if (fullPath.startsWith(virtualDJRoot)) {
       return fullPath.substring(virtualDJRoot.length + 1); // +1 for the leading slash
     }

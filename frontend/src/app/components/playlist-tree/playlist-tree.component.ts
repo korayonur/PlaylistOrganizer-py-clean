@@ -108,23 +108,8 @@ export class PlaylistTreeComponent {
     const map = this.playlists();
     const nodes = Object.values(map);
 
-    // Folders ve MyLists node'larını bul
-    const foldersNode = nodes.find(node => node.name === "Folders");
-    const myListsNode = nodes.find(node => node.name === "MyLists");
-
-    let rootNodes: TreeNode[] = [];
-
-    // Folders'ın içeriğini al
-    if (foldersNode && foldersNode.children) {
-      rootNodes = [...foldersNode.children];
-    }
-
-    // MyLists'i ekle
-    if (myListsNode) {
-      rootNodes.push(myListsNode);
-    }
-
-    return rootNodes;
+    // YENİ: Tüm playlist'leri direkt göster (klasör yapısı yok)
+    return nodes.filter(node => node.type === 'playlist');
   });
 
   @Output() nodeSelect = new EventEmitter<TreeNode>();

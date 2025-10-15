@@ -33,10 +33,23 @@
           color="accent" 
           (click)="indexDatabase()" 
           [disabled]="isIndexing">
-          <mat-icon>sync</mat-icon>
+          <mat-icon>{{ isIndexing ? 'sync' : 'refresh' }}</mat-icon>
           {{ isIndexing ? 'İndeksleniyor...' : 'Veritabanı İndeksle' }}
         </button>
-        <mat-progress-bar *ngIf="isIndexing" mode="indeterminate"></mat-progress-bar>
+        
+        <div *ngIf="isIndexing" class="indexing-progress">
+          <mat-progress-bar 
+            mode="determinate" 
+            [value]="importProgress">
+          </mat-progress-bar>
+          <div class="progress-stats">
+            <span>%{{ importProgress }}</span>
+            <span>Müzik: {{ importStats.musicFiles }}</span>
+            <span>Track: {{ importStats.tracks }}</span>
+            <span>Toplam: {{ importStats.totalFiles }}</span>
+          </div>
+        </div>
+        
         <div *ngIf="indexingResult" class="indexing-result">
           <p [ngClass]="indexingResult.status === 'success' ? 'success-text' : 'error-text'">
             {{ indexingResult.message }}

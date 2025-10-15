@@ -1,0 +1,233 @@
+<div class="fix-suggestions-dialog">
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="header-content">
+      <h2>
+        <mat-icon>build</mat-icon>
+        Fix Önerileri
+      </h2>
+      <p class="subtitle">Veritabanından otomatik oluşturulan path düzeltme önerileri</p>
+    </div>
+    <button mat-icon-button (click)="close()" class="close-button">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Stats & Filters -->
+  <div class="stats-section">
+    <div class="stats-grid">
+      <div class="stat-card total">
+        <div class="stat-icon">
+          <mat-icon>list_alt</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.total }}</div>
+          <div class="stat-label">Toplam Öneri</div>
+        </div>
+      </div>
+
+      <div 
+        class="stat-card exact" 
+        [class.active]="isTypeFilterActive('exact')"
+        (click)="filterByType('exact')"
+        matTooltip="Mükemmel eşleşmeler - Güvenle uygulanabilir">
+        <div class="stat-icon">
+          <mat-icon>{{ getTypeIcon('exact') }}</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.exact }}</div>
+          <div class="stat-label">Exact</div>
+        </div>
+      </div>
+
+      <div 
+        class="stat-card high" 
+        [class.active]="isTypeFilterActive('high')"
+        (click)="filterByType('high')"
+        matTooltip="Yüksek benzerlik - Güvenle uygulanabilir">
+        <div class="stat-icon">
+          <mat-icon>{{ getTypeIcon('high') }}</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.high }}</div>
+          <div class="stat-label">High</div>
+        </div>
+      </div>
+
+      <div 
+        class="stat-card medium" 
+        [class.active]="isTypeFilterActive('medium')"
+        (click)="filterByType('medium')"
+        matTooltip="Orta benzerlik - Kontrol edilmeli">
+        <div class="stat-icon">
+          <mat-icon>{{ getTypeIcon('medium') }}</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.medium }}</div>
+          <div class="stat-label">Medium</div>
+        </div>
+      </div>
+
+      <div 
+        class="stat-card low" 
+        [class.active]="isTypeFilterActive('low')"
+        (click)="filterByType('low')"
+        matTooltip="Düşük benzerlik - Dikkatli incelenmeli">
+        <div class="stat-icon">
+          <mat-icon>{{ getTypeIcon('low') }}</mat-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.low }}</div>
+          <div class="stat-label">Low</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-info" *ngIf="activeTypeFilter">
+      <mat-icon>filter_list</mat-icon>
+      Filtre: {{ getSimilarityLabel(activeTypeFilter) }}
+      <button mat-button (click)="filterByType(null)">
+        <mat-icon>close</mat-icon>
+        Temizle
+      </button>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions-bar">
+    <div class="selection-info">
+      <mat-checkbox 
+        [checked]="selectedPaths.size === filteredSuggestions.length && filteredSuggestions.length > 0"
+        [indeterminate]="selectedPaths.size > 0 && selectedPaths.size < filteredSuggestions.length"
+        (change)="selectedPaths.size > 0 ? clearSelection() : selectAll()">
+      </mat-checkbox>
+      <span class="selection-count">
+        {{ selectedPaths.size }} / {{ filteredSuggestions.length }} seçildi
+      </span>
+    </div>
+
+    <div class="action-buttons">
+      <button mat-button (click)="selectByType('exact')" matTooltip="Tüm 'Exact' önerileri seç">
+        <mat-icon>check_circle</mat-icon>
+        Exact Seç
+      </button>
+      <button mat-button (click)="selectByType('high')" matTooltip="Tüm 'High' önerileri seç">
+        <mat-icon>stars</mat-icon>
+        High Seç
+      </button>
+      <button mat-button (click)="clearSelection()" [disabled]="!hasSelection()">
+        <mat-icon>clear</mat-icon>
+        Temizle
+      </button>
+      <button 
+        mat-raised-button 
+        color="primary" 
+        (click)="applySelected()" 
+        [disabled]="!hasSelection() || isLoading">
+        <mat-icon>done_all</mat-icon>
+        Seçilenleri Uygula ({{ selectedPaths.size }})
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading Bar -->
+  <mat-progress-bar mode="indeterminate" *ngIf="isLoading"></mat-progress-bar>
+
+  <!-- Error Message -->
+  <div class="error-message" *ngIf="error">
+    <mat-icon>error</mat-icon>
+    {{ error }}
+  </div>
+
+  <!-- Table -->
+  <div class="table-container">
+    <table class="suggestions-table" *ngIf="!isLoading && filteredSuggestions.length > 0">
+      <thead>
+        <tr>
+          <th class="checkbox-col"></th>
+          <th class="track-col">Original Track</th>
+          <th class="arrow-col"></th>
+          <th class="music-col">Suggested Music File</th>
+          <th class="similarity-col">Similarity</th>
+          <th class="type-col">Type</th>
+          <th class="actions-col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let suggestion of filteredSuggestions" [class.selected]="isSelected(suggestion)">
+          <td class="checkbox-col">
+            <mat-checkbox 
+              [checked]="isSelected(suggestion)"
+              (change)="toggleSelection(suggestion)">
+            </mat-checkbox>
+          </td>
+          <td class="track-col">
+            <div class="file-info">
+              <div class="file-name" [matTooltip]="suggestion.track_fileName">
+                {{ suggestion.track_fileName }}
+              </div>
+              <div class="file-path" [matTooltip]="'Hatalı Path: ' + suggestion.track_path">
+                <strong>Hatalı Path:</strong> {{ suggestion.track_path }}
+              </div>
+              <div class="file-source-path" [matTooltip]="'Kaynak Dosya: ' + suggestion.track_source_file">
+                <strong>Kaynak Dosya:</strong> {{ suggestion.track_source_file }}
+              </div>
+            </div>
+          </td>
+          <td class="arrow-col">
+            <mat-icon>arrow_forward</mat-icon>
+          </td>
+          <td class="music-col">
+            <div class="file-info">
+              <div class="file-name" [matTooltip]="suggestion.music_file_name">
+                {{ suggestion.music_file_name }}
+              </div>
+              <div class="file-path" [matTooltip]="suggestion.music_file_path">
+                {{ suggestion.music_file_path }}
+              </div>
+            </div>
+          </td>
+          <td class="similarity-col">
+            <div class="similarity-badge" [style.background-color]="getSimilarityColor(suggestion.similarity_score)">
+              {{ (suggestion.similarity_score * 100).toFixed(0) }}%
+            </div>
+          </td>
+          <td class="type-col">
+            <mat-chip [class]="'type-chip-' + suggestion.match_type">
+              <mat-icon>{{ getTypeIcon(suggestion.match_type) }}</mat-icon>
+              {{ suggestion.match_type }}
+            </mat-chip>
+          </td>
+          <td class="actions-col">
+            <!-- Delete butonu kaldırıldı - Yeni sistemde gerçek zamanlı arama var -->
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+  <!-- Results Info -->
+  <div class="results-info" *ngIf="!isLoading && filteredSuggestions.length > 0">
+    <div class="results-summary">
+      <mat-icon>list_alt</mat-icon>
+      <span>{{ filteredSuggestions.length }} / {{ getFilteredTotal() }} öneri gösteriliyor</span>
+      <span class="all-results-badge" *ngIf="filteredSuggestions.length === getFilteredTotal()">
+        <mat-icon>check_circle</mat-icon>
+        Tüm sonuçlar yüklendi
+      </span>
+    </div>
+  </div>
+
+  <!-- Empty State -->
+  <div class="empty-state" *ngIf="!isLoading && filteredSuggestions.length === 0">
+    <mat-icon>inbox</mat-icon>
+    <h3>{{ activeTypeFilter ? 'Bu filtrede öneri yok' : 'Fix önerisi bulunamadı' }}</h3>
+    <p *ngIf="!activeTypeFilter">
+      Fix önerileri oluşturmak için "Yenile" butonuna tıklayın
+    </p>
+    <button mat-raised-button color="primary" (click)="filterByType(null)" *ngIf="activeTypeFilter">
+      Filtreyi Temizle
+    </button>
+  </div>
+</div>
+</div>
+
