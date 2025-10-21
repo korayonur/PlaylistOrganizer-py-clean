@@ -206,3 +206,18 @@ yarn.lock
 # Development server dosyaları
 logs/api_dev.log
 logs/frontend_dev.log
+
+# Test ve analiz dosyaları
+.playwright-mcp/
+*.json
+!package.json
+!package-lock.json
+!tsconfig*.json
+!angular.json
+!*.md
+!README.md
+
+# Analiz raporları
+*_analysis_report_*.json
+*_test_results.json
+*_missing.json
