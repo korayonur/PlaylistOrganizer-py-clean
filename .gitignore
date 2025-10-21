@@ -59,14 +59,12 @@ testem.log
 .angular/cache/
 frontend/angular/cache/
 frontend/.angular/cache/
+frontend/dist/
+frontend/.angular/
 *.pack
 *.pack.old
 frontend/**/*.pack
 frontend/**/*.pack.old
-frontend/node_modules/
-frontend/dist/
-frontend/.angular/
-frontend/package-lock.json
 
 # Docs ve geçici markdown dosyalar
 docs/
@@ -198,11 +196,9 @@ logs/
 **/test-results/
 **/.playwright-mcp/
 
-# Package lock dosyaları (node_modules olmadığı için)
+# Package lock dosyaları - sadece ana seviyede ignore et
 package-lock.json
-**/package-lock.json
 yarn.lock
-**/yarn.lock
 
 # Development server dosyaları
 logs/api_dev.log
@@ -230,3 +226,8 @@ logs/frontend_dev.log
 
 # Ana package-lock.json (workspace seviyesinde)
 package-lock.json
+
+# Gereksiz dosyalar
+--watch=false
+*.DS_Store
+**/.DS_Store
