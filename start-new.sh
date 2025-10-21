@@ -36,7 +36,7 @@ info() {
 }
 
 # Proje dizinleri
-PROJECT_ROOT="/Users/koray/projects/PlaylistOrganizer-py"
+PROJECT_ROOT="/Users/koray/projects/PlaylistOrganizer-py-backup"
 BACKEND_DIR="$PROJECT_ROOT/api"
 FRONTEND_DIR="$PROJECT_ROOT/frontend"
 

@@ -192,3 +192,7 @@ package-lock.json
 **/package-lock.json
 yarn.lock
 **/yarn.lock
+
+# Development server dosyaları
+logs/api_dev.log
+logs/frontend_dev.log
