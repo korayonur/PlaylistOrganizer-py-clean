@@ -24,13 +24,19 @@ yarn-error.log
 !.vscode/launch.json
 !.vscode/extensions.json
 
-# Yedekler ve geçici dosyalar
+# Yedekler ve geçici dosyalar - NEVER commit trash/backup files
 /backup
 .trash/
+**/.trash/
+**/trash/
 *.bak
 *.swp
 *.swo
 *~
+*.backup*
+*_backup*
+*_old*
+*_test*
 
 # Sistem dosyaları
 .DS_Store
@@ -154,12 +160,16 @@ py/dist/
 *.svclog
 *.scc
 
-# Database files
+# Database files - NEVER commit database files
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
+musicfiles.db*
+*.db.json
+*.db.backup*
+*.db-*
 
 # Cache files
 **/cache/
