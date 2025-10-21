@@ -5,7 +5,8 @@
 /bazel-out
 
 # Node
-/node_modules
+node_modules/
+**/node_modules/
 npm-debug.log
 yarn-debug.log
 yarn-error.log
@@ -209,13 +210,6 @@ logs/frontend_dev.log
 
 # Test ve analiz dosyaları
 .playwright-mcp/
-*.json
-!package.json
-!package-lock.json
-!tsconfig*.json
-!angular.json
-!*.md
-!README.md
 
 # Analiz raporları
 *_analysis_report_*.json
