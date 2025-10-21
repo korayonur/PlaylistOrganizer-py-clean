@@ -181,3 +181,14 @@ logs/
 **/*.pyd
 **/.Python
 **/*.so
+
+# Test dosyaları ve sonuçları
+**/tests/
+**/test-results/
+**/.playwright-mcp/
+
+# Package lock dosyaları (node_modules olmadığı için)
+package-lock.json
+**/package-lock.json
+yarn.lock
+**/yarn.lock
