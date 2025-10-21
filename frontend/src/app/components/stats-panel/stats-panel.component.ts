@@ -45,11 +45,7 @@ import { Song } from "../../models/song.model";
           Fix Önerileri
         </button>
 
-        <button
-          class="settings-button"
-          (click)="openSettings.emit()"
-          [disabled]="loading"
-        >
+        <button class="settings-button" (click)="openSettings.emit()" [disabled]="loading">
           <span class="settings-icon">⚙️</span>
           <strong>Ayarlar</strong>
         </button>
@@ -125,7 +121,6 @@ import { Song } from "../../models/song.model";
         flex-wrap: wrap;
       }
 
-
       .fix-suggestions-button {
         background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         color: white;
@@ -160,7 +155,6 @@ import { Song } from "../../models/song.model";
         font-size: 1.2em;
       }
 
-
       .settings-button {
         padding: 0.5rem 1rem;
         border: none;
@@ -185,8 +179,6 @@ import { Song } from "../../models/song.model";
           transform: none;
         }
       }
-
-
     `,
   ],
 })
@@ -194,6 +186,7 @@ export class StatsPanelComponent {
   @Input() songs: Song[] = [];
   @Input() loading = false;
   @Input() currentFilter: "all" | "exists" | "missing" = "all";
+  @Input() autoFilterMissing = false; // Tree checkbox durumu
   @Output() filterChange = new EventEmitter<"all" | "exists" | "missing">();
   @Output() openSettings = new EventEmitter<void>();
   @Output() openFixSuggestions = new EventEmitter<void>();
@@ -207,6 +200,10 @@ export class StatsPanelComponent {
   }
 
   setFilter(filter: "all" | "exists" | "missing") {
+    // Tree checkbox işaretliyse ve "all" seçilmeye çalışılıyorsa, izin verme
+    if (this.autoFilterMissing && filter === "all") {
+      return; // Otomatik missing filter aktif, all'a izin yok
+    }
     this.filterChange.emit(filter);
   }
 }

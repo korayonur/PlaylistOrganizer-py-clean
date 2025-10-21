@@ -15,14 +15,14 @@ export function initializeApp(configService: ConfigService) {
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideRouter(routes), 
+    provideRouter(routes),
     provideHttpClient(),
     provideAnimations(),
     {
       provide: APP_INITIALIZER,
       useFactory: initializeApp,
       deps: [ConfigService],
-      multi: true
-    }
+      multi: true,
+    },
   ],
 };

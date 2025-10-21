@@ -33,9 +33,13 @@ class PlaylistRepository extends IPlaylistRepository {
     }
 
     async findAll(options = {}) {
-        const { limit = 100, offset = 0, orderBy = 'id', order = 'ASC' } = options;
+        const { limit = 100, offset = 0, orderBy = 'id', order = 'ASC', excludeEmpty = false } = options;
+        
+        // FavoriteFolder'ları filtrele (track_count = 0 olanlar)
+        const whereClause = excludeEmpty ? 'WHERE track_count > 0' : '';
+        
         const stmt = this.db.prepare(
-            `SELECT * FROM ${this.tableName} ORDER BY ${orderBy} ${order} LIMIT ? OFFSET ?`
+            `SELECT * FROM ${this.tableName} ${whereClause} ORDER BY ${orderBy} ${order} LIMIT ? OFFSET ?`
         );
         const rows = stmt.all(limit, offset);
         return rows.map(row => new Playlist(row));
@@ -176,6 +180,80 @@ class PlaylistRepository extends IPlaylistRepository {
             playlist,
             tracks
         };
+    }
+
+    /**
+     * Playlist track'lerini file existence kontrolü ile al
+     * LEFT JOIN music_files ile dosya varlığını database'den kontrol eder (SIFIR dosya I/O)
+     * @param {number} playlistId - Playlist ID
+     * @param {boolean} onlyMissing - Sadece eksik dosyaları getir
+     * @returns {Promise<Array>} Track listesi (path, file_exists)
+     */
+    async findTracksWithFileStatus(playlistId, onlyMissing = false) {
+        const missingFilter = onlyMissing ? 'AND m_exact.path IS NULL AND m_norm.path IS NULL' : '';
+        
+        const stmt = this.db.prepare(`
+            SELECT 
+                t.id,
+                t.path,
+                t.fileName,
+                CASE 
+                    WHEN m_exact.path IS NOT NULL THEN 1  -- Exact path match (en iyi)
+                    WHEN m_norm.path IS NOT NULL THEN 1   -- Normalized match (iyi)
+                    ELSE 0                                 -- Eşleşme yok
+                END as file_exists
+            FROM playlist_tracks pt
+            INNER JOIN tracks t ON pt.track_id = t.id
+            LEFT JOIN music_files m_exact ON t.path = m_exact.path
+            LEFT JOIN music_files m_norm ON t.normalizedFileName = m_norm.normalizedFileName AND m_exact.path IS NULL
+            WHERE pt.playlist_id = ?
+            ${missingFilter}
+            GROUP BY t.id  -- Duplicate music_files'ı önle
+            ORDER BY pt.track_order
+        `);
+        
+        const rows = stmt.all(playlistId);
+        return rows.map(row => ({
+            id: row.id,
+            path: row.path,
+            fileName: row.fileName,
+            fileExists: Boolean(row.file_exists)
+        }));
+    }
+
+    /**
+     * Eksik track içeren playlist'leri al
+     * LEFT JOIN music_files ile eksik track'leri tespit eder (SIFIR dosya I/O)
+     * @param {Object} options - Filtreleme seçenekleri
+     * @returns {Promise<Array>} Eksik track'li playlist'ler
+     */
+    async findPlaylistsWithMissingTracks(options = {}) {
+        const { limit = 10000, offset = 0 } = options;
+        
+        const stmt = this.db.prepare(`
+            SELECT 
+                p.*,
+                COUNT(DISTINCT t.id) as total_tracks,
+                COUNT(DISTINCT CASE 
+                    WHEN m_exact.path IS NULL AND m_norm.path IS NULL THEN t.id 
+                END) as missing_tracks,
+                COUNT(DISTINCT CASE 
+                    WHEN m_exact.path IS NOT NULL OR m_norm.path IS NOT NULL THEN t.id 
+                END) as existing_tracks
+            FROM playlists p
+            LEFT JOIN playlist_tracks pt ON p.id = pt.playlist_id
+            LEFT JOIN tracks t ON pt.track_id = t.id
+            LEFT JOIN music_files m_exact ON t.path = m_exact.path
+            LEFT JOIN music_files m_norm ON t.normalizedFileName = m_norm.normalizedFileName AND m_exact.path IS NULL
+            WHERE p.track_count > 0
+            GROUP BY p.id
+            HAVING missing_tracks > 0
+            ORDER BY p.name ASC
+            LIMIT ? OFFSET ?
+        `);
+        
+        const rows = stmt.all(limit, offset);
+        return rows.map(row => new Playlist(row));
     }
 }
 

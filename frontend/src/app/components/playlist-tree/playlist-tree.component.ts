@@ -29,6 +29,18 @@ import { PlaylistService } from "../../services/playlist.service";
         </button>
       </div>
 
+      <!-- Checkbox: Sadece Eksik Track'li Playlist'ler -->
+      <div class="filter-container">
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            [ngModel]="showOnlyMissing()"
+            (ngModelChange)="handleShowOnlyMissingChange($event)"
+          />
+          <span>Sadece eksik track içeren playlist'ler</span>
+        </label>
+      </div>
+
       <!-- Loading State -->
       <div *ngIf="loading()" class="loading">
         <span class="material-icons spin">refresh</span> Yükleniyor...
@@ -69,13 +81,25 @@ import { PlaylistService } from "../../services/playlist.service";
           >
             <div
               class="node-content"
+              [class.expanded]="node.type === 'folder' && node.isExpanded"
               (click)="node.type === 'folder' ? toggleNode(node.id) : selectNode(node.id)"
               (keydown.enter)="node.type === 'folder' ? toggleNode(node.id) : selectNode(node.id)"
               (keydown.space)="node.type === 'folder' ? toggleNode(node.id) : selectNode(node.id)"
               tabindex="0"
             >
+              <!-- Expand icon (sadece folder için) -->
+              <span class="expand-icon" *ngIf="node.type === 'folder'">
+                {{ node.isExpanded ? "▼" : "▶" }}
+              </span>
+              <span class="expand-icon-placeholder" *ngIf="node.type !== 'folder'"></span>
+
+              <!-- Node icon -->
               <span class="icon">{{ getNodeIcon(node) }}</span>
+
+              <!-- Node name -->
               <span class="node-name">{{ node.name }}</span>
+
+              <!-- Count -->
               <span class="count">{{
                 node.type === "folder" ? node.children?.length || 0 : node.songCount || 0
               }}</span>
@@ -95,6 +119,7 @@ import { PlaylistService } from "../../services/playlist.service";
 export class PlaylistTreeComponent {
   playlists = signal<PlaylistMap>({});
   searchQuery = signal<string>("");
+  showOnlyMissing = signal<boolean>(false); // Checkbox: Sadece eksik track'li playlist'ler
   loading = signal<boolean>(false);
   error = signal<string | null>(null);
   stats = signal<{ totalNodes: number; folders: number; playlists: number }>({
@@ -104,15 +129,22 @@ export class PlaylistTreeComponent {
   });
 
   // rootNodes'u computed signal olarak tanımla
+  // Backend'den gelen tree yapısını direkt kullan (koray, PlayLists, Serato, History, MyLists, Sideview)
   rootNodes = computed(() => {
     const map = this.playlists();
     const nodes = Object.values(map);
 
-    // YENİ: Tüm playlist'leri direkt göster (klasör yapısı yok)
-    return nodes.filter(node => node.type === 'playlist');
+    // Root node'ları bul - bunlar backend'den gelen en üst seviye folder'lar
+    // Folders kaldırıldı, children'ı root'a taşındı
+    const rootFolders = ["koray", "PlayLists", "Serato", "History", "MyLists", "Sideview"];
+
+    return nodes.filter((node) => {
+      return node.type === "folder" && rootFolders.includes(node.name);
+    });
   });
 
   @Output() nodeSelect = new EventEmitter<TreeNode>();
+  @Output() showOnlyMissingChange = new EventEmitter<boolean>(); // Checkbox event
 
   constructor(private readonly playlistService: PlaylistService) {
     this.loadPlaylists();
@@ -243,16 +275,23 @@ export class PlaylistTreeComponent {
     }
   }
 
+  handleShowOnlyMissingChange(value: boolean): void {
+    console.log("🔄 Checkbox değişti:", value);
+    this.showOnlyMissing.set(value);
+    this.showOnlyMissingChange.emit(value); // Parent component'e bildir
+    this.loadPlaylists(); // Yeniden yükle
+  }
+
   loadPlaylists(): void {
-    console.log('🔄 loadPlaylists başlatıldı');
+    console.log("🔄 loadPlaylists başlatıldı, showOnlyMissing:", this.showOnlyMissing());
     this.loading.set(true);
     this.error.set(null);
 
-    this.playlistService.getPlaylists().subscribe({
+    this.playlistService.getPlaylists(this.showOnlyMissing()).subscribe({
       next: (response: PlaylistResponse) => {
-        console.log('✅ API Response alındı:', response);
+        console.log("✅ API Response alındı:", response);
         if (!response.success) {
-          console.error('❌ Response success false:', response);
+          console.error("❌ Response success false:", response);
           this.error.set("Sunucudan geçersiz yanıt alındı");
           this.loading.set(false);
           return;
@@ -284,7 +323,7 @@ export class PlaylistTreeComponent {
         this.loading.set(false);
       },
       error: (error) => {
-        console.error('❌ API Error:', error);
+        console.error("❌ API Error:", error);
         this.error.set("Playlistler yüklenirken bir hata oluştu");
         this.loading.set(false);
       },
@@ -313,11 +352,11 @@ export class PlaylistTreeComponent {
   selectNode(id: string) {
     const playlists = this.playlists();
     const node = playlists[id];
-    
+
     if (node) {
       // Tüm node'ların seçimini kaldır
-      Object.values(playlists).forEach(n => n.isSelected = false);
-      
+      Object.values(playlists).forEach((n) => (n.isSelected = false));
+
       // Seçili node'u güncelle
       node.isSelected = true;
       this.playlists.set({ ...playlists });
@@ -331,105 +370,111 @@ export class PlaylistTreeComponent {
     if (node.type === "folder") {
       // Özel klasör türlerine göre farklı ikonlar (VirtualDJ tarzı)
       const folderName = node.name.toLowerCase();
-      
-      // Ana klasörler
-      if (folderName === 'folders') {
+
+      // Ana klasörler - expand/collapse'a göre icon değişimi
+      if (folderName === "mylists") {
+        return "📋";
+      }
+      if (folderName === "history") {
+        return "🕒";
+      }
+      if (folderName === "sideview") {
+        return "👁️";
+      }
+
+      // Özel klasör türleri
+      if (folderName.includes("serato")) {
+        return "🎛️";
+      }
+      if (folderName.includes("playlists")) {
         return node.isExpanded ? "📂" : "📁";
       }
-      if (folderName === 'mylists') {
-        return node.isExpanded ? "📋" : "📋";
+      if (folderName.includes("koray")) {
+        return node.isExpanded ? "📂" : "📁";
       }
-      
-      // Özel klasör türleri
-      if (folderName.includes('serato')) {
-        return node.isExpanded ? "🎛️" : "🎛️";
+      if (folderName.includes("my library")) {
+        return "📚";
       }
-      if (folderName.includes('my library')) {
-        return node.isExpanded ? "📚" : "📚";
+      if (folderName.includes("crates") || folderName.includes("crateler")) {
+        return "📦";
       }
-      if (folderName.includes('crates') || folderName.includes('crateler')) {
-        return node.isExpanded ? "📦" : "📦";
+      if (folderName.includes("favorites") || folderName.includes("favoriler")) {
+        return "⭐";
       }
-      if (folderName.includes('history') || folderName.includes('geçmiş')) {
-        return node.isExpanded ? "🕒" : "🕒";
-      }
-      if (folderName.includes('favorites') || folderName.includes('favoriler')) {
-        return node.isExpanded ? "⭐" : "⭐";
-      }
-      
+
       // Müzik türü klasörleri
-      if (folderName.includes('düğün') || folderName.includes('dugun')) {
-        return node.isExpanded ? "💒" : "💒";
+      if (folderName.includes("düğün") || folderName.includes("dugun")) {
+        return "💒";
       }
-      if (folderName.includes('club') || folderName.includes('klup')) {
-        return node.isExpanded ? "🎪" : "🎪";
+      if (folderName.includes("club") || folderName.includes("klup")) {
+        return "🎪";
       }
-      if (folderName.includes('slow') || folderName.includes('romantik')) {
-        return node.isExpanded ? "💕" : "💕";
+      if (folderName.includes("slow") || folderName.includes("romantik")) {
+        return "💕";
       }
-      if (folderName.includes('pop') || folderName.includes('hit')) {
-        return node.isExpanded ? "🎤" : "🎤";
+      if (folderName.includes("pop") || folderName.includes("hit")) {
+        return "🎤";
       }
-      if (folderName.includes('oyun') || folderName.includes('halay')) {
-        return node.isExpanded ? "🎉" : "🎉";
+      if (folderName.includes("oyun") || folderName.includes("halay")) {
+        return "🎉";
       }
-      
-      // Varsayılan klasör
+
+      // Varsayılan klasör - açık/kapalı
       return node.isExpanded ? "📂" : "📁";
     }
-    
+
     // Playlist türleri
     if (node.type === "playlist") {
       const playlistName = node.name.toLowerCase();
-      
+
       // Özel playlist türleri
-      if (playlistName.includes('favorites') || playlistName.includes('favoriler')) {
+      if (playlistName.includes("favorites") || playlistName.includes("favoriler")) {
         return "⭐";
       }
-      if (playlistName.includes('history') || playlistName.includes('geçmiş')) {
+      if (playlistName.includes("history") || playlistName.includes("geçmiş")) {
         return "🕒";
       }
-      if (playlistName.includes('crate')) {
+      if (playlistName.includes("crate")) {
         return "📦";
       }
-      if (playlistName.includes('smart') || playlistName.includes('akıllı')) {
+      if (playlistName.includes("smart") || playlistName.includes("akıllı")) {
         return "🧠";
       }
-      if (playlistName.includes('auto') || playlistName.includes('otomatik')) {
+      if (playlistName.includes("auto") || playlistName.includes("otomatik")) {
         return "⚡";
       }
-      
+
       // Müzik türü playlistleri
-      if (playlistName.includes('düğün') || playlistName.includes('dugun')) {
+      if (playlistName.includes("düğün") || playlistName.includes("dugun")) {
         return "💒";
       }
-      if (playlistName.includes('club') || playlistName.includes('klup')) {
+      if (playlistName.includes("club") || playlistName.includes("klup")) {
         return "🎪";
       }
-      if (playlistName.includes('slow') || playlistName.includes('romantik')) {
+      if (playlistName.includes("slow") || playlistName.includes("romantik")) {
         return "💕";
       }
-      if (playlistName.includes('pop') || playlistName.includes('hit')) {
+      if (playlistName.includes("pop") || playlistName.includes("hit")) {
         return "🎤";
       }
-      if (playlistName.includes('oyun') || playlistName.includes('halay')) {
+      if (playlistName.includes("oyun") || playlistName.includes("halay")) {
         return "🎉";
       }
-      
+
       // Varsayılan playlist
       return "🎵";
     }
-    
+
     return "📄";
   }
 
   isSpecialFolder(node: TreeNode): boolean {
-    if (node.type !== 'folder') return false;
-    
+    if (node.type !== "folder") return false;
+
     const folderName = node.name.toLowerCase();
-    const specialFolders = ['mylists', 'serato', 'my library', 'favorites', 'history', 'crates'];
-    
-    return specialFolders.some(special => folderName.includes(special));
+    const specialFolders = ["mylists", "serato", "my library", "favorites", "history", "crates"];
+
+    return specialFolders.some((special) => folderName.includes(special));
   }
 
   clearSearch() {

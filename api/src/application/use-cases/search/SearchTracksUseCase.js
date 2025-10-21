@@ -1,20 +1,20 @@
 'use strict';
 
-const SearchService = require('../../services/SearchService');
+const FuzzySearchService = require('../../services/FuzzySearchService');
 
 /**
  * Search Tracks Use Case
- * Kelime bazlı track arama - Merkezi SearchService kullanır
+ * Kelime bazlı track arama - FuzzySearchService kullanır
  */
 class SearchTracksUseCase {
     constructor(db, wordIndexService) {
         this.db = db;
         this.wordIndexService = wordIndexService;
-        this.searchService = new SearchService(db, wordIndexService);
+        this.fuzzySearchService = new FuzzySearchService(db, wordIndexService);
     }
 
     /**
-     * Track'leri ara - Merkezi SearchService kullanır
+     * Track'leri ara - FuzzySearchService kullanır
      * @param {string} query - Arama sorgusu
      * @param {number} limit - Sonuç limiti
      * @param {number} offset - Başlangıç offset
@@ -39,8 +39,8 @@ class SearchTracksUseCase {
             console.log(`📝 Normalize edilmiş query: "${normalizedQuery}"`);
             console.log(`🔤 Kelimeler: [${words.join(', ')}]`);
             
-            // Merkezi SearchService kullan - MUSIC_WORDS tablosunu kullan (gerçek müzik dosyaları)
-            const results = await this.searchService.searchTracks(query, {
+            // FuzzySearchService kullan - MUSIC_WORDS tablosunu kullan (gerçek müzik dosyaları)
+            const results = await this.fuzzySearchService.searchTracks(query, {
                 limit,
                 offset,
                 includeScoreDetails: true,

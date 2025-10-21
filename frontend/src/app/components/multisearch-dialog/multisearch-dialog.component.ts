@@ -21,19 +21,68 @@ import { MatChipsModule } from "@angular/material/chips";
 import { MatDividerModule } from "@angular/material/divider";
 import { MatExpansionModule } from "@angular/material/expansion";
 import { MatCheckboxModule } from "@angular/material/checkbox";
-import { SearchResponse, SearchResult, SearchInfo } from "../../models/api.model";
+import { SearchResponse, SearchResult, SearchInfo, SearchStats } from "../../models/api.model";
 import { firstValueFrom } from "rxjs";
 import { provideAnimations } from "@angular/platform-browser/animations";
 import { signal } from "@angular/core";
 import { ConfigService } from "../../services/config.service";
 import { PlaylistService } from "../../services/playlist.service";
 
+interface GlobalMissingFile {
+  originalPath: string;
+  playlistName: string;
+  playlistPath: string;
+}
+
+interface GlobalStats {
+  playlists_checked: number;
+  unique_missing_files: number;
+  totalUpdated?: number;
+  totalPlaylistsUpdated?: number;
+}
+
+interface GlobalUpdateResponse {
+  success: boolean;
+  totalUpdated: number;
+  totalPlaylistsUpdated: number;
+}
+
+interface ServerSearchItem {
+  originalPath?: string;
+  found?: boolean;
+  matchType: string;
+  processTime?: number | string;
+  foundPath?: string;
+  bestMatch?: {
+    path?: string;
+  };
+  searchInfo?: SearchInfo;
+}
+
+interface ServerSearchResponse {
+  status: "success" | "error";
+  data: ServerSearchItem[];
+  stats: SearchStats;
+}
+
+interface RemoveFromAllResponse {
+  success: boolean;
+  totalRemovedCount: number;
+  removedFromPlaylists: string[];
+}
+
+interface RemovedSongResult {
+  songPath: string;
+  removedFrom: string[];
+  totalRemoved: number;
+}
+
 export interface DialogData {
   paths: string[];
   playlistPath: string;
   category: string;
-  globalMissingFiles?: any[];
-  globalStats?: any;
+  globalMissingFiles?: GlobalMissingFile[];
+  globalStats?: GlobalStats;
 }
 
 // PlaylistInfo interface kaldırıldı - artık sadece son okunan playlist bilgisi kullanılıyor
@@ -76,16 +125,16 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   isSearching = false;
   selectedItems = new Set<string>();
   playlistInfo = signal<{ name: string; path: string; category: string } | null>(null);
-  globalMissingFiles: any[] = [];
-  globalStats: any = null;
+  globalMissingFiles: GlobalMissingFile[] = [];
+  globalStats: GlobalStats | null = null;
   isGlobalMode = false;
-  
+
   private getApiUrl(): string {
     return this.configService.getApiUrl();
   }
   activeFilters: Set<string> = new Set();
   filteredResults: SearchResult[] | null = null;
-  
+
   // Benzerlik skoru filtresi
   similarityThreshold = 0.7; // Varsayılan eşik
   showSimilarityFilter = false;
@@ -118,19 +167,19 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     // Global mode kontrolü
     if (this.data.playlistPath === "global") {
       this.isGlobalMode = true;
-      
+
       // Veri zaten app.component.ts'den geliyor, tekrar API çağrısı yapma
       if (this.data.globalMissingFiles) {
-      this.globalMissingFiles = this.data.globalMissingFiles;
-      this.globalStats = this.data.globalStats;
+        this.globalMissingFiles = this.data.globalMissingFiles;
+        this.globalStats = this.data.globalStats ?? null;
       }
-      
+
       this.playlistInfo.set({
         name: "Tüm Eksik Dosyalar",
         path: "global",
         category: "Global",
       });
-      
+
       // Veri zaten yüklü, direkt sonuçları göster
       this.performGlobalSearch();
     } else {
@@ -158,14 +207,14 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     if (this.isGlobalMode) {
       return; // Global mode'da ngOnInit'te hiçbir şey yapma
     }
-    
+
     if (this.data.paths && this.data.paths.length > 0) {
       this.search(this.data.paths).then(() => {
         // Arama tamamlandıktan sonra benzerDosya dışındaki tüm sonuçları seç
         if (this.searchResults?.data) {
           this.searchResults.data
-            .filter(result => result.found && result.matchType !== 'benzerDosya')
-            .forEach(result => this.selectedItems.add(result.originalPath));
+            .filter((result) => result.found && result.matchType !== "benzerDosya")
+            .forEach((result) => this.selectedItems.add(result.originalPath));
         }
       });
     }
@@ -202,14 +251,14 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
       return { total: 0, processed: 0, matches: 0, notFound: 0 };
     }
 
-    const found = this.searchResults.data?.filter(r => r.found).length || 0;
-    const notFound = this.searchResults.data?.filter(r => !r.found).length || 0;
+    const found = this.searchResults.data?.filter((r) => r.found).length || 0;
+    const notFound = this.searchResults.data?.filter((r) => !r.found).length || 0;
 
     return {
       total: this.searchResults.stats.totalProcessed,
       processed: this.searchResults.stats.totalProcessed,
       matches: found,
-      notFound: notFound
+      notFound: notFound,
     };
   }
 
@@ -233,7 +282,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     try {
       const formValue = this.searchForm.value;
       const response = await firstValueFrom(
-        this.http.post<SearchResponse>(`${this.getApiUrl()}/search/files`, {
+        this.http.post<ServerSearchResponse>(`${this.getApiUrl()}/search/files`, {
           paths,
           options: {
             ...formValue.options,
@@ -312,10 +361,10 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     }
 
     const { executionTime, averageProcessTime, totalProcessed } = this.searchResults.stats;
-    
+
     // Bulunan dosya sayısını hesapla
-    const found = this.searchResults.data?.filter(r => r.found).length || 0;
-    
+    const found = this.searchResults.data?.filter((r) => r.found).length || 0;
+
     // Sıfıra bölme kontrolü
     const efficiency = totalProcessed > 0 ? (found / totalProcessed) * 100 : 0;
 
@@ -412,22 +461,22 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     this.error = null;
 
     try {
-      let globalStats: any = null;
+      let globalUpdateStats: GlobalUpdateResponse | null = null;
       const updatedPaths = new Set<string>(); // Güncellenen dosyaları takip et
 
       // Global mode'da sadece global güncelleme yap
       if (this.isGlobalMode) {
         const globalResponse = await firstValueFrom(
-          this.http.post(`${this.getApiUrl()}/playlistsong/global-update`, {
+          this.http.post<GlobalUpdateResponse>(`${this.getApiUrl()}/playlistsong/global-update`, {
             items,
             updateAllPlaylists: true,
           }),
         );
 
-        globalStats = globalResponse as any;
-        
+        globalUpdateStats = globalResponse;
+
         // Güncellenen dosyaları işaretle
-        selectedResults.forEach(result => updatedPaths.add(result.originalPath));
+        selectedResults.forEach((result) => updatedPaths.add(result.originalPath));
       } else {
         // Normal mode'da önce mevcut playlist'i güncelle
         const playlistPath = this.getPlaylistPath();
@@ -442,16 +491,16 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
         // Sonra global güncelleme yap
         const globalResponse = await firstValueFrom(
-          this.http.post(`${this.getApiUrl()}/playlistsong/global-update`, {
+          this.http.post<GlobalUpdateResponse>(`${this.getApiUrl()}/playlistsong/global-update`, {
             items,
             updateAllPlaylists: true,
           }),
         );
 
-        globalStats = globalResponse as any;
-        
+        globalUpdateStats = globalResponse;
+
         // Güncellenen dosyaları işaretle
-        selectedResults.forEach(result => updatedPaths.add(result.originalPath));
+        selectedResults.forEach((result) => updatedPaths.add(result.originalPath));
       }
 
       // Local olarak güncellenen dosyaları arayüzden kaldır
@@ -461,25 +510,29 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
       // Global stats'i güncelle - benzersiz eksik dosya sayısını azalt
       if (this.globalStats && selectedResults.length > 0) {
-        this.globalStats.unique_missing_files = Math.max(0, this.globalStats.unique_missing_files - selectedResults.length);
-        console.log(`📊 Global stats güncellendi: ${selectedResults.length} dosya işlendi, kalan benzersiz eksik dosya: ${this.globalStats.unique_missing_files}`);
+        this.globalStats.unique_missing_files = Math.max(
+          0,
+          this.globalStats.unique_missing_files - selectedResults.length,
+        );
+        console.log(
+          `📊 Global stats güncellendi: ${selectedResults.length} dosya işlendi, kalan benzersiz eksik dosya: ${this.globalStats.unique_missing_files}`,
+        );
       }
 
       // Modern mesaj sistemi
-      this.showSaveSuccessMessage(selectedResults.length, globalStats);
+      this.showSaveSuccessMessage(selectedResults.length, globalUpdateStats);
 
       // Seçimi temizle
       this.clearSelection();
 
       // Dialog'u kapat (isteğe bağlı)
-      // this.dialogRef.close({ 
-      //   success: true, 
+      // this.dialogRef.close({
+      //   success: true,
       //   data: selectedResults,
       //   globalStats: globalStats
       // });
-
     } catch (err) {
-      console.error('Kaydetme hatası:', err);
+      console.error("Kaydetme hatası:", err);
       this.error = "Seçili öğeler kaydedilirken bir hata oluştu";
       this.showSaveErrorMessage();
     } finally {
@@ -499,7 +552,6 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     return this.playlistInfo()?.path || "";
   }
 
-
   // loadGlobalMissingFiles fonksiyonu kaldırıldı - veri zaten app.component.ts'den geliyor
 
   async performGlobalSearch(): Promise<void> {
@@ -509,9 +561,9 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     }
 
     // Debug: Veriyi kontrol et
-    console.log('Global missing files:', this.globalMissingFiles[0]);
-    console.log('Playlist name:', this.globalMissingFiles[0]?.playlistName);
-    console.log('Playlist path:', this.globalMissingFiles[0]?.playlistPath);
+    console.log("Global missing files:", this.globalMissingFiles[0]);
+    console.log("Playlist name:", this.globalMissingFiles[0]?.playlistName);
+    console.log("Playlist path:", this.globalMissingFiles[0]?.playlistPath);
 
     // Loading göstergesini başlat
     this.isSearching = true;
@@ -519,12 +571,12 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
     // 1. Önce global-missing API'si çalıştı (zaten çalıştı)
     // 2. Şimdi benzerlik algoritması çalıştır (466 dosya için toplu arama)
-    const paths = this.globalMissingFiles.map(file => file.originalPath);
-    
+    const paths = this.globalMissingFiles.map((file) => file.originalPath);
+
     try {
       const formValue = this.searchForm.value;
       const response = await firstValueFrom(
-        this.http.post<SearchResponse>(`${this.getApiUrl()}/search/files`, {
+        this.http.post<ServerSearchResponse>(`${this.getApiUrl()}/search/files`, {
           paths,
           options: {
             ...formValue.options,
@@ -537,32 +589,36 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
       if (response && response.status === "success") {
         // Backend'den gelen yeni veri yapısını eski yapıya dönüştür
         const transformedResponse = this.transformSearchResponse(response);
-        
+
         // Benzerlik sonuçlarını playlist bilgileriyle birleştir
         this.searchResults = {
           ...transformedResponse,
-          data: transformedResponse.data.map(result => {
-            const originalFile = this.globalMissingFiles.find(f => f.originalPath === result.originalPath);
+          data: transformedResponse.data.map((result) => {
+            const originalFile = this.globalMissingFiles.find(
+              (f) => f.originalPath === result.originalPath,
+            );
             return {
               ...result,
               // Her dosya için son okunan playlist bilgisini ekle
               lastPlaylistName: originalFile?.playlistName,
-              lastPlaylistPath: originalFile ? this.getShortPlaylistPath(originalFile.playlistPath) : undefined
+              lastPlaylistPath: originalFile
+                ? this.getShortPlaylistPath(originalFile.playlistPath)
+                : undefined,
             };
-          })
+          }),
         };
       } else {
         // Hata durumunda sadece eksik dosyaları göster
         this.searchResults = {
           status: "success",
-          data: this.globalMissingFiles.map(file => ({
+          data: this.globalMissingFiles.map((file) => ({
             originalPath: file.originalPath,
             found: false,
             matchType: "benzerDosya" as const,
             algoritmaYontemi: "Eksik Dosya",
             processTime: "0",
             lastPlaylistName: file.playlistName,
-            lastPlaylistPath: this.getShortPlaylistPath(file.playlistPath)
+            lastPlaylistPath: this.getShortPlaylistPath(file.playlistPath),
           })),
           stats: {
             totalProcessed: this.globalMissingFiles.length,
@@ -570,31 +626,43 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
             averageProcessTime: 0,
             matchDetails: {
               tamYolEsleme: { count: 0, time: "0", algoritmaYontemi: "Tam Yol Eşleşme" },
-              ayniKlasorFarkliUzanti: { count: 0, time: "0", algoritmaYontemi: "Aynı Klasör Farklı Uzantı" },
-              farkliKlasorveUzanti: { count: 0, time: "0", algoritmaYontemi: "Farklı Klasör Farklı Uzantı" },
+              ayniKlasorFarkliUzanti: {
+                count: 0,
+                time: "0",
+                algoritmaYontemi: "Aynı Klasör Farklı Uzantı",
+              },
+              farkliKlasorveUzanti: {
+                count: 0,
+                time: "0",
+                algoritmaYontemi: "Farklı Klasör Farklı Uzantı",
+              },
               farkliKlasor: { count: 0, time: "0", algoritmaYontemi: "Farklı Klasör Aynı Ad" },
-              benzerDosya: { count: this.globalMissingFiles.length, time: "0", algoritmaYontemi: "Eksik Dosya" }
+              benzerDosya: {
+                count: this.globalMissingFiles.length,
+                time: "0",
+                algoritmaYontemi: "Eksik Dosya",
+              },
             },
             foundCount: 0,
-            notFoundCount: this.globalMissingFiles.length
-          }
+            notFoundCount: this.globalMissingFiles.length,
+          },
         };
       }
     } catch (error) {
-      console.error('Global search error:', error);
+      console.error("Global search error:", error);
       this.error = "Global arama sırasında hata oluştu";
-      
+
       // Hata durumunda sadece eksik dosyaları göster
       this.searchResults = {
         status: "success",
-        data: this.globalMissingFiles.map(file => ({
+        data: this.globalMissingFiles.map((file) => ({
           originalPath: file.originalPath,
           found: false,
           matchType: "benzerDosya" as const,
           algoritmaYontemi: "Eksik Dosya",
           processTime: "0",
           lastPlaylistName: file.playlistName,
-          lastPlaylistPath: this.getShortPlaylistPath(file.playlistPath)
+          lastPlaylistPath: this.getShortPlaylistPath(file.playlistPath),
         })),
         stats: {
           totalProcessed: this.globalMissingFiles.length,
@@ -602,14 +670,26 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
           averageProcessTime: 0,
           matchDetails: {
             tamYolEsleme: { count: 0, time: "0", algoritmaYontemi: "Tam Yol Eşleşme" },
-            ayniKlasorFarkliUzanti: { count: 0, time: "0", algoritmaYontemi: "Aynı Klasör Farklı Uzantı" },
-            farkliKlasorveUzanti: { count: 0, time: "0", algoritmaYontemi: "Farklı Klasör Farklı Uzantı" },
+            ayniKlasorFarkliUzanti: {
+              count: 0,
+              time: "0",
+              algoritmaYontemi: "Aynı Klasör Farklı Uzantı",
+            },
+            farkliKlasorveUzanti: {
+              count: 0,
+              time: "0",
+              algoritmaYontemi: "Farklı Klasör Farklı Uzantı",
+            },
             farkliKlasor: { count: 0, time: "0", algoritmaYontemi: "Farklı Klasör Aynı Ad" },
-            benzerDosya: { count: this.globalMissingFiles.length, time: "0", algoritmaYontemi: "Eksik Dosya" }
+            benzerDosya: {
+              count: this.globalMissingFiles.length,
+              time: "0",
+              algoritmaYontemi: "Eksik Dosya",
+            },
           },
           foundCount: 0,
-          notFoundCount: this.globalMissingFiles.length
-        }
+          notFoundCount: this.globalMissingFiles.length,
+        },
       };
     }
 
@@ -623,13 +703,13 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     } else {
       this.activeFilters.add(type);
     }
-    
+
     if (this.activeFilters.size === 0) {
       this.filteredResults = this.searchResults?.data || null;
     } else {
-      this.filteredResults = this.searchResults?.data?.filter(result => 
-        this.activeFilters.has(result.matchType)
-      ) || null;
+      this.filteredResults =
+        this.searchResults?.data?.filter((result) => this.activeFilters.has(result.matchType)) ||
+        null;
     }
   }
 
@@ -639,128 +719,134 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
   get displayResults(): SearchResult[] {
     let results = this.filteredResults || this.searchResults?.data || [];
-    
+
     // Benzerlik skoru filtresi uygula
     if (this.showSimilarityFilter) {
-      results = results.filter(result => {
+      results = results.filter((result) => {
         if (!result.found || !result.searchInfo?.bestMatchSimilarity) {
           return false;
         }
-        
+
         // En iyi eşleşmenin benzerlik skorunu kontrol et
         return result.searchInfo.bestMatchSimilarity >= this.similarityThreshold;
       });
     }
-    
+
     return results;
   }
 
   // Benzerlik skoru filtresi fonksiyonları
   toggleSimilarityFilter(): void {
     this.showSimilarityFilter = !this.showSimilarityFilter;
-    
+
     // Filtre açıldığında otomatik seçim yap
     if (this.showSimilarityFilter) {
       this.autoSelectBySimilarity();
     }
   }
-  
+
   onSimilarityThresholdChange(value: number): void {
     this.similarityThreshold = value;
-    
+
     // Eşik değiştiğinde otomatik seçim güncelle
     if (this.showSimilarityFilter) {
       this.autoSelectBySimilarity();
     }
   }
-  
+
   onSliderChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.similarityThreshold = +target.value;
-    
+
     // Slider değiştiğinde otomatik seçim güncelle
     if (this.showSimilarityFilter) {
       this.autoSelectBySimilarity();
     }
   }
-  
+
   // Benzerlik skoruna göre otomatik seçim yap
   autoSelectBySimilarity(): void {
     if (!this.searchResults?.data) return;
-    
+
     // Önce mevcut seçimleri temizle
     this.selectedItems.clear();
-    
+
     // Filtrelenmiş sonuçları al
     const filteredResults = this.displayResults;
-    
+
     // Eşik değerini karşılayan sonuçları seç
-    filteredResults.forEach(result => {
+    filteredResults.forEach((result) => {
       if (result.found && result.searchInfo?.bestMatchSimilarity) {
         if (result.searchInfo.bestMatchSimilarity >= this.similarityThreshold) {
           this.selectedItems.add(result.originalPath);
         }
       }
     });
-    
+
     // Grup seçim durumlarını güncelle
     this.updateGroupSelectionStates();
   }
-  
+
   // Grup seçim durumlarını güncelle
   updateGroupSelectionStates(): void {
     if (!this.searchResults?.data) return;
-    
+
     // Her grup için seçim durumunu kontrol et
-    const groupTypes = ['tamYolEsleme', 'ayniKlasorFarkliUzanti', 'farkliKlasor', 'farkliKlasorveUzanti', 'benzerDosya'];
-    
-    groupTypes.forEach(groupType => {
-      const groupResults = this.searchResults!.data!.filter(
-        (result: SearchResult) => result.matchType === groupType && result.found
+    const groupTypes = [
+      "tamYolEsleme",
+      "ayniKlasorFarkliUzanti",
+      "farkliKlasor",
+      "farkliKlasorveUzanti",
+      "benzerDosya",
+    ];
+
+    groupTypes.forEach((groupType) => {
+      const groupResults = (this.searchResults?.data ?? []).filter(
+        (result: SearchResult) => result.matchType === groupType && result.found,
       );
-      
+
       if (groupResults.length === 0) {
         this.groupSelectionState.set(groupType, false);
         return;
       }
-      
+
       // Bu gruptaki tüm sonuçlar seçili mi kontrol et
-      const allSelected = groupResults.every((result: SearchResult) => 
-        this.selectedItems.has(result.originalPath)
+      const allSelected = groupResults.every((result: SearchResult) =>
+        this.selectedItems.has(result.originalPath),
       );
-      
+
       this.groupSelectionState.set(groupType, allSelected);
     });
   }
-  
+
   getSimilarityColor(similarity: number): string {
-    if (similarity >= 1.0) return '#4caf50'; // Yeşil - Mükemmel
-    if (similarity >= 0.85) return '#2196f3'; // Mavi - Çok yüksek
-    if (similarity >= 0.7) return '#ff9800'; // Turuncu - Yüksek
-    if (similarity >= 0.5) return '#ffc107'; // Sarı - Orta
-    return '#9e9e9e'; // Gri - Düşük
+    if (similarity >= 1.0) return "#4caf50"; // Yeşil - Mükemmel
+    if (similarity >= 0.85) return "#2196f3"; // Mavi - Çok yüksek
+    if (similarity >= 0.7) return "#ff9800"; // Turuncu - Yüksek
+    if (similarity >= 0.5) return "#ffc107"; // Sarı - Orta
+    return "#9e9e9e"; // Gri - Düşük
   }
-  
+
   getSimilarityLabel(similarity: number): string {
-    if (similarity >= 1.0) return 'Mükemmel Eşleşme';
-    if (similarity >= 0.85) return 'Çok Yüksek Benzerlik';
-    if (similarity >= 0.7) return 'Yüksek Benzerlik';
-    if (similarity >= 0.5) return 'Orta Benzerlik';
-    return 'Düşük Benzerlik';
+    if (similarity >= 1.0) return "Mükemmel Eşleşme";
+    if (similarity >= 0.85) return "Çok Yüksek Benzerlik";
+    if (similarity >= 0.7) return "Yüksek Benzerlik";
+    if (similarity >= 0.5) return "Orta Benzerlik";
+    return "Düşük Benzerlik";
   }
 
   // Grup seçimini değiştir
   toggleGroupSelection(groupType: string, event: Event) {
     event.stopPropagation(); // Tıklama olayının filtrelemeyi tetiklemesini engelle
-    
+
     const currentState = this.isGroupSelected(groupType);
     this.groupSelectionState.set(groupType, !currentState);
-    
+
     if (this.searchResults?.data) {
       const groupResults = this.searchResults.data.filter(
-        (result: SearchResult) => result.matchType === groupType
+        (result: SearchResult) => result.matchType === groupType,
       );
-      
+
       if (!currentState) {
         groupResults.forEach((result: SearchResult) => {
           if (result.found) {
@@ -778,28 +864,29 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
   // Bir grubun seçili olup olmadığını kontrol et
   isGroupSelected(groupType: string): boolean {
     if (!this.searchResults?.data) return false;
-    
+
     const groupResults = this.searchResults.data.filter(
-      (result: SearchResult) => result.matchType === groupType
+      (result: SearchResult) => result.matchType === groupType,
     );
-    
+
     // Gruptaki tüm dosyalar seçili mi kontrol et
-    return groupResults.length > 0 && groupResults.every(
-      (result: SearchResult) => this.selectedItems.has(result.originalPath)
+    return (
+      groupResults.length > 0 &&
+      groupResults.every((result: SearchResult) => this.selectedItems.has(result.originalPath))
     );
   }
 
   // Backend'den gelen yeni veri yapısını eski yapıya dönüştür
-  private transformSearchResponse(response: any): SearchResponse {
-    const transformedData = response.data.map((item: any) => {
+  private transformSearchResponse(response: ServerSearchResponse): SearchResponse {
+    const transformedData = response.data.map((item) => {
       const result: SearchResult = {
-        originalPath: item.searchInfo?.inputValue || item.originalPath || '',
+        originalPath: item.searchInfo?.inputValue || item.originalPath || "",
         found: item.found || false,
         matchType: this.mapMatchType(item.matchType),
         algoritmaYontemi: this.getAlgorithmMethod(item.matchType, item.searchInfo),
-        processTime: item.processTime?.toString() || '0',
-        foundPath: item.bestMatch?.path || item.foundPath || '',
-        searchInfo: item.searchInfo
+        processTime: item.processTime?.toString() || "0",
+        foundPath: item.bestMatch?.path || item.foundPath || "",
+        searchInfo: item.searchInfo,
       };
       return result;
     });
@@ -807,47 +894,54 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     return {
       status: response.status,
       data: transformedData,
-      stats: response.stats
+      stats: response.stats,
     };
   }
 
   // Match type'ı eski formata dönüştür
-  private mapMatchType(matchType: string): "tamYolEsleme" | "farkliKlasor" | "ayniKlasorFarkliUzanti" | "farkliKlasorveUzanti" | "benzerDosya" {
+  private mapMatchType(
+    matchType: string,
+  ):
+    | "tamYolEsleme"
+    | "farkliKlasor"
+    | "ayniKlasorFarkliUzanti"
+    | "farkliKlasorveUzanti"
+    | "benzerDosya" {
     switch (matchType) {
-      case 'benzerDosya':
-        return 'benzerDosya';
-      case 'tamYolEsleme':
-        return 'tamYolEsleme';
-      case 'ayniKlasorFarkliUzanti':
-        return 'ayniKlasorFarkliUzanti';
-      case 'farkliKlasor':
-        return 'farkliKlasor';
-      case 'farkliKlasorveUzanti':
-        return 'farkliKlasorveUzanti';
+      case "benzerDosya":
+        return "benzerDosya";
+      case "tamYolEsleme":
+        return "tamYolEsleme";
+      case "ayniKlasorFarkliUzanti":
+        return "ayniKlasorFarkliUzanti";
+      case "farkliKlasor":
+        return "farkliKlasor";
+      case "farkliKlasorveUzanti":
+        return "farkliKlasorveUzanti";
       default:
-        return 'benzerDosya';
+        return "benzerDosya";
     }
   }
 
   // Algoritma yöntemini belirle
-  private getAlgorithmMethod(matchType: string, searchInfo: any): string {
+  private getAlgorithmMethod(matchType: string, searchInfo: SearchInfo | undefined): string {
     if (searchInfo?.searchStage) {
       return searchInfo.searchStage;
     }
-    
+
     switch (matchType) {
-      case 'benzerDosya':
-        return 'Benzer Dosya Arama';
-      case 'tamYolEsleme':
-        return 'Tam Yol Eşleşme';
-      case 'ayniKlasorFarkliUzanti':
-        return 'Aynı Klasör Farklı Uzantı';
-      case 'farkliKlasor':
-        return 'Farklı Klasör';
-      case 'farkliKlasorveUzanti':
-        return 'Farklı Klasör ve Uzantı';
+      case "benzerDosya":
+        return "Benzer Dosya Arama";
+      case "tamYolEsleme":
+        return "Tam Yol Eşleşme";
+      case "ayniKlasorFarkliUzanti":
+        return "Aynı Klasör Farklı Uzantı";
+      case "farkliKlasor":
+        return "Farklı Klasör";
+      case "farkliKlasorveUzanti":
+        return "Farklı Klasör ve Uzantı";
       default:
-        return 'Bilinmeyen Yöntem';
+        return "Bilinmeyen Yöntem";
     }
   }
 
@@ -856,7 +950,9 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
   // Playlist yolunu kısalt - VirtualDJ root'tan sonrasını göster
   getShortPlaylistPath(fullPath: string): string {
-    const virtualDJRoot = this.configService.getConfig().paths.playlistFolder.replace('/Folders', '');
+    const virtualDJRoot = this.configService
+      .getConfig()
+      .paths.playlistFolder.replace("/Folders", "");
     if (fullPath.startsWith(virtualDJRoot)) {
       return fullPath.substring(virtualDJRoot.length + 1); // +1 for the leading slash
     }
@@ -876,23 +972,24 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
     try {
       let totalRemoved = 0;
-      const results = [];
+      const results: RemovedSongResult[] = [];
       const removedSongPaths = new Set<string>(); // Kaldırılan şarkıları takip et
 
       // Her seçili şarkı için ayrı ayrı kaldır
       for (const songPath of selectedPaths) {
         const response = await firstValueFrom(
-          this.http.post<any>(`${this.getApiUrl()}/playlistsong/remove-from-all`, {
-            songPath: songPath
-          })
+          this.http.post<RemoveFromAllResponse>(
+            `${this.getApiUrl()}/playlistsong/remove-from-all`,
+            { songPath },
+          ),
         );
 
         if (response && response.success) {
           totalRemoved += response.totalRemovedCount;
           results.push({
-            songPath: songPath,
+            songPath,
             removedFrom: response.removedFromPlaylists,
-            totalRemoved: response.totalRemovedCount
+            totalRemoved: response.totalRemovedCount,
           });
 
           // Eğer şarkı kaldırıldıysa, local olarak da kaldır
@@ -900,7 +997,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
             removedSongPaths.add(songPath);
           }
         } else {
-          console.error('Şarkı kaldırma hatası:', response);
+          console.error("Şarkı kaldırma hatası:", response);
         }
       }
 
@@ -911,18 +1008,17 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
       // Modern mesaj sistemi - Toast benzeri
       this.showModernMessage(totalRemoved, results, removedSongPaths.size);
-      
+
       // Sonuçları konsola yazdır
-      console.log('Playlist kaldırma sonuçları:', results);
+      console.log("Playlist kaldırma sonuçları:", results);
 
       // Seçimi temizle
       this.clearSelection();
 
       // Dialog'u kapat (isteğe bağlı)
       // this.dialogRef.close();
-
     } catch (error) {
-      console.error('Playlist kaldırma hatası:', error);
+      console.error("Playlist kaldırma hatası:", error);
       this.error = "Şarkılar playlist'lerden kaldırılırken hata oluştu";
     } finally {
       this.isSearching = false;
@@ -934,32 +1030,38 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     if (!this.searchResults?.data) return;
 
     // Kaldırılan şarkıları filtrele
-    this.searchResults.data = this.searchResults.data.filter(result => 
-      !removedPaths.includes(result.originalPath)
+    this.searchResults.data = this.searchResults.data.filter(
+      (result) => !removedPaths.includes(result.originalPath),
     );
 
     // İstatistikleri güncelle
     if (this.searchResults.stats) {
-      this.searchResults.stats.foundCount = this.searchResults.data.filter(r => r.found).length;
-      this.searchResults.stats.notFoundCount = this.searchResults.data.filter(r => !r.found).length;
+      this.searchResults.stats.foundCount = this.searchResults.data.filter((r) => r.found).length;
+      this.searchResults.stats.notFoundCount = this.searchResults.data.filter(
+        (r) => !r.found,
+      ).length;
     }
 
     // Seçili öğeleri temizle
     this.selectedItems.clear();
-    
+
     // Change detection'ı tetikle
     this.changeDetector.detectChanges();
   }
 
   // Modern mesaj sistemi
-  private showModernMessage(totalRemoved: number, results: any[], removedFiles: number): void {
+  private showModernMessage(
+    totalRemoved: number,
+    results: RemovedSongResult[],
+    removedFiles: number,
+  ): void {
     // Toast benzeri mesaj oluştur
-    const messageContainer = document.createElement('div');
+    const messageContainer = document.createElement("div");
     messageContainer.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
-      background: ${totalRemoved > 0 ? '#4caf50' : '#ff9800'};
+      background: ${totalRemoved > 0 ? "#4caf50" : "#ff9800"};
       color: white;
       padding: 16px 24px;
       border-radius: 8px;
@@ -972,7 +1074,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     `;
 
     // CSS animasyonu ekle
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.textContent = `
       @keyframes slideIn {
         from { transform: translateX(100%); opacity: 0; }
@@ -987,16 +1089,19 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
     if (totalRemoved > 0) {
       // Daha anlamlı mesaj oluştur
-      const playlistCount = results.reduce((sum, result) => sum + (result.removedFrom?.length || 0), 0);
+      const playlistCount = results.reduce(
+        (sum, result) => sum + (result.removedFrom?.length || 0),
+        0,
+      );
       const fileCount = removedFiles;
-      
-      let messageText = '';
+
+      let messageText = "";
       if (fileCount === 1) {
         messageText = `1 dosya ${playlistCount} playlist'ten kaldırıldı`;
       } else {
         messageText = `${fileCount} dosya toplam ${playlistCount} playlist'ten kaldırıldı`;
       }
-      
+
       messageContainer.innerHTML = `
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 20px;">✅</span>
@@ -1024,7 +1129,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
     // 4 saniye sonra kaldır
     setTimeout(() => {
-      messageContainer.style.animation = 'slideOut 0.3s ease-in';
+      messageContainer.style.animation = "slideOut 0.3s ease-in";
       setTimeout(() => {
         if (messageContainer.parentNode) {
           messageContainer.parentNode.removeChild(messageContainer);
@@ -1041,26 +1146,31 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     if (!this.searchResults?.data) return;
 
     // Güncellenen şarkıları filtrele
-    this.searchResults.data = this.searchResults.data.filter(result => 
-      !updatedPaths.includes(result.originalPath)
+    this.searchResults.data = this.searchResults.data.filter(
+      (result) => !updatedPaths.includes(result.originalPath),
     );
 
     // İstatistikleri güncelle
     if (this.searchResults.stats) {
-      this.searchResults.stats.foundCount = this.searchResults.data.filter(r => r.found).length;
-      this.searchResults.stats.notFoundCount = this.searchResults.data.filter(r => !r.found).length;
+      this.searchResults.stats.foundCount = this.searchResults.data.filter((r) => r.found).length;
+      this.searchResults.stats.notFoundCount = this.searchResults.data.filter(
+        (r) => !r.found,
+      ).length;
     }
 
     // Seçili öğeleri temizle
     this.selectedItems.clear();
-    
+
     // Change detection'ı tetikle
     this.changeDetector.detectChanges();
   }
 
   // Kaydetme başarı mesajı
-  private showSaveSuccessMessage(fileCount: number, globalStats: any): void {
-    const messageContainer = document.createElement('div');
+  private showSaveSuccessMessage(
+    fileCount: number,
+    updateStats: GlobalUpdateResponse | null,
+  ): void {
+    const messageContainer = document.createElement("div");
     messageContainer.style.cssText = `
       position: fixed;
       top: 20px;
@@ -1078,7 +1188,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     `;
 
     // CSS animasyonu ekle
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.textContent = `
       @keyframes slideIn {
         from { transform: translateX(100%); opacity: 0; }
@@ -1092,11 +1202,11 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     document.head.appendChild(style);
 
     // Backend'den gelen gerçek verileri kullan
-    const totalSongsUpdated = globalStats?.totalUpdated || 0;  // Toplam güncellenen şarkı sayısı
-    const playlistCount = globalStats?.totalPlaylistsUpdated || 0;  // Güncellenen playlist sayısı
-    const selectedFileCount = fileCount;  // Seçilen dosya sayısı
-    
-    let messageText = '';
+    const totalSongsUpdated = updateStats?.totalUpdated ?? 0; // Toplam güncellenen şarkı sayısı
+    const playlistCount = updateStats?.totalPlaylistsUpdated ?? 0; // Güncellenen playlist sayısı
+    const selectedFileCount = fileCount; // Seçilen dosya sayısı
+
+    let messageText = "";
     if (selectedFileCount === 1) {
       messageText = `1 dosya seçildi, ${totalSongsUpdated} şarkı ${playlistCount} playlist'te güncellendi`;
     } else {
@@ -1119,7 +1229,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
     // 5 saniye sonra kaldır
     setTimeout(() => {
-      messageContainer.style.animation = 'slideOut 0.3s ease-in';
+      messageContainer.style.animation = "slideOut 0.3s ease-in";
       setTimeout(() => {
         if (messageContainer.parentNode) {
           messageContainer.parentNode.removeChild(messageContainer);
@@ -1133,7 +1243,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
   // Kaydetme hata mesajı
   private showSaveErrorMessage(): void {
-    const messageContainer = document.createElement('div');
+    const messageContainer = document.createElement("div");
     messageContainer.style.cssText = `
       position: fixed;
       top: 20px;
@@ -1151,7 +1261,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
     `;
 
     // CSS animasyonu ekle
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.textContent = `
       @keyframes slideIn {
         from { transform: translateX(100%); opacity: 0; }
@@ -1179,7 +1289,7 @@ export class MultisearchDialogComponent implements OnInit, AfterViewInit {
 
     // 5 saniye sonra kaldır
     setTimeout(() => {
-      messageContainer.style.animation = 'slideOut 0.3s ease-in';
+      messageContainer.style.animation = "slideOut 0.3s ease-in";
       setTimeout(() => {
         if (messageContainer.parentNode) {
           messageContainer.parentNode.removeChild(messageContainer);

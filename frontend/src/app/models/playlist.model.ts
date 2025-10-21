@@ -6,4 +6,4 @@ export interface Playlist {
   songs: string[];
   createdAt: Date;
   updatedAt: Date;
-} 
+}

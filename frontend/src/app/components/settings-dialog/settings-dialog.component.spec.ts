@@ -1,23 +1,22 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from "@angular/core/testing";
 
-import { SettingsDialogComponent } from './settings-dialog.component';
+import { SettingsDialogComponent } from "./settings-dialog.component";
 
-describe('SettingsDialogComponent', () => {
+describe("SettingsDialogComponent", () => {
   let component: SettingsDialogComponent;
   let fixture: ComponentFixture<SettingsDialogComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SettingsDialogComponent]
-    })
-    .compileComponents();
+      imports: [SettingsDialogComponent],
+    }).compileComponents();
 
     fixture = TestBed.createComponent(SettingsDialogComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });
 
-  it('should create', () => {
+  it("should create", () => {
     expect(component).toBeTruthy();
   });
 });

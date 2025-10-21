@@ -13,7 +13,7 @@ export interface SearchInfo {
   originalQuery: string;
   normalizedQuery: string;
   totalWords: number;
-  matchedAt: 'exact' | 'partial' | 'single' | 'none';
+  matchedAt: "exact" | "partial" | "single" | "none";
   matchedWords: number;
   matchedWordIndex?: number;
   matchedWord?: string;
@@ -21,7 +21,7 @@ export interface SearchInfo {
   searchStep: number;
   searchStepDescription: string;
   searchedTerm?: string;
-  inputType: 'query' | 'filePath';
+  inputType: "query" | "filePath";
   inputValue: string;
   // En iyi eşleşme bilgileri
   bestMatchWords?: number;

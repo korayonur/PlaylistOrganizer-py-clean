@@ -7,7 +7,7 @@
   .search-container {
     position: relative;
     padding: 1rem;
-    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
     background: var(--surface-color-light);
     position: sticky;
     top: 0;
@@ -56,6 +56,38 @@
     }
   }
 
+  .filter-container {
+    padding: 0.5rem 1rem 1rem 1rem;
+    background: var(--surface-color-light);
+    border-bottom: 1px solid var(--border-color);
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.85rem;
+      color: var(--text-color);
+      font-weight: 500;
+
+      input[type="checkbox"] {
+        cursor: pointer;
+        width: 16px;
+        height: 16px;
+        accent-color: var(--accent-color);
+      }
+
+      span {
+        transition: color 0.2s ease;
+      }
+
+      &:hover span {
+        color: var(--accent-color);
+      }
+    }
+  }
+
   .tree-container {
     flex: 1;
     overflow-y: auto;
@@ -71,10 +103,30 @@
   .tree-node {
     margin: 0.25rem 0;
     transition: all 0.2s ease;
+    position: relative;
+
+    // Nested children için hiyerarşi çizgisi
+    .tree-list {
+      margin-left: 1rem;
+      padding-left: 0.5rem;
+      border-left: 1px solid var(--border-color);
+      
+      // Açık klasörün children'ı daha belirgin çizgi
+      .tree-node.expanded + & {
+        border-left-color: rgba(var(--accent-rgb), 0.3);
+      }
+    }
 
     &.selected {
       > .node-content {
         background-color: var(--surface-hover);
+      }
+    }
+    
+    // Açık klasör için özel stil
+    &.expanded {
+      > .node-content {
+        font-weight: 600;
       }
     }
     
@@ -107,12 +159,41 @@
     .node-content {
       display: flex;
       align-items: center;
-      padding: 0.75rem 1rem;
+      padding: 0.75rem 0.5rem 0.75rem 1rem;
       border-radius: var(--border-radius-sm);
       cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
       
       &:hover {
         background-color: var(--surface-hover);
+      }
+
+      // Açık klasör vurgusu
+      &.expanded {
+        background: rgba(var(--accent-rgb), 0.1);
+        border-left: 3px solid var(--accent-color);
+        padding-left: calc(1rem - 3px);
+        
+        .expand-icon {
+          color: var(--accent-color);
+        }
+      }
+
+      .expand-icon {
+        width: 16px;
+        min-width: 16px;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-right: 0.5rem;
+        transition: all 0.2s ease;
+        text-align: center;
+      }
+
+      .expand-icon-placeholder {
+        width: 16px;
+        min-width: 16px;
+        margin-right: 0.5rem;
       }
 
       .icon {
@@ -120,16 +201,10 @@
         min-width: 24px;
         text-align: center;
         margin-right: 0.5rem;
+        transition: all 0.2s ease;
         
         // VirtualDJ tarzı ikon efektleri
         filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
-        transition: all 0.2s ease;
-        
-        // Özel klasör türleri için hover efektleri
-        &:hover {
-          transform: scale(1.1);
-          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-        }
       }
 
       .node-name {

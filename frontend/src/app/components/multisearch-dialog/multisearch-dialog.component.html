@@ -131,7 +131,11 @@
           <!-- Tam Yol Eşleşme -->
           <div class="match-card" 
                [class.active]="isFilterActive('tamYolEsleme')" 
-               (click)="filterResults('tamYolEsleme')">
+               role="button"
+               tabindex="0"
+               (click)="filterResults('tamYolEsleme')"
+               (keyup.enter)="filterResults('tamYolEsleme')"
+               (keyup.space)="filterResults('tamYolEsleme')">
             <div class="header">
               <mat-icon class="group-icon">check_circle</mat-icon>
               <span>Tam Yol Eşleşme</span>
@@ -152,7 +156,11 @@
           <!-- Aynı Klasör Farklı Uzantı -->
           <div class="match-card" 
                [class.active]="isFilterActive('ayniKlasorFarkliUzanti')" 
-               (click)="filterResults('ayniKlasorFarkliUzanti')">
+               role="button"
+               tabindex="0"
+               (click)="filterResults('ayniKlasorFarkliUzanti')"
+               (keyup.enter)="filterResults('ayniKlasorFarkliUzanti')"
+               (keyup.space)="filterResults('ayniKlasorFarkliUzanti')">
             <div class="header">
               <mat-icon class="group-icon">extension</mat-icon>
               <span>Aynı Klasör Farklı Uzantı</span>
@@ -174,7 +182,11 @@
           <!-- Farklı Klasör -->
           <div class="match-card" 
                [class.active]="isFilterActive('farkliKlasor')" 
-               (click)="filterResults('farkliKlasor')">
+               role="button"
+               tabindex="0"
+               (click)="filterResults('farkliKlasor')"
+               (keyup.enter)="filterResults('farkliKlasor')"
+               (keyup.space)="filterResults('farkliKlasor')">
             <div class="header">
               <mat-icon class="group-icon">folder</mat-icon>
               <span>Farklı Klasör</span>
@@ -196,7 +208,11 @@
           <!-- Farklı Klasör ve Uzantı -->
           <div class="match-card" 
                [class.active]="isFilterActive('farkliKlasorveUzanti')" 
-               (click)="filterResults('farkliKlasorveUzanti')">
+               role="button"
+               tabindex="0"
+               (click)="filterResults('farkliKlasorveUzanti')"
+               (keyup.enter)="filterResults('farkliKlasorveUzanti')"
+               (keyup.space)="filterResults('farkliKlasorveUzanti')">
             <div class="header">
               <mat-icon class="group-icon">folder_special</mat-icon>
               <span>Farklı Klasör ve Uzantı</span>
@@ -218,7 +234,11 @@
           <!-- Benzer Dosya -->
           <div class="match-card" 
                [class.active]="isFilterActive('benzerDosya')" 
-               (click)="filterResults('benzerDosya')">
+               role="button"
+               tabindex="0"
+               (click)="filterResults('benzerDosya')"
+               (keyup.enter)="filterResults('benzerDosya')"
+               (keyup.space)="filterResults('benzerDosya')">
             <div class="header">
               <mat-icon class="group-icon">find_in_page</mat-icon>
               <span>Benzer Dosya</span>
@@ -260,13 +280,14 @@
           </div>
           
           <div class="slider-container">
-            <label class="slider-label">
+            <label class="slider-label" for="similarity-threshold-slider">
               Minimum Benzerlik Skoru: {{ (similarityThreshold * 100) | number:'1.0-0' }}%
             </label>
             <input type="range" 
                    min="0" 
                    max="1" 
                    step="0.05"
+                   id="similarity-threshold-slider"
                    [value]="similarityThreshold"
                    (input)="onSliderChange($event)"
                    class="similarity-slider">

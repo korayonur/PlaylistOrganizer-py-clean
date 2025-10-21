@@ -7,9 +7,12 @@ const { formatHeader, formatInfo } = require('./utils/output');
 const importCommand = require('./commands/import.command');
 const searchCommand = require('./commands/search.command');
 const rebuildCommand = require('./commands/rebuild.command');
+const cacheRefreshCommand = require('./commands/cache-refresh.command');
 const { dbStatsCommand, dbAnalyzeCommand, dbUpdateTrackCountsCommand } = require('./commands/db.command');
 const sessionsCommand = require('./commands/sessions.command');
 const { similaritySuggestionsCommand, similarityStatisticsCommand, similarityUnmatchedCommand } = require('./commands/similarity.command');
+const TestSearchCommand = require('./commands/test-search');
+const playlistsTreeCommand = require('./commands/playlists-tree');
 
 // Logger'ı başlat
 const { getLogger } = require('../../shared/logger');
@@ -44,6 +47,13 @@ function setupCLI() {
         .command('rebuild-index')
         .description('Kelime index\'ini yeniden oluştur')
         .action(rebuildCommand);
+
+    // Cache refresh komutu
+    program
+        .command('cache:refresh')
+        .description('Fix suggestions cache\'ini yenile')
+        .option('-l, --limit <number>', 'Cache limiti (varsayılan: tümü)')
+        .action(cacheRefreshCommand);
 
     // Database stats komutu
     program
@@ -89,6 +99,30 @@ function setupCLI() {
         .description('Eşleşmemiş trackları listele')
         .option('-l, --limit <number>', 'Gösterilecek track sayısı', '20')
         .action(similarityUnmatchedCommand);
+
+    // Test Search komutu
+    program
+        .command('test-search')
+        .description('Kapsamlı arama algoritması testleri çalıştır')
+        .option('-s, --suite <name>', 'Belirli test suite\'i çalıştır')
+        .option('-t, --test <id>', 'Belirli test çalıştır')
+        .option('-v, --verbose', 'Detaylı çıktı')
+        .option('-r, --report <file>', 'Raporu dosyaya kaydet')
+        .action(async (options) => {
+            const testCommand = new TestSearchCommand();
+            await testCommand.execute(options);
+        });
+
+    // Playlists Tree komutu
+    program
+        .command('playlists:tree')
+        .description('Playlist tree yapısını göster (VirtualDJ tarzı hiyerarşik görünüm)')
+        .option('-f, --format <format>', 'Output format (ascii|json)', 'ascii')
+        .option('-o, --output <file>', 'JSON export için dosya adı')
+        .option('-d, --depth <n>', 'Maksimum derinlik', parseInt, 10)
+        .option('-b, --base-folder <name>', 'Sadece belirli base folder (MyLists, Folders, History, Sideview)')
+        .option('--include-empty', 'Boş playlist\'leri de göster (FavoriteFolder vb.)')
+        .action(playlistsTreeCommand);
 
     return program;
 }

@@ -1,0 +1,9 @@
+21 10 2025 20:48:32.920:WARN [karma]: No captured browser, open http://localhost:9876/
+21 10 2025 20:48:33.634:INFO [karma-server]: Karma v6.4.4 server started at http://localhost:9876/
+21 10 2025 20:48:33.634:INFO [launcher]: Launching browsers Chrome with concurrency unlimited
+21 10 2025 20:48:33.638:INFO [launcher]: Starting browser Chrome
+21 10 2025 20:48:35.220:INFO [Chrome 141.0.0.0 (Mac OS 10.15.7)]: Connected on socket wBobYV9_fDWDzbiqAAAB with id 79842041
+21 10 2025 20:48:35.300:WARN [web-server]: 404: /_karma_webpack_/main.js
+Chrome 141.0.0.0 (Mac OS 10.15.7): Executed 0 of 0 SUCCESS (0 secs / 0 secs)
+[1A[2KChrome 141.0.0.0 (Mac OS 10.15.7): Executed 0 of 0 SUCCESS (0 secs / 0 secs)
+TOTAL: 0 SUCCESS

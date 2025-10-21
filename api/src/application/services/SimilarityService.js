@@ -1,17 +1,17 @@
 const fs = require('fs').promises;
 const path = require('path');
-const SearchService = require('./SearchService');
+const FuzzySearchService = require('./FuzzySearchService');
 const CacheService = require('./CacheService');
 
 /**
  * Similarity Service - Fix Önerileri Sistemi
  * Eşleşmemiş track'lar için music_files'da eş bulur
- * Merkezi SearchService kullanır
+ * FuzzySearchService kullanır
  */
 class SimilarityService {
     constructor(db, wordIndexService) {
         this.db = db;
-        this.searchService = new SearchService(db, wordIndexService);
+        this.fuzzySearchService = new FuzzySearchService(db, wordIndexService);
         this.cacheService = new CacheService();
     }
 
@@ -89,7 +89,7 @@ class SimilarityService {
         console.log(`🔧 ${unmatchedTracks.length} eşleşmemiş track için öneri oluşturuluyor...`);
         
         // PERFORMANS OPTİMİZASYONU: Batch arama kullan - sadece en iyi sonuç
-        const batchResults = await this.searchService.batchSearch(unmatchedTracks, {
+        const batchResults = await this.fuzzySearchService.batchSearch(unmatchedTracks, {
             resultsPerTrack: 1, // Sadece en iyi sonuç
             minScore: 150 // Artırıldı: 100 → 150 (daha kaliteli öneriler)
         });
@@ -99,6 +99,18 @@ class SimilarityService {
             const track = result.track;
             const bestMatch = result.matches[0];
             
+            // match_type hesapla similarity_score'a göre
+            let match_type;
+            if (bestMatch.similarity_score >= 0.9) {
+                match_type = 'exact';
+            } else if (bestMatch.similarity_score >= 0.7) {
+                match_type = 'high';
+            } else if (bestMatch.similarity_score >= 0.5) {
+                match_type = 'medium';
+            } else {
+                match_type = 'low';
+            }
+
             allSuggestions.push({
                 track_path: track.path,
                 track_fileName: track.fileName,
@@ -111,9 +123,9 @@ class SimilarityService {
                 music_file_name: bestMatch.music_file_name,
                 music_file_normalized: bestMatch.music_file_normalized,
                 similarity_score: bestMatch.similarity_score,
-                match_type: bestMatch.match_type,
-                matched_words: bestMatch.matched_words,
-                score: bestMatch.score, // Detaylı puan
+                match_type: match_type,
+                matched_words: bestMatch.matched_words || [],
+                score: bestMatch.score || bestMatch.similarity_score * 400, // Detaylı puan
                 source: 'search_service'
             });
         }

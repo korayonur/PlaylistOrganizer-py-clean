@@ -5,6 +5,13 @@ import { MusicPlayerService } from "../../services/music-player.service";
 import { HttpClient } from "@angular/common/http";
 import { DialogService, DialogResult } from "../../shared/services/dialog.service";
 import { ConfigService } from "../../services/config.service";
+import {
+  PlaylistService,
+  TrackSearchResponse,
+  TrackSearchResultResponse,
+  BulkFixPreviewResponse,
+  BulkFixConfirmResponse,
+} from "../../services/playlist.service";
 
 interface SearchResult {
   originalPath: string;
@@ -40,6 +47,13 @@ interface ApiSearchResponse {
   };
 }
 
+interface TrackSearchState {
+  loading: boolean;
+  success?: boolean;
+  result?: TrackSearchResultResponse;
+  error?: string;
+}
+
 @Component({
   selector: "app-song-grid",
   templateUrl: "./song-grid.component.html",
@@ -50,11 +64,16 @@ interface ApiSearchResponse {
 export class SongGridComponent {
   private readonly _songs: WritableSignal<Song[]> = signal([]);
   loading = signal(false);
-  
+
   // Benzerlik skoru filtresi
   similarityThreshold = 0.7;
   showSimilarityFilter = false;
-  
+
+  // Track fix accordion state
+  expandedTrackPath: string | null = null;
+  searchResultForTrack: Map<string, TrackSearchState> = new Map();
+  fixLoadingForTrack: Map<string, boolean> = new Map();
+
   private getApiUrl(): string {
     return this.configService.getApiUrl();
   }
@@ -93,6 +112,7 @@ export class SongGridComponent {
     song: Song;
     similarFile: SimilarFile;
   }>();
+  @Output() reloadCurrentPlaylist = new EventEmitter<void>();
 
   @Input() set isLoading(value: boolean) {
     this.loading.set(value);
@@ -103,6 +123,7 @@ export class SongGridComponent {
     private readonly http: HttpClient,
     private dialogService: DialogService,
     private configService: ConfigService,
+    private playlistService: PlaylistService,
   ) {}
 
   hasUpdatedSongs(): boolean {
@@ -131,6 +152,33 @@ export class SongGridComponent {
         },
       });
     }
+  }
+
+  isPreviewPlaying(song: Song, previewPath: string): boolean {
+    const previewSong = this.createPreviewSong(song, previewPath);
+    return this.musicPlayer.isPlaying(previewSong);
+  }
+
+  togglePreviewTrack(song: Song, previewPath: string): void {
+    const previewSong = this.createPreviewSong(song, previewPath);
+
+    if (this.musicPlayer.isPlaying(previewSong)) {
+      this.musicPlayer.pause();
+      return;
+    }
+
+    this.musicPlayer.play(previewSong).subscribe({
+      complete: () => {
+        this.error = null;
+      },
+      error: () => {
+        this.error = "Müzik çalma sırasında bir hata oluştu";
+      },
+    });
+  }
+
+  trackByWord(index: number, word: string): string {
+    return `${index}-${word}`;
   }
 
   onAccept(song: Song): void {
@@ -310,42 +358,42 @@ export class SongGridComponent {
       // ...
     });
   }
-  
+
   // Benzerlik skoru filtresi fonksiyonları
   toggleSimilarityFilter(): void {
     this.showSimilarityFilter = !this.showSimilarityFilter;
-    
+
     // Filtre açıldığında otomatik seçim yap
     if (this.showSimilarityFilter) {
       this.autoSelectBySimilarity();
     }
   }
-  
+
   onSimilarityThresholdChange(value: number): void {
     this.similarityThreshold = value;
-    
+
     // Eşik değiştiğinde otomatik seçim güncelle
     if (this.showSimilarityFilter) {
       this.autoSelectBySimilarity();
     }
   }
-  
+
   onSliderChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.similarityThreshold = +target.value;
-    
+
     // Slider değiştiğinde otomatik seçim güncelle
     if (this.showSimilarityFilter) {
       this.autoSelectBySimilarity();
     }
   }
-  
+
   // Benzerlik skoruna göre otomatik seçim yap
   autoSelectBySimilarity(): void {
     const songs = this._songs();
-    
+
     // Eşik değerini karşılayan şarkıları seç
-    songs.forEach(song => {
+    songs.forEach((song) => {
       if (song.similarFiles && song.similarFiles.length > 0) {
         const bestMatch = song.similarFiles[0];
         if (bestMatch.similarity >= this.similarityThreshold) {
@@ -355,49 +403,239 @@ export class SongGridComponent {
       }
     });
   }
-  
+
   // Seçili şarkı sayısını döndür
   getSelectedSongsCount(): number {
     const songs = this.filteredSongs;
-    return songs.filter(song => 
-      song.similarFiles && 
-      song.similarFiles.length > 0 && 
-      song.similarFiles[0].similarity >= this.similarityThreshold
+    return songs.filter(
+      (song) =>
+        song.similarFiles &&
+        song.similarFiles.length > 0 &&
+        song.similarFiles[0].similarity >= this.similarityThreshold,
     ).length;
   }
-  
+
   getSimilarityColor(similarity: number): string {
-    if (similarity >= 1.0) return '#4caf50'; // Yeşil - Mükemmel
-    if (similarity >= 0.85) return '#2196f3'; // Mavi - Çok yüksek
-    if (similarity >= 0.7) return '#ff9800'; // Turuncu - Yüksek
-    if (similarity >= 0.5) return '#ffc107'; // Sarı - Orta
-    return '#9e9e9e'; // Gri - Düşük
+    if (similarity >= 1.0) return "#4caf50"; // Yeşil - Mükemmel
+    if (similarity >= 0.85) return "#2196f3"; // Mavi - Çok yüksek
+    if (similarity >= 0.7) return "#ff9800"; // Turuncu - Yüksek
+    if (similarity >= 0.5) return "#ffc107"; // Sarı - Orta
+    return "#9e9e9e"; // Gri - Düşük
   }
-  
+
   getSimilarityLabel(similarity: number): string {
-    if (similarity >= 1.0) return 'Mükemmel Eşleşme';
-    if (similarity >= 0.85) return 'Çok Yüksek Benzerlik';
-    if (similarity >= 0.7) return 'Yüksek Benzerlik';
-    if (similarity >= 0.5) return 'Orta Benzerlik';
-    return 'Düşük Benzerlik';
+    if (similarity >= 1.0) return "Mükemmel Eşleşme";
+    if (similarity >= 0.85) return "Çok Yüksek Benzerlik";
+    if (similarity >= 0.7) return "Yüksek Benzerlik";
+    if (similarity >= 0.5) return "Orta Benzerlik";
+    return "Düşük Benzerlik";
   }
-  
+
   // Filtrelenmiş şarkıları döndür
   get filteredSongs(): Song[] {
     let songs = this._songs();
-    
+
     if (this.showSimilarityFilter) {
-      songs = songs.filter(song => {
+      songs = songs.filter((song) => {
         if (!song.similarFiles || song.similarFiles.length === 0) {
           return false;
         }
-        
+
         // En iyi eşleşmenin benzerlik skorunu kontrol et
         const bestMatch = song.similarFiles[0];
         return bestMatch.similarity >= this.similarityThreshold;
       });
     }
-    
+
     return songs;
+  }
+
+  // Track fix metodları
+  async searchForMissingTrack(song: Song) {
+    // Toggle accordion
+    if (this.expandedTrackPath === song.filePath) {
+      this.expandedTrackPath = null;
+      return;
+    }
+
+    this.expandedTrackPath = song.filePath;
+    this.searchResultForTrack.set(song.filePath, { loading: true });
+
+    // Dosya adını al (path'siz)
+    const fileName = song.filePath.split("/").pop();
+    if (!fileName) {
+      this.searchResultForTrack.set(song.filePath, {
+        loading: false,
+        success: false,
+        error: "Geçersiz dosya adı",
+      });
+      return;
+    }
+
+    // API call: /api/track/search-by-filename
+    this.playlistService.searchTrackByFilename(fileName).subscribe({
+      next: (response: TrackSearchResponse) => {
+        if (response.success && response.result) {
+          this.searchResultForTrack.set(song.filePath, {
+            loading: false,
+            result: response.result,
+            success: true,
+          });
+        } else if (response.success) {
+          this.searchResultForTrack.set(song.filePath, {
+            loading: false,
+            success: true,
+          });
+        } else {
+          this.searchResultForTrack.set(song.filePath, {
+            loading: false,
+            success: false,
+            error: response.message ?? "Arama başarısız",
+          });
+        }
+      },
+      error: (error: unknown) => {
+        console.error("Track search failed:", error);
+        const errorMessage = error instanceof Error ? error.message : "Arama başarısız";
+        this.searchResultForTrack.set(song.filePath, {
+          loading: false,
+          success: false,
+          error: errorMessage,
+        });
+      },
+    });
+  }
+
+  async fixTrack(song: Song, newPath: string) {
+    // 1. Önce preview (hangi playlist'ler etkilenecek?)
+    this.fixLoadingForTrack.set(song.filePath, true);
+
+    this.playlistService.bulkFixTrack(song.filePath, newPath).subscribe({
+      next: (previewResponse: BulkFixPreviewResponse) => {
+        if (!previewResponse.success) {
+          this.fixLoadingForTrack.set(song.filePath, false);
+          alert("Ön izleme başarısız.");
+          return;
+        }
+
+        // 2. Kullanıcıya sor (dialog)
+        const message =
+          `Bu dosya ${previewResponse.totalPlaylists} playlist'te kullanılıyor:\n\n` +
+          previewResponse.affectedPlaylists
+            .slice(0, 10)
+            .map((playlist) => `- ${playlist.name}`)
+            .join("\n") +
+          (previewResponse.totalPlaylists > 10
+            ? `\n... ve ${previewResponse.totalPlaylists - 10} tane daha`
+            : "") +
+          `\n\nTümü güncellensin mi?`;
+
+        if (confirm(message)) {
+          // 3. Confirm ile fix et
+          this.confirmFix(song.filePath, newPath);
+        } else {
+          this.fixLoadingForTrack.set(song.filePath, false);
+        }
+      },
+      error: (error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : "Ön izleme başarısız";
+        alert("Preview başarısız: " + errorMessage);
+        this.fixLoadingForTrack.set(song.filePath, false);
+      },
+    });
+  }
+
+  async confirmFix(oldPath: string, newPath: string) {
+    this.playlistService.bulkFixTrackConfirm(oldPath, newPath).subscribe({
+      next: (result: BulkFixConfirmResponse) => {
+        alert(`Başarılı!\n${result.filesUpdated} playlist güncellendi.`);
+        this.fixLoadingForTrack.set(oldPath, false);
+        this.expandedTrackPath = null;
+
+        // Playlist'i yeniden yükle
+        this.reloadCurrentPlaylist.emit();
+      },
+      error: (error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : "Fix başarısız";
+        alert("Fix başarısız: " + errorMessage);
+        this.fixLoadingForTrack.set(oldPath, false);
+      },
+    });
+  }
+
+  private createPreviewSong(baseSong: Song, filePath: string): Song {
+    return {
+      ...baseSong,
+      filePath,
+      isFileExists: true,
+      status: "exists",
+    };
+  }
+
+  getResultScorePercent(result: TrackSearchResultResponse): number {
+    if (!result?.score) {
+      return 0;
+    }
+    const rawPercent = (result.score / 1000) * 100;
+    return Math.max(0, Math.min(100, rawPercent));
+  }
+
+  getMatchedWords(song: Song, result: TrackSearchResultResponse): string[] {
+    if (!result?.track_path) {
+      return [];
+    }
+
+    const originalPath =
+      song.status === "updated" ? song.originalPath ?? song.filePath : song.filePath;
+    const originalFileName = this.extractFileName(originalPath);
+    const candidateFileName = this.extractFileName(result.track_path);
+
+    if (!originalFileName || !candidateFileName) {
+      return [];
+    }
+
+    const originalWords = new Set(this.tokenizeFileName(originalFileName));
+    if (originalWords.size === 0) {
+      return [];
+    }
+
+    const candidateWords = this.tokenizeFileName(candidateFileName);
+    const matched: string[] = [];
+
+    for (const word of candidateWords) {
+      if (originalWords.has(word) && !matched.includes(word)) {
+        matched.push(word);
+      }
+    }
+
+    return matched;
+  }
+
+  getMatchTooltip(song: Song, result: TrackSearchResultResponse): string {
+    const matched = this.getMatchedWords(song, result);
+    if (matched.length === 0) {
+      return "Eşleşen kelime bulunamadı";
+    }
+    return `Eşleşen kelimeler: ${matched.join(", ")}`;
+  }
+
+  private extractFileName(fullPath?: string | null): string | null {
+    if (!fullPath) {
+      return null;
+    }
+    const parts = fullPath.split(/[/\\]/);
+    return parts.length ? parts[parts.length - 1] : null;
+  }
+
+  private tokenizeFileName(fileName: string): string[] {
+    return fileName
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[_\-]+/g, " ")
+      .replace(/[^a-z0-9\s]+/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length > 0);
   }
 }

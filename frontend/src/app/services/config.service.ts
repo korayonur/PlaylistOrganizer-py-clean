@@ -5,6 +5,20 @@ import { environment } from "../../environments/environment";
 import { Observable, of } from "rxjs";
 import { map, catchError } from "rxjs/operators";
 
+interface BackendConfigResponse {
+  success: boolean;
+  data: {
+    paths: {
+      music: string;
+      virtualDJ: string;
+    };
+    extensions: {
+      music: string[];
+      playlist: string[];
+    };
+  };
+}
+
 @Injectable({
   providedIn: "root",
 })
@@ -31,30 +45,30 @@ export class ConfigService {
    * Backend'den config bilgilerini yükle
    */
   loadConfigFromBackend(): Observable<void> {
-    return this.http.get<any>(`${environment.apiUrl}/database/config`).pipe(
-      map(response => {
+    return this.http.get<BackendConfigResponse>(`${environment.apiUrl}/database/config`).pipe(
+      map((response) => {
         if (response.success) {
           const backendConfig: AppConfig = {
             paths: {
               musicFolder: response.data.paths.music,
-              playlistFolder: response.data.paths.virtualDJ + '/Folders'
+              playlistFolder: response.data.paths.virtualDJ + "/Folders",
             },
             supportedFormats: {
               audio: response.data.extensions.music,
-              playlist: response.data.extensions.playlist
-            }
+              playlist: response.data.extensions.playlist,
+            },
           };
           this.config.set(backendConfig);
-          localStorage.setItem('app_config', JSON.stringify(backendConfig));
+          localStorage.setItem("app_config", JSON.stringify(backendConfig));
           this.configLoaded = true;
-          console.log('✅ Backend config başarıyla yüklendi:', backendConfig);
+          console.log("✅ Backend config başarıyla yüklendi:", backendConfig);
         }
       }),
-      catchError(err => {
-        console.warn('⚠️ Backend config yüklenemedi, varsayılan kullanılıyor:', err);
+      catchError((err) => {
+        console.warn("⚠️ Backend config yüklenemedi, varsayılan kullanılıyor:", err);
         this.configLoaded = false;
         return of(void 0);
-      })
+      }),
     );
   }
 

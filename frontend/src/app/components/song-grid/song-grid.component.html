@@ -5,67 +5,6 @@
     <span class="material-icons spin">refresh</span> Playlist içeriği yükleniyor...
   </div>
 
-  <!-- Benzerlik Skoru Filtresi -->
-  <div class="similarity-filter-container" *ngIf="songs && songs.length > 0">
-    <div class="filter-header">
-      <h3>Benzerlik Skoru Filtresi</h3>
-      <button class="filter-toggle-btn" 
-              [class.active]="showSimilarityFilter"
-              (click)="toggleSimilarityFilter()">
-        <span class="material-icons">{{ showSimilarityFilter ? 'filter_alt' : 'filter_alt_off' }}</span>
-        {{ showSimilarityFilter ? 'Filtreyi Kapat' : 'Filtreyi Aç' }}
-      </button>
-    </div>
-    
-    <div class="filter-controls" *ngIf="showSimilarityFilter">
-      <div class="selection-info" *ngIf="getSelectedSongsCount() > 0">
-        <div class="selection-count">
-          <span class="material-icons">check_circle</span>
-          <span>{{ getSelectedSongsCount() }} şarkı filtrelendi ({{ (similarityThreshold * 100) | number:'1.0-0' }}% ve üzeri)</span>
-        </div>
-      </div>
-      
-      <div class="slider-container">
-        <label class="slider-label">
-          Minimum Benzerlik Skoru: {{ (similarityThreshold * 100) | number:'1.0-0' }}%
-        </label>
-        <input type="range" 
-               min="0" 
-               max="1" 
-               step="0.05"
-               [value]="similarityThreshold"
-               (input)="onSliderChange($event)"
-               class="similarity-slider">
-        <div class="slider-labels">
-          <span>0%</span>
-          <span>25%</span>
-          <span>50%</span>
-          <span>75%</span>
-          <span>100%</span>
-        </div>
-      </div>
-      
-      <div class="threshold-info">
-        <div class="threshold-item" [style.color]="getSimilarityColor(1.0)">
-          <span class="material-icons">check_circle</span>
-          <span>100% - Mükemmel Eşleşme</span>
-        </div>
-        <div class="threshold-item" [style.color]="getSimilarityColor(0.85)">
-          <span class="material-icons">star</span>
-          <span>85%+ - Çok Yüksek Benzerlik</span>
-        </div>
-        <div class="threshold-item" [style.color]="getSimilarityColor(0.7)">
-          <span class="material-icons">thumb_up</span>
-          <span>70%+ - Yüksek Benzerlik</span>
-        </div>
-        <div class="threshold-item" [style.color]="getSimilarityColor(0.5)">
-          <span class="material-icons">thumbs_up_down</span>
-          <span>50%+ - Orta Benzerlik</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- Tablo -->
   <div class="table-container" *ngIf="songs && songs.length > 0">
     <table>
@@ -77,11 +16,11 @@
         </tr>
       </thead>
       <tbody>
-        <tr
-          *ngFor="let song of filteredSongs"
-          [class.missing]="!song.isFileExists"
-          [class.updated]="song.status === 'updated'"
-        >
+        <ng-container *ngFor="let song of filteredSongs">
+          <tr
+            [class.missing]="!song.isFileExists"
+            [class.updated]="song.status === 'updated'"
+          >
           <td class="status-col">
             <div class="status-container">
               <!-- Dosya durumu -->
@@ -113,12 +52,15 @@
                 <button
                   class="status-icon search"
                   [class.searching]="song.isSearching"
+                  [class.expanded]="expandedTrackPath === song.filePath"
                   [disabled]="song.isSearching"
-                  (click)="searchSimilarFiles(song)"
+                  (click)="searchForMissingTrack(song)"
                   aria-label="Alternatif Ara"
                   tabindex="0"
                 >
-                  <span class="material-icons">{{ song.isSearching ? "refresh" : "search" }}</span>
+                  <span class="material-icons">
+                    {{ expandedTrackPath === song.filePath ? 'expand_less' : 'search' }}
+                  </span>
                 </button>
               }
             </div>
@@ -228,7 +170,108 @@
               </div>
             </td>
           }
-        </tr>
+          </tr>
+
+          <!-- Accordion expansion row -->
+          <tr *ngIf="expandedTrackPath === song.filePath" class="expansion-row">
+            <td colspan="2">
+              <div class="search-result-panel">
+                <!-- Loading -->
+                <div *ngIf="searchResultForTrack.get(song.filePath)?.loading" class="loading-state">
+                  <span class="material-icons spin">refresh</span>
+                  🔍 Aranıyor...
+                </div>
+
+                <!-- Result found -->
+                <div *ngIf="searchResultForTrack.get(song.filePath)?.result as result" class="result-card">
+                  <div class="result-header">
+                    <div class="header-info">
+                      <strong>En İyi Eşleşme</strong>
+                      <div class="result-path">{{ result.track_path }}</div>
+                    </div>
+                    <div class="score-chip">
+                      <span class="label">Benzerlik</span>
+                      <span class="value">{{ getResultScorePercent(result) | number:'1.0-0' }}%</span>
+                    </div>
+                  </div>
+
+                  <div class="result-details">
+                    <div class="detail-item full-width">
+                      <span class="label">Dosya Adı</span>
+                      <span class="value">{{ result.fileName }}</span>
+                    </div>
+                    <div
+                      class="detail-item"
+                      [attr.title]="getMatchTooltip(song, result)"
+                    >
+                      <span class="label">Eşleşen Kelimeler</span>
+                      <span class="value match-count">
+                        {{ result.match_count ?? getMatchedWords(song, result).length }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    class="matched-words"
+                    *ngIf="getMatchedWords(song, result).length > 0"
+                  >
+                    <span class="label">Kelimeler</span>
+                    <div class="word-list">
+                      <span
+                        class="word-chip"
+                        *ngFor="let word of getMatchedWords(song, result); trackBy: trackByWord"
+                      >
+                        {{ word }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="result-actions">
+                    <button
+                      type="button"
+                      class="play-btn"
+                      [class.playing]="isPreviewPlaying(song, result.track_path)"
+                      (click)="togglePreviewTrack(song, result.track_path)"
+                      [disabled]="fixLoadingForTrack.get(song.filePath)"
+                      title="Eşleşmeyi Dinle"
+                    >
+                      <span class="material-icons">
+                        {{ isPreviewPlaying(song, result.track_path) ? 'pause_circle' : 'play_circle' }}
+                      </span>
+                      <span class="button-text">
+                        {{ isPreviewPlaying(song, result.track_path) ? 'Durdur' : 'Dinle' }}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      class="fix-btn"
+                      [disabled]="fixLoadingForTrack.get(song.filePath)"
+                      (click)="fixTrack(song, result.track_path)"
+                    >
+                      <span class="material-icons">healing</span>
+                      {{ fixLoadingForTrack.get(song.filePath) ? 'Düzeltiliyor...' : 'Fix' }}
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Not found -->
+                <div
+                  *ngIf="searchResultForTrack.get(song.filePath)?.success === true && !searchResultForTrack.get(song.filePath)?.result"
+                  class="no-result"
+                >
+                  <span class="material-icons">search_off</span>
+                  ❌ Benzer dosya bulunamadı
+                </div>
+
+                <!-- Error -->
+                <div *ngIf="searchResultForTrack.get(song.filePath)?.error" class="error-state">
+                  <span class="material-icons">error</span>
+                  {{ searchResultForTrack.get(song.filePath)?.error }}
+                </div>
+              </div>
+            </td>
+          </tr>
+        </ng-container>
       </tbody>
     </table>
   </div>

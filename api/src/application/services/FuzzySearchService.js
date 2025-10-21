@@ -65,11 +65,14 @@ class FuzzySearchService {
     async exactSearch(words, options) {
         const { limit, offset, includeScoreDetails, tableType } = options;
         
+        // Tekrar eden kelimeleri filtrele - unique kelimeleri al
+        const uniqueWords = [...new Set(words)];
+        
         const tableName = tableType === 'music_words' ? 'music_words' : 'track_words';
         const pathColumn = tableType === 'music_words' ? 'music_path' : 'track_path';
         const joinTable = tableType === 'music_words' ? 'music_files' : 'tracks';
 
-        const placeholders = words.map(() => '?').join(', ');
+        const placeholders = uniqueWords.map(() => '?').join(', ');
         const stmt = this.db.prepare(`
             SELECT DISTINCT 
                 tw.${pathColumn} as path,
@@ -85,11 +88,22 @@ class FuzzySearchService {
             LIMIT ? OFFSET ?
         `);
 
-        const rawResults = stmt.all(...words, limit, offset);
+        // PERFORMANS OPTİMİZASYONU: Akıllı buffer sistemi (SearchService'ten kopyalandı)
+        let queryLimit;
+        if (limit === null) {
+            queryLimit = 10000; // Tüm sonuçlar için yüksek limit
+        } else if (limit === 1) {
+            queryLimit = 50; // En iyi sonuç için yeterli buffer
+        } else if (limit <= 10) {
+            queryLimit = limit * 3; // Küçük limitler için 3x buffer
+        } else {
+            queryLimit = Math.min(limit + 50, 10000); // Büyük limitler için sabit buffer (max 10000)
+        }
+        const rawResults = stmt.all(...uniqueWords, queryLimit, offset);
 
         // Puanlama sistemi
         const scoredResults = rawResults.map(result => {
-            const score = this.calculateScore(result, words, words.join(' '));
+            const score = this.calculateScore(result, uniqueWords, words.join(' '));
             
             const baseResult = {
                 track_path: result.path,
@@ -377,6 +391,75 @@ class FuzzySearchService {
             similarityCache: this.similarityCache.size,
             totalMemory: (this.cache.size + this.similarityCache.size) * 100 // Rough estimate
         };
+    }
+
+    /**
+     * Music file'ları ara - Track araması ile aynı algoritma
+     * @param {string} query - Arama sorgusu
+     * @param {Object} options - Arama seçenekleri
+     * @returns {Array} Puanlanmış sonuçlar
+     */
+    async searchMusicFiles(query, options = {}) {
+        return await this.searchTracks(query, {
+            ...options,
+            tableType: 'music_words'
+        });
+    }
+
+    /**
+     * Fix önerileri için özel arama
+     * Eşleşmemiş bir track için en iyi music file'ı bul
+     */
+    async findBestMatch(trackFileName, options = {}) {
+        const {
+            limit = 10,
+            minScore = 100 // Fix önerileri için minimum puan
+        } = options;
+
+        const results = await this.searchMusicFiles(trackFileName, {
+            limit,
+            minScore,
+            includeScoreDetails: true
+        });
+
+        return results.map(result => ({
+            music_file_path: result.track_path,
+            music_file_name: result.fileName,
+            music_file_normalized: result.normalizedFileName,
+            similarity_score: Math.min(result.score / 400, 1.0), // 0-1 normalize
+            score_details: result.score_details,
+            match_count: result.match_count
+        }));
+    }
+
+    /**
+     * Batch arama - Birden fazla track için toplu arama
+     * Fix önerileri için optimize edilmiş
+     */
+    async batchSearch(tracks, options = {}) {
+        const {
+            resultsPerTrack = 1,
+            minScore = 100
+        } = options;
+
+        const results = [];
+        
+        for (const track of tracks) {
+            const searchQuery = track.normalizedFileName || track.fileName;
+            const matches = await this.findBestMatch(searchQuery, {
+                limit: resultsPerTrack,
+                minScore
+            });
+
+            if (matches.length > 0) {
+                results.push({
+                    track,
+                    matches
+                });
+            }
+        }
+
+        return results;
     }
 }
 

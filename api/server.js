@@ -7,6 +7,9 @@ const WordIndexService = require('./src/application/services/WordIndexService');
 const ImportController = require('./src/presentation/http/controllers/ImportController');
 const SearchController = require('./src/presentation/http/controllers/SearchController');
 const PlaylistController = require('./src/presentation/http/controllers/PlaylistController');
+const PlaylistSongsController = require('./src/presentation/http/controllers/PlaylistSongsController');
+const TrackFixController = require('./src/presentation/http/controllers/TrackFixController');
+const TrackStreamController = require('./src/presentation/http/controllers/TrackStreamController');
 const HealthController = require('./src/presentation/http/controllers/HealthController');
 const DatabaseController = require('./src/presentation/http/controllers/DatabaseController');
 const SimilarityController = require('./src/presentation/http/controllers/SimilarityController');
@@ -41,15 +44,25 @@ async function startServer() {
     const importController = new ImportController(dbManager, wordIndexService);
     const searchController = new SearchController(dbManager, wordIndexService);
     const playlistController = new PlaylistController(dbManager);
+    const playlistSongsController = new PlaylistSongsController(dbManager);
+    const trackFixController = new TrackFixController(dbManager, wordIndexService);
+    const trackStreamController = new TrackStreamController();
     const healthController = new HealthController(dbManager);
     const databaseController = new DatabaseController(dbManager);
     const similarityController = new SimilarityController(dbManager.db, wordIndexService);
 
+    // Load additional routes
+    const playlistSongsRoutes = require('./src/presentation/http/routes/playlistsongs.routes');
+    const trackFixRoutes = require('./src/presentation/http/routes/trackfix.routes');
+    
     // Routes
     app.use('/api/import', importRoutes(importController));
     app.use('/api/search', searchRoutes(searchController));
     app.use('/api/playlist', playlistRoutes(playlistController));
     app.use('/api/playlists', playlistRoutes(playlistController)); // Backward compatibility
+    app.use('/api/playlistsongs', playlistSongsRoutes(playlistSongsController)); // Playlist songs
+    app.use('/api/track', trackFixRoutes(trackFixController)); // Track fix
+    app.post('/api/stream', (req, res) => trackStreamController.stream(req, res)); // Track preview
     app.use('/api/health', healthRoutes(healthController));
     app.use('/api/database', databaseRoutes(databaseController));
     app.use('/api/similarity', similarityRoutes(similarityController));

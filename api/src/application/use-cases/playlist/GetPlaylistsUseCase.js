@@ -19,17 +19,30 @@ class GetPlaylistsUseCase {
      */
     async execute(options = {}) {
         try {
-            const { limit = 100, offset = 0, type = null } = options;
+            const { 
+                limit = 100, 
+                offset = 0, 
+                type = null, 
+                excludeEmpty = true,
+                onlyWithMissing = false  // YENİ: Sadece eksik track'li playlist'ler
+            } = options;
             
             let playlists;
-            if (type) {
+            
+            if (onlyWithMissing) {
+                // Eksik track içeren playlist'leri getir (database JOIN - SIFIR dosya I/O)
+                console.log('[USE_CASE] Eksik track\'li playlist\'ler getiriliyor...');
+                playlists = await this.playlistRepository.findPlaylistsWithMissingTracks({ limit, offset });
+                console.log(`[USE_CASE] ${playlists.length} eksik track\'li playlist bulundu`);
+            } else if (type) {
                 playlists = await this.playlistRepository.findByType(type);
             } else {
                 playlists = await this.playlistRepository.findAll({ 
                     limit, 
                     offset, 
                     orderBy: 'name', 
-                    order: 'ASC' 
+                    order: 'ASC',
+                    excludeEmpty  // FavoriteFolder'ları (track_count = 0) filtrele
                 });
             }
 

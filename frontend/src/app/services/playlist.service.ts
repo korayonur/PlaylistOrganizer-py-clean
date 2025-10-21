@@ -5,8 +5,38 @@ import { PlaylistResponse } from "../models/tree-node.model";
 import { Song } from "../models/song.model";
 import { FileExistsResponse } from "../models/file-exists-response.model";
 import { PlaylistError } from "../models/playlist-error.model";
-import { environment } from '../../environments/environment';
-import { ConfigService } from './config.service';
+import { ConfigService } from "./config.service";
+
+export interface TrackSearchResultResponse {
+  score?: number;
+  track_path: string;
+  fileName: string;
+  match_count?: number;
+  track_source?: string;
+  track_source_file?: string;
+  match_type?: string;
+}
+
+export interface TrackSearchResponse {
+  success: boolean;
+  result?: TrackSearchResultResponse;
+  message?: string;
+}
+
+export interface BulkFixPreviewResponse {
+  success: boolean;
+  totalPlaylists: number;
+  affectedPlaylists: {
+    name: string;
+    path: string;
+    songCount: number;
+  }[];
+}
+
+export interface BulkFixConfirmResponse {
+  success: boolean;
+  filesUpdated: number;
+}
 
 @Injectable({
   providedIn: "root",
@@ -14,10 +44,10 @@ import { ConfigService } from './config.service';
 export class PlaylistService {
   constructor(
     private readonly http: HttpClient,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
   ) {
     // Servis başlatıldığında API URL'ini kontrol et
-    console.log('PlaylistService initialized with API URL:', this.getApiUrl());
+    console.log("PlaylistService initialized with API URL:", this.getApiUrl());
   }
 
   private getApiUrl(): string {
@@ -31,10 +61,15 @@ export class PlaylistService {
     return this.configService.getPlaylistFolder();
   }
 
-  getPlaylists(): Observable<PlaylistResponse> {
-    const url = `${this.getApiUrl()}/playlists/list`;
-    console.log('🎵 PlaylistService getPlaylists - Calling API:', url);
-    console.log('🎵 ConfigService API URL:', this.configService.getApiUrl());
+  getPlaylists(onlyWithMissing = false): Observable<PlaylistResponse> {
+    const url = `${this.getApiUrl()}/playlists/list?onlyWithMissing=${onlyWithMissing}`;
+    console.log(
+      "🎵 PlaylistService getPlaylists - Calling API:",
+      url,
+      "onlyWithMissing:",
+      onlyWithMissing,
+    );
+    console.log("🎵 ConfigService API URL:", this.configService.getApiUrl());
     return this.http.get<PlaylistResponse>(url).pipe(
       retry(3),
       map((response) => {
@@ -49,13 +84,18 @@ export class PlaylistService {
 
   getPlaylistContent(path: string): Observable<Song[]> {
     const url = `${this.getApiUrl()}/playlistsongs/read`;
-    console.log('getPlaylistContent - Calling API:', url);
+    console.log("getPlaylistContent - Calling API:", url);
     interface PlaylistSongResponse {
       success: boolean;
       songs: {
         file: string;
         isFileExists: boolean;
       }[];
+      stats?: {
+        total: number;
+        exists: number;
+        missing: number;
+      };
     }
 
     return this.http
@@ -68,6 +108,8 @@ export class PlaylistService {
           if (!response.success) {
             throw new PlaylistError("PLY-500", "Playlist okuma hatası");
           }
+
+          console.log("Playlist stats:", response.stats);
 
           return response.songs.map(
             (song, index) =>
@@ -85,7 +127,7 @@ export class PlaylistService {
 
   updateSongPath(playlistPath: string, oldPath: string, newPath: string): Observable<void> {
     const url = `${this.getApiUrl()}/playlistsong/update`;
-    console.log('updateSongPath - Calling API:', url);
+    console.log("updateSongPath - Calling API:", url);
     return this.http
       .post<{
         success: boolean;
@@ -108,7 +150,7 @@ export class PlaylistService {
 
   fileExists(path: string): Observable<FileExistsResponse> {
     const url = `${this.getApiUrl()}/files/exists`;
-    console.log('fileExists - Calling API:', url);
+    console.log("fileExists - Calling API:", url);
     return this.http
       .post<{
         success: boolean;
@@ -129,76 +171,113 @@ export class PlaylistService {
   getFilePlaylists(filePath: string): Observable<{
     success: boolean;
     filePath: string;
-    playlists: Array<{
+    playlists: {
       name: string;
       path: string;
       songCount: number;
-    }>;
+    }[];
     totalPlaylists: number;
   }> {
     const encodedPath = encodeURIComponent(filePath);
     const url = `${this.getApiUrl()}/files/playlists/${encodedPath}`;
-    console.log('getFilePlaylists - Calling API:', url);
-    
-    return this.http.get<{
-      success: boolean;
-      filePath: string;
-      playlists: Array<{
-        name: string;
-        path: string;
-        songCount: number;
-      }>;
-      totalPlaylists: number;
-    }>(url).pipe(
-      retry(3),
-      map((response) => {
-        if (!response.success) {
-          throw new PlaylistError("PLY-500", "Dosya playlist bilgisi alma hatası");
-        }
-        return response;
-      }),
-      catchError(this.handleError),
-    );
+    console.log("getFilePlaylists - Calling API:", url);
+
+    return this.http
+      .get<{
+        success: boolean;
+        filePath: string;
+        playlists: {
+          name: string;
+          path: string;
+          songCount: number;
+        }[];
+        totalPlaylists: number;
+      }>(url)
+      .pipe(
+        retry(3),
+        map((response) => {
+          if (!response.success) {
+            throw new PlaylistError("PLY-500", "Dosya playlist bilgisi alma hatası");
+          }
+          return response;
+        }),
+        catchError(this.handleError),
+      );
   }
 
   getFilesPlaylistsBatch(filePaths: string[]): Observable<{
     success: boolean;
-    results: Array<{
+    results: {
       filePath: string;
-      playlists: Array<{
+      playlists: {
         name: string;
         path: string;
         songCount: number;
-      }>;
+      }[];
       totalPlaylists: number;
-    }>;
+    }[];
     totalFiles: number;
   }> {
     const url = `${this.getApiUrl()}/files/playlists/batch`;
-    console.log('getFilesPlaylistsBatch - Calling API:', url, 'with', filePaths.length, 'files');
-    
-    return this.http.post<{
-      success: boolean;
-      results: Array<{
-        filePath: string;
-        playlists: Array<{
-          name: string;
-          path: string;
-          songCount: number;
-        }>;
-        totalPlaylists: number;
-      }>;
-      totalFiles: number;
-    }>(url, filePaths).pipe(
-      retry(3),
-      map((response) => {
-        if (!response.success) {
-          throw new PlaylistError("PLY-500", "Batch playlist bilgisi alma hatası");
-        }
-        return response;
-      }),
-      catchError(this.handleError),
-    );
+    console.log("getFilesPlaylistsBatch - Calling API:", url, "with", filePaths.length, "files");
+
+    return this.http
+      .post<{
+        success: boolean;
+        results: {
+          filePath: string;
+          playlists: {
+            name: string;
+            path: string;
+            songCount: number;
+          }[];
+          totalPlaylists: number;
+        }[];
+        totalFiles: number;
+      }>(url, filePaths)
+      .pipe(
+        retry(3),
+        map((response) => {
+          if (!response.success) {
+            throw new PlaylistError("PLY-500", "Batch playlist bilgisi alma hatası");
+          }
+          return response;
+        }),
+        catchError(this.handleError),
+      );
+  }
+
+  /**
+   * Dosya adı ile track arama
+   */
+  searchTrackByFilename(fileName: string): Observable<TrackSearchResponse> {
+    const url = `${this.getApiUrl()}/track/search-by-filename`;
+    console.log("searchTrackByFilename - Calling API:", url);
+    return this.http
+      .post<TrackSearchResponse>(url, { fileName, limit: 1 })
+      .pipe(retry(3), catchError(this.handleError));
+  }
+
+  /**
+   * Bulk fix preview - hangi playlist'ler etkilenecek?
+   */
+  bulkFixTrack(oldPath: string, newPath: string): Observable<BulkFixPreviewResponse> {
+    const url = `${this.getApiUrl()}/track/bulk-fix`;
+    console.log("bulkFixTrack - Calling API:", url);
+    return this.http
+      .post<BulkFixPreviewResponse>(url, { oldPath, newPath })
+      .pipe(retry(3), catchError(this.handleError));
+  }
+
+  /**
+   * Bulk fix onayla ve çalıştır
+   */
+  bulkFixTrackConfirm(oldPath: string, newPath: string): Observable<BulkFixConfirmResponse> {
+    const url = `${this.getApiUrl()}/track/bulk-fix/confirm`;
+    console.log("bulkFixTrackConfirm - Calling API:", url);
+    return this.http
+      .post<BulkFixConfirmResponse>(url, { oldPath, newPath })
+      .pipe(retry(3), catchError(this.handleError));
   }
 
   private handleError(error: HttpErrorResponse) {

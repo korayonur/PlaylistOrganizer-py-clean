@@ -51,7 +51,7 @@ export class DialogService {
 
   constructor(
     private dialog: MatDialog,
-    private configService: ConfigService
+    private configService: ConfigService,
   ) {}
 
   /**

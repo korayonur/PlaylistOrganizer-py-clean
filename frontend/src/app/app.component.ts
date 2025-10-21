@@ -10,7 +10,6 @@ import { firstValueFrom } from "rxjs";
 import { HttpClient } from "@angular/common/http";
 import { MatDialog, MatDialogModule } from "@angular/material/dialog";
 import { SettingsDialogComponent } from "./components/settings-dialog/settings-dialog.component";
-import { MultisearchDialogComponent } from "./components/multisearch-dialog/multisearch-dialog.component";
 import { ConfigService } from "./services/config.service";
 
 @Component({
@@ -18,15 +17,19 @@ import { ConfigService } from "./services/config.service";
   standalone: true,
   imports: [
     CommonModule,
-    PlaylistTreeComponent, 
-    StatsPanelComponent, 
+    PlaylistTreeComponent,
+    StatsPanelComponent,
     SongGridComponent,
-    MatDialogModule
+    MatDialogModule,
   ],
   template: `
     <div class="app">
       <div class="sidebar">
-        <app-playlist-tree (nodeSelect)="handleNodeSelect($event)"> </app-playlist-tree>
+        <app-playlist-tree
+          (nodeSelect)="handleNodeSelect($event)"
+          (showOnlyMissingChange)="handleTreeFilterChange($event)"
+        >
+        </app-playlist-tree>
       </div>
 
       <div class="content">
@@ -35,6 +38,7 @@ import { ConfigService } from "./services/config.service";
             [songs]="playlistContent()"
             [loading]="loading()"
             [currentFilter]="currentFilter()"
+            [autoFilterMissing]="autoFilterMissing()"
             (filterChange)="setFilter($event)"
             (openSettings)="openSettingsDialog()"
             (openFixSuggestions)="openFixSuggestionsDialog()"
@@ -139,6 +143,7 @@ export class AppComponent {
   loading = signal<boolean>(false);
   error = signal<string | null>(null);
   currentFilter = signal<"all" | "exists" | "missing">("all");
+  autoFilterMissing = signal<boolean>(false); // Playlist tree checkbox durumu
 
   constructor(
     private playlistService: PlaylistService,
@@ -146,9 +151,8 @@ export class AppComponent {
     private http: HttpClient,
     private configService: ConfigService,
   ) {
-    console.log('🚀 App Component başlatıldı');
+    console.log("🚀 App Component başlatıldı");
   }
-
 
   private getApiUrl(): string {
     return this.configService.getApiUrl();
@@ -170,10 +174,25 @@ export class AppComponent {
     this.currentFilter.set(filter);
   }
 
+  handleTreeFilterChange(showOnlyMissing: boolean) {
+    console.log("🔄 Tree filter değişti:", showOnlyMissing);
+    this.autoFilterMissing.set(showOnlyMissing);
+
+    // Checkbox işaretliyse otomatik "Eksik" filtresini aktif et
+    if (showOnlyMissing) {
+      this.currentFilter.set("missing");
+    } else {
+      this.currentFilter.set("all");
+    }
+  }
+
   handleNodeSelect(node: TreeNode) {
     this.selectedPlaylist.set(node);
     if (node.type !== "folder") {
-      this.currentFilter.set("all");
+      // Tree checkbox'ı işaretliyse "missing" filtresi otomatik aktif
+      if (!this.autoFilterMissing()) {
+        this.currentFilter.set("all");
+      }
       this.loadPlaylistContent(node.path);
     } else {
       this.playlistContent.set([]);
@@ -194,7 +213,6 @@ export class AppComponent {
     }
   }
 
-
   handleAcceptAlternative(): void {
     // TODO: Implement
   }
@@ -203,19 +221,18 @@ export class AppComponent {
     // TODO: Implement
   }
 
-
   openSettingsDialog(): void {
     const dialogRef = this.dialog.open(SettingsDialogComponent, {
-      width: '500px',
-      disableClose: false
+      width: "500px",
+      disableClose: false,
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe((result) => {
       if (result) {
         // Ayarlar değiştiğinde gerekli işlemleri yap
         // Örneğin, mevcut playlist'i yeniden yükle
         const currentPlaylist = this.selectedPlaylist();
-        if (currentPlaylist && currentPlaylist.type !== 'folder') {
+        if (currentPlaylist && currentPlaylist.type !== "folder") {
           this.loadPlaylistContent(currentPlaylist.path);
         }
       }
@@ -223,13 +240,15 @@ export class AppComponent {
   }
 
   async openFixSuggestionsDialog(): Promise<void> {
-    const { FixSuggestionsComponent } = await import("./components/fix-suggestions/fix-suggestions.component");
-    
+    const { FixSuggestionsComponent } = await import(
+      "./components/fix-suggestions/fix-suggestions.component"
+    );
+
     const dialogRef = this.dialog.open(FixSuggestionsComponent, {
       width: "95vw",
       maxWidth: "95vw",
       height: "90vh",
-      panelClass: "fix-suggestions-dialog"
+      panelClass: "fix-suggestions-dialog",
     });
 
     const result = await dialogRef.afterClosed().toPromise();
@@ -237,7 +256,7 @@ export class AppComponent {
     if (result?.success) {
       // Fix uygulandıysa, mevcut playlist'i yeniden yükle
       const currentPlaylist = this.selectedPlaylist();
-      if (currentPlaylist && currentPlaylist.type !== 'folder') {
+      if (currentPlaylist && currentPlaylist.type !== "folder") {
         await this.loadPlaylistContent(currentPlaylist.path);
       }
     }

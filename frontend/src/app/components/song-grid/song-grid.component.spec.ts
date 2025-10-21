@@ -4,7 +4,8 @@ import { SongGridComponent } from "./song-grid.component";
 import { MusicPlayerService } from "../../services/music-player.service";
 import { SearchResultComponent } from "./search-result/search-result.component";
 import { Song } from "../../models/song.model";
-import { environment } from '../../../environments/environment';
+import { of } from "rxjs";
+import { environment } from "../../../environments/environment";
 
 describe("SongGridComponent", () => {
   let component: SongGridComponent;
@@ -49,6 +50,8 @@ describe("SongGridComponent", () => {
       "pause",
       "isPlaying",
     ]);
+    musicPlayerServiceSpy.play.and.returnValue(of(void 0));
+    musicPlayerServiceSpy.isPlaying.and.returnValue(false);
 
     await TestBed.configureTestingModule({
       imports: [SongGridComponent, SearchResultComponent, HttpClientTestingModule],

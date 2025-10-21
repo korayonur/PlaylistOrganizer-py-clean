@@ -26,7 +26,8 @@
         </div>
       </div>
 
-      <div 
+      <button 
+        type="button"
         class="stat-card exact" 
         [class.active]="isTypeFilterActive('exact')"
         (click)="filterByType('exact')"
@@ -38,9 +39,10 @@
           <div class="stat-value">{{ stats.exact }}</div>
           <div class="stat-label">Exact</div>
         </div>
-      </div>
+      </button>
 
-      <div 
+      <button 
+        type="button"
         class="stat-card high" 
         [class.active]="isTypeFilterActive('high')"
         (click)="filterByType('high')"
@@ -52,9 +54,10 @@
           <div class="stat-value">{{ stats.high }}</div>
           <div class="stat-label">High</div>
         </div>
-      </div>
+      </button>
 
-      <div 
+      <button 
+        type="button"
         class="stat-card medium" 
         [class.active]="isTypeFilterActive('medium')"
         (click)="filterByType('medium')"
@@ -66,9 +69,10 @@
           <div class="stat-value">{{ stats.medium }}</div>
           <div class="stat-label">Medium</div>
         </div>
-      </div>
+      </button>
 
-      <div 
+      <button 
+        type="button"
         class="stat-card low" 
         [class.active]="isTypeFilterActive('low')"
         (click)="filterByType('low')"
@@ -80,7 +84,7 @@
           <div class="stat-value">{{ stats.low }}</div>
           <div class="stat-label">Low</div>
         </div>
-      </div>
+      </button>
     </div>
 
     <div class="filter-info" *ngIf="activeTypeFilter">
@@ -145,16 +149,36 @@
       <thead>
         <tr>
           <th class="checkbox-col"></th>
-          <th class="track-col">Original Track</th>
+          <th class="track-col sortable" (click)="sortByColumn('track')">
+            <span class="sort-header">
+              Original Track
+              <mat-icon class="sort-icon">{{ getSortIcon('track') }}</mat-icon>
+            </span>
+          </th>
           <th class="arrow-col"></th>
-          <th class="music-col">Suggested Music File</th>
-          <th class="similarity-col">Similarity</th>
-          <th class="type-col">Type</th>
+          <th class="music-col sortable" (click)="sortByColumn('musicFile')">
+            <span class="sort-header">
+              Suggested Music File
+              <mat-icon class="sort-icon">{{ getSortIcon('musicFile') }}</mat-icon>
+            </span>
+          </th>
+          <th class="similarity-col sortable" (click)="sortByColumn('similarity')">
+            <span class="sort-header">
+              Similarity
+              <mat-icon class="sort-icon">{{ getSortIcon('similarity') }}</mat-icon>
+            </span>
+          </th>
+          <th class="type-col sortable" (click)="sortByColumn('type')">
+            <span class="sort-header">
+              Type
+              <mat-icon class="sort-icon">{{ getSortIcon('type') }}</mat-icon>
+            </span>
+          </th>
           <th class="actions-col">Actions</th>
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let suggestion of filteredSuggestions" [class.selected]="isSelected(suggestion)">
+        <tr *ngFor="let suggestion of paginatedSuggestions" [class.selected]="isSelected(suggestion)">
           <td class="checkbox-col">
             <mat-checkbox 
               [checked]="isSelected(suggestion)"
@@ -209,12 +233,51 @@
   <div class="results-info" *ngIf="!isLoading && filteredSuggestions.length > 0">
     <div class="results-summary">
       <mat-icon>list_alt</mat-icon>
-      <span>{{ filteredSuggestions.length }} / {{ getFilteredTotal() }} öneri gösteriliyor</span>
+      <span>{{ paginatedSuggestions.length }} / {{ filteredSuggestions.length }} öneri gösteriliyor (Sayfa {{ currentPage }} / {{ totalPages }})</span>
       <span class="all-results-badge" *ngIf="filteredSuggestions.length === getFilteredTotal()">
         <mat-icon>check_circle</mat-icon>
         Tüm sonuçlar yüklendi
       </span>
     </div>
+  </div>
+
+  <!-- Pagination Controls -->
+  <div class="pagination-container" *ngIf="!isLoading && filteredSuggestions.length > 0 && totalPages > 1">
+    <div class="pagination-info">
+      Sayfa {{ currentPage }} / {{ totalPages }} (Toplam {{ filteredSuggestions.length }} öneri)
+    </div>
+    
+    <div class="pagination-controls">
+      <button mat-button (click)="goToPage(currentPage - 1)" [disabled]="currentPage <= 1">
+        <mat-icon>chevron_left</mat-icon>
+        Önceki
+      </button>
+      
+      <div class="page-numbers">
+        <button 
+          *ngFor="let page of getPageNumbers()" 
+          mat-button 
+          [class.active]="page === currentPage"
+          [disabled]="page === -1"
+          (click)="page !== -1 && goToPage(page)">
+          {{ page === -1 ? '...' : page }}
+        </button>
+      </div>
+      
+      <button mat-button (click)="goToPage(currentPage + 1)" [disabled]="currentPage >= totalPages">
+        Sonraki
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+    
+    <button 
+      mat-raised-button 
+      color="primary" 
+      (click)="loadMoreSuggestions()" 
+      [disabled]="!hasMoreData">
+      <mat-icon>expand_more</mat-icon>
+      Daha Fazla Yükle
+    </button>
   </div>
 
   <!-- Empty State -->
@@ -230,4 +293,3 @@
   </div>
 </div>
 </div>
-
