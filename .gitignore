@@ -26,6 +26,7 @@ yarn-error.log
 
 # Yedekler ve geçici dosyalar
 /backup
+.trash/
 *.bak
 *.swp
 *.swo
