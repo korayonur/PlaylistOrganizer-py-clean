@@ -22,11 +22,14 @@ Bu yönetilen bloğu koruyun ki 'openspec update' talimatları yenileyebilsin.
 - Değişken ve fonksiyon isimleri İngilizce olmalı
 - Git commit mesajları Türkçe olabilir
 
-### .NET MAUI Geliştirme
-- .NET 8 kullanılmalı
-- Clean Architecture uygulanmalı
-- Mac Catalyst öncelikli platform
-- MVVM pattern kullanılmalı
+### SwiftUI Geliştirme
+- SwiftUI framework kullanılmalı
+- macOS 13.0+ hedef platform
+- MVVM pattern zorunlu
+- @StateObject ve @ObservedObject kullanılmalı
+- Combine framework ile reactive programming
+- Async/await pattern kullanılmalı
+- SwiftUI best practices uygulanmalı
 
 ### Git Workflow
 - Feature branch'ler kullanılmalı
@@ -35,17 +38,19 @@ Bu yönetilen bloğu koruyun ki 'openspec update' talimatları yenileyebilsin.
 - Pull request'ler kullanılmalı
 
 ### Kod Standartları
-- C# coding conventions
-- Async/await pattern
+- Swift coding conventions
+- SwiftUI best practices
+- MVVM pattern zorunlu
+- Protocol-oriented programming
 - Dependency injection
 - Unit test coverage
-- Nullable reference types
+- SwiftUI preview'ları
 
 ### OpenSpec Workflow
 1. Değişiklik önerisi oluştur
 2. Spec'leri güncelle
 3. Task'ları tanımla
 4. Kodu implement et
-5. Test'leri yaz
+5. SwiftUI preview'ları test et
 6. Dokümantasyonu güncelle
 7. Değişikliği archive et

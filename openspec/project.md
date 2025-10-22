@@ -1,56 +1,58 @@
-# PlaylistOrganizer Projesi
+# PlaylistOrganizer SwiftUI Projesi
 
 ## Proje Genel Bakış
 
-**PlaylistOrganizer**, müzik playlist'lerini organize etmek ve yönetmek için geliştirilmiş bir .NET MAUI uygulamasıdır. Uygulama, Mac, iOS, Android ve Windows platformlarında çalışabilir.
+**PlaylistOrganizer**, müzik playlist'lerini organize etmek ve yönetmek için geliştirilmiş native macOS uygulamasıdır. SwiftUI ile geliştirilmiş, Mac'te sorunsuz çalışan modern bir uygulamadır.
 
 ## Teknoloji Yığını
 
 ### Ana Teknolojiler
-- **.NET 8** - Ana framework
-- **.NET MAUI** - Cross-platform UI framework
-- **C#** - Programlama dili
-- **XAML** - UI tanımlama
+- **SwiftUI** - Native macOS UI framework
+- **Swift** - Programlama dili
+- **Xcode** - IDE
+- **macOS** - Hedef platform (macOS 13.0+)
 
 ### Mimari
-- **Clean Architecture** - Katmanlı mimari yaklaşımı
-- **Domain-Driven Design (DDD)** - İş mantığı odaklı tasarım
 - **MVVM Pattern** - Model-View-ViewModel deseni
+- **Combine Framework** - Reactive programming
+- **Core Data** - Veri yönetimi (opsiyonel)
+- **Protocol-oriented programming** - Swift'in güçlü yanı
 
 ### Katmanlar
-1. **Domain** - İş mantığı ve varlıklar
-2. **Application** - Use case'ler ve servisler
-3. **Infrastructure** - Veri erişimi ve harici servisler
-4. **Presentation** - UI ve kullanıcı etkileşimi
+1. **Models** - Veri modelleri (Playlist, Track, Artist)
+2. **ViewModels** - İş mantığı (@ObservableObject)
+3. **Views** - UI bileşenleri (SwiftUI Views)
+4. **Services** - Harici servisler (MockDataService)
 
 ## Hedef Platformlar
 
-- **macOS** (Mac Catalyst) - Ana hedef platform
-- **iOS** - Mobil platform
-- **Android** - Mobil platform
-- **Windows** - Desktop platform
+- **macOS** - Ana hedef platform (macOS 13.0+)
+- **macOS 26.0** - Güncel SDK hedefi
 
 ## Özellikler
 
-### Temel Özellikler
-- Playlist oluşturma ve düzenleme
-- Müzik dosyası import/export
-- Arama ve filtreleme
-- Playlist paylaşımı
+### Temel Özellikler ✅
+- ✅ Playlist listesi görüntüleme
+- ✅ Track listesi görüntüleme
+- ✅ Arama ve filtreleme
+- ✅ İstatistik kartları (Toplam/Bulunan/Eksik)
+- ✅ Dark theme UI
 
-### Gelişmiş Özellikler
-- Akıllı playlist önerileri
-- Müzik analizi ve kategorilendirme
-- Cloud senkronizasyonu
-- Offline çalışma desteği
+### Gelişmiş Özellikler (Planlanan)
+- 🔄 Müzik dosyası import/export
+- 🔄 Playlist oluşturma ve düzenleme
+- 🔄 Akıllı playlist önerileri
+- 🔄 Cloud senkronizasyonu
+- 🔄 Offline çalışma desteği
 
 ## Geliştirme Kuralları
 
 ### Kod Standartları
-- C# coding conventions
-- Async/await pattern kullanımı
-- Dependency injection
-- Unit test coverage
+- Swift coding conventions
+- SwiftUI best practices
+- MVVM pattern zorunlu
+- @StateObject ve @ObservedObject kullanımı
+- Combine framework ile reactive programming
 
 ### Git Workflow
 - Feature branch'ler
@@ -61,43 +63,45 @@
 ### Dokümantasyon
 - Tüm belgeler Türkçe
 - OpenSpec ile spec-driven development
-- API dokümantasyonu
+- SwiftUI preview'ları
 - Kullanıcı kılavuzu
 
 ## Kurulum ve Çalıştırma
 
 ### Gereksinimler
-- .NET 8 SDK
-- .NET MAUI workload
-- Visual Studio 2022 veya VS Code
-- Mac için Xcode (iOS geliştirme)
+- **Xcode 15.0+** (macOS geliştirme için)
+- **Swift 6.2+**
+- **macOS 13.0+** (hedef platform)
 
 ### Çalıştırma
 ```bash
-# Proje restore
-dotnet restore
+# Xcode ile açma
+open PlaylistOrganizer.xcodeproj
 
-# Mac için çalıştırma
-dotnet build -f net8.0-maccatalyst
-dotnet run -f net8.0-maccatalyst
+# Terminal'den build
+xcodebuild -project PlaylistOrganizer.xcodeproj -scheme PlaylistOrganizer -configuration Debug build
+
+# Çalıştırma
+xcodebuild -project PlaylistOrganizer.xcodeproj -scheme PlaylistOrganizer -configuration Debug -destination 'platform=macOS' run
 ```
 
 ## Proje Yapısı
 
 ```
-src/
-├── PlaylistOrganizer.Domain/          # Domain katmanı
-├── PlaylistOrganizer.Application/     # Application katmanı
-├── PlaylistOrganizer.Infrastructure/  # Infrastructure katmanı
-├── PlaylistOrganizer.Presentation/    # Presentation katmanı
-└── PlaylistOrganizer.Maui/           # MAUI uygulaması
+xcode/PlaylistOrganizer/
+├── PlaylistOrganizer.xcodeproj/     # Xcode proje dosyası
+└── PlaylistOrganizer/
+    ├── PlaylistOrganizerApp.swift   # Ana uygulama
+    ├── ContentView.swift            # Ana UI view
+    ├── PlaylistOrganizerViewModel.swift # ViewModel ve modeller
+    └── Assets.xcassets/            # Uygulama varlıkları
 ```
 
 ## Katkıda Bulunma
 
 1. Feature branch oluştur
 2. Değişiklikleri yap
-3. Test'leri çalıştır
+3. SwiftUI preview'ları test et
 4. Pull request oluştur
 5. Code review bekle
 6. Merge et
