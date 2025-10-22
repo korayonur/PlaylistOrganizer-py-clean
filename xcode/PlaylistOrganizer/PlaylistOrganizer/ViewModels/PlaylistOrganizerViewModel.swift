@@ -16,12 +16,23 @@ class PlaylistOrganizerViewModel: ObservableObject {
     @Published var searchText: String = ""
     @Published var showMissingTracksOnly: Bool = false
     
+    private let databaseManager = DatabaseManager()
+    
     var totalTracks: Int { tracks.count }
     var foundTracks: Int { tracks.filter { $0.status == .found }.count }
     var missingTracks: Int { tracks.filter { $0.status == .missing }.count }
     
     init() {
         loadMockData()
+        testDatabaseConnection()
+    }
+    
+    private func testDatabaseConnection() {
+        if databaseManager.testConnection() {
+            print("✅ DatabaseManager başarıyla bağlandı")
+        } else {
+            print("❌ DatabaseManager bağlantı hatası")
+        }
     }
     
     func loadMockData() {
