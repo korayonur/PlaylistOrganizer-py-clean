@@ -1,6 +1,8 @@
-﻿namespace PlaylistOrganizer.Maui;
+﻿using Microsoft.Maui.Controls;
 
-public partial class App : Application
+namespace PlaylistOrganizer.Maui;
+
+public partial class App : Microsoft.Maui.Controls.Application
 {
 	public App()
 	{
