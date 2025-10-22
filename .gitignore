@@ -136,6 +136,8 @@ py/dist/
 # .NET MAUI
 **/bin/
 **/obj/
+**/project.assets.json
+**/*.csproj.nuget.dgspec.json
 *.user
 *.suo
 *.userosscache
@@ -158,6 +160,12 @@ py/dist/
 *.pidb
 *.svclog
 *.scc
+
+# MAUI özel dosyalar
+**/Platforms/**/bin/
+**/Platforms/**/obj/
+**/Resources/**/bin/
+**/Resources/**/obj/
 
 # Database files - NEVER commit database files
 *.db
