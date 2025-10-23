@@ -7,17 +7,35 @@ let package = Package(
         .macOS(.v13)
     ],
     products: [
-        .executable(name: "PlaylistOrganizer", targets: ["PlaylistOrganizer"])
+        .library(name: "PlaylistOrganizer", targets: ["PlaylistOrganizer"]),
+        .executable(name: "TerminalImportTest", targets: ["TerminalImportTest"])
     ],
     dependencies: [
         .package(url: "https://github.com/stephencelis/SQLite.swift.git", from: "0.15.0")
     ],
     targets: [
-        .executableTarget(
+        .target(
             name: "PlaylistOrganizer",
             dependencies: [
                 .product(name: "SQLite", package: "SQLite.swift")
-            ]
+            ],
+            path: "Sources/PlaylistOrganizer"
+        ),
+        .testTarget(
+            name: "PlaylistOrganizerTests",
+            dependencies: ["PlaylistOrganizer"],
+            path: "Tests/PlaylistOrganizerTests"
+        ),
+        .executableTarget(
+            name: "TerminalImportTest",
+            dependencies: [
+                .product(name: "SQLite", package: "SQLite.swift")
+            ],
+            path: "Sources/TerminalImportTest"
         )
     ]
 )
+
+
+
+

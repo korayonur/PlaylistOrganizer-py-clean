@@ -11,19 +11,28 @@ import Combine
 
 // MARK: - ViewModel
 class PlaylistOrganizerViewModel: ObservableObject {
-    @Published var playlists: [Playlist] = []
-    @Published var tracks: [Track] = []
     @Published var searchText: String = ""
     @Published var showMissingTracksOnly: Bool = false
     
+    private let dataService = DataService()
     private let databaseManager = DatabaseManager()
     
-    var totalTracks: Int { tracks.count }
-    var foundTracks: Int { tracks.filter { $0.status == .found }.count }
-    var missingTracks: Int { tracks.filter { $0.status == .missing }.count }
+    // DataService'den veri al
+    var playlists: [Playlist] { dataService.playlists }
+    var tracks: [Track] { dataService.tracks }
+    var isLoading: Bool { dataService.isLoading }
+    var errorMessage: String? { dataService.errorMessage }
+    
+    // Computed properties
+    var totalTracks: Int { dataService.totalTracks }
+    var foundTracks: Int { dataService.foundTracks }
+    var missingTracks: Int { dataService.missingTracks }
+    var totalPlaylists: Int { dataService.totalPlaylists }
+    var selectedPlaylist: Playlist? { dataService.selectedPlaylist }
     
     init() {
-        loadMockData()
+        // DatabaseManager instance'ı oluştur (database dosyası oluşturulur)
+        _ = DatabaseManager()
         testDatabaseConnection()
     }
     
@@ -35,36 +44,79 @@ class PlaylistOrganizerViewModel: ObservableObject {
         }
     }
     
-    func loadMockData() {
-        playlists = MockDataService.getSamplePlaylists()
-        tracks = MockDataService.getSampleTracks()
+    func refreshData() {
+        dataService.refreshData()
     }
     
     func selectPlaylist(_ playlist: Playlist) {
+        // DataService'de playlist seçimini güncelle
+        var updatedPlaylists = playlists
+        
         // Tüm playlist'lerin seçimini kaldır
-        for i in 0..<playlists.count {
-            playlists[i].isSelected = false
-            for j in 0..<playlists[i].children.count {
-                playlists[i].children[j].isSelected = false
+        for i in 0..<updatedPlaylists.count {
+            updatedPlaylists[i].isSelected = false
+            for j in 0..<updatedPlaylists[i].children.count {
+                updatedPlaylists[i].children[j].isSelected = false
             }
         }
         
         // Seçilen playlist'i bul ve seç
-        for i in 0..<playlists.count {
-            if playlists[i].id == playlist.id {
-                playlists[i].isSelected = true
-                playlists[i].isExpanded = !playlists[i].isExpanded
+        for i in 0..<updatedPlaylists.count {
+            if updatedPlaylists[i].id == playlist.id {
+                updatedPlaylists[i].isSelected = true
+                updatedPlaylists[i].isExpanded = !updatedPlaylists[i].isExpanded
             } else {
-                for j in 0..<playlists[i].children.count {
-                    if playlists[i].children[j].id == playlist.id {
-                        playlists[i].children[j].isSelected = true
-                        playlists[i].isExpanded = true
+                for j in 0..<updatedPlaylists[i].children.count {
+                    if updatedPlaylists[i].children[j].id == playlist.id {
+                        updatedPlaylists[i].children[j].isSelected = true
+                        updatedPlaylists[i].isExpanded = true
                     }
                 }
             }
         }
         
+        // DataService'i güncelle
+        for playlist in updatedPlaylists {
+            dataService.updatePlaylist(playlist)
+        }
+        
         // Track'leri filtrele (şimdilik tüm track'leri göster)
         // TODO: Seçilen playlist'e göre track'leri filtrele
+    }
+    
+    // MARK: - Search Methods
+    
+    func searchPlaylists(query: String) -> [Playlist] {
+        return dataService.searchPlaylists(query: query)
+    }
+    
+    func searchTracks(query: String) -> [Track] {
+        return dataService.searchTracks(query: query)
+    }
+    
+    // MARK: - CRUD Operations
+    
+    func addPlaylist(_ playlist: Playlist) {
+        dataService.addPlaylist(playlist)
+    }
+    
+    func updatePlaylist(_ playlist: Playlist) {
+        dataService.updatePlaylist(playlist)
+    }
+    
+    func deletePlaylist(_ playlist: Playlist) {
+        dataService.deletePlaylist(playlist)
+    }
+    
+    func addTrack(_ track: Track) {
+        dataService.addTrack(track)
+    }
+    
+    func updateTrack(_ track: Track) {
+        dataService.updateTrack(track)
+    }
+    
+    func deleteTrack(_ track: Track) {
+        dataService.deleteTrack(track)
     }
 }

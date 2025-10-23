@@ -28,7 +28,7 @@ struct TrackRowView: View {
             .buttonStyle(PlainButtonStyle())
             
             // Dosya Yolu
-            Text(track.filePath)
+            Text(track.path)
                 .foregroundColor(.white)
                 .font(.system(size: 13))
                 .lineLimit(1)

@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		0E67451D2EAA50A5001C7B81 /* Algorithms in Frameworks */ = {isa = PBXBuildFile; productRef = 0E67451C2EAA50A5001C7B81 /* Algorithms */; };
+		0E6745202EAA51F2001C7B81 /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = 0E67451F2EAA51F2001C7B81 /* SQLite */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		0EA5EA092EA8F51F0078E786 /* PlaylistOrganizer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PlaylistOrganizer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +28,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0E6745202EAA51F2001C7B81 /* SQLite in Frameworks */,
+				0E67451D2EAA50A5001C7B81 /* Algorithms in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +72,8 @@
 			);
 			name = PlaylistOrganizer;
 			packageProductDependencies = (
+				0E67451C2EAA50A5001C7B81 /* Algorithms */,
+				0E67451F2EAA51F2001C7B81 /* SQLite */,
 			);
 			productName = PlaylistOrganizer;
 			productReference = 0EA5EA092EA8F51F0078E786 /* PlaylistOrganizer.app */;
@@ -94,6 +103,10 @@
 			);
 			mainGroup = 0EA5EA002EA8F51F0078E786;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				0E67451B2EAA50A5001C7B81 /* XCRemoteSwiftPackageReference "swift-algorithms" */,
+				0E67451E2EAA51F2001C7B81 /* XCRemoteSwiftPackageReference "SQLite.swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0EA5EA0A2EA8F51F0078E786 /* Products */;
 			projectDirPath = "";
@@ -248,10 +261,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PlaylistOrganizer/PlaylistOrganizer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -278,10 +292,11 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PlaylistOrganizer/PlaylistOrganizer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -325,6 +340,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0E67451B2EAA50A5001C7B81 /* XCRemoteSwiftPackageReference "swift-algorithms" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-algorithms.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.1;
+			};
+		};
+		0E67451E2EAA51F2001C7B81 /* XCRemoteSwiftPackageReference "SQLite.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stephencelis/SQLite.swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.15.4;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0E67451C2EAA50A5001C7B81 /* Algorithms */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E67451B2EAA50A5001C7B81 /* XCRemoteSwiftPackageReference "swift-algorithms" */;
+			productName = Algorithms;
+		};
+		0E67451F2EAA51F2001C7B81 /* SQLite */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0E67451E2EAA51F2001C7B81 /* XCRemoteSwiftPackageReference "SQLite.swift" */;
+			productName = SQLite;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 0EA5EA012EA8F51F0078E786 /* Project object */;
 }
