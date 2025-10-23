@@ -1,3 +1,9 @@
+---
+description: PlaylistOrganizer SwiftUI projesi için OpenSpec uyumlu kurallar
+globs: ["**/*.swift", "**/*.md", "**/*.json", "**/*.sh"]
+alwaysApply: true
+---
+
 # CURSOR RULES - PlaylistOrganizer SwiftUI (OpenSpec Uyumlu)
 
 ## OPENSPEC WORKFLOW KURALLARI
