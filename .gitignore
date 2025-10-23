@@ -239,3 +239,4 @@ package-lock.json
 --watch=false
 *.DS_Store
 **/.DS_Store
+xcode/PlaylistOrganizer/.build/
