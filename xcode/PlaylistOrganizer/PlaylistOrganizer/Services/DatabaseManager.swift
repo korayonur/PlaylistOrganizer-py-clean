@@ -94,6 +94,9 @@ class DatabaseManager {
                 t.column(wordFileId)
                 t.column(wordType)
                 t.column(wordCreatedAt, defaultValue: "")
+                
+                // Foreign key constraint: word_index -> music_files
+                t.foreignKey(wordFileId, references: musicFiles, musicId, delete: .cascade)
             })
             
             // Playlists Tablosu
@@ -123,7 +126,7 @@ class DatabaseManager {
             let trackFileName = Expression<String>("file_name")
             let trackFileNameOnly = Expression<String>("file_name_only")
             let trackNormalizedFileName = Expression<String>("normalized_file_name")
-            let trackPlaylistId = Expression<Int?>("playlist_id")
+            let trackMusicFileId = Expression<Int?>("music_file_id")
             let trackCreatedAt = Expression<String>("created_at")
             
             try db.run(tracks.create(ifNotExists: true) { t in
@@ -132,8 +135,11 @@ class DatabaseManager {
                 t.column(trackFileName)
                 t.column(trackFileNameOnly)
                 t.column(trackNormalizedFileName)
-                t.column(trackPlaylistId)
+                t.column(trackMusicFileId)
                 t.column(trackCreatedAt, defaultValue: "")
+                
+                // Foreign key constraint: tracks -> music_files
+                t.foreignKey(trackMusicFileId, references: musicFiles, musicId, delete: .cascade)
             })
             
             // Playlist Tracks İlişki Tablosu
@@ -154,7 +160,38 @@ class DatabaseManager {
                 t.foreignKey(ptTrackId, references: tracks, trackId, delete: .cascade)
             })
             
+            // Music Words Tablosu (WordIndexingService için)
+            let musicWords = Table("music_words")
+            let mwId = Expression<Int>("id")
+            let mwMusicPath = Expression<String>("music_path")
+            let mwWord = Expression<String>("word")
+            let mwCreatedAt = Expression<String>("created_at")
+            
+            try db.run(musicWords.create(ifNotExists: true) { t in
+                t.column(mwId, primaryKey: .autoincrement)
+                t.column(mwMusicPath)
+                t.column(mwWord)
+                t.column(mwCreatedAt, defaultValue: "")
+            })
+            
+            // Index'ler ekle (Performance için)
+            try db.run("CREATE INDEX IF NOT EXISTS idx_word_index_word ON word_index(word)")
+            try db.run("CREATE INDEX IF NOT EXISTS idx_word_index_file_id ON word_index(file_id)")
+            try db.run("CREATE INDEX IF NOT EXISTS idx_tracks_path ON tracks(path)")
+            try db.run("CREATE INDEX IF NOT EXISTS idx_music_files_path ON music_files(path)")
+            try db.run("CREATE INDEX IF NOT EXISTS idx_playlists_name ON playlists(name)")
+            try db.run("CREATE INDEX IF NOT EXISTS idx_music_words_word ON music_words(word)")
+            try db.run("CREATE INDEX IF NOT EXISTS idx_music_words_path ON music_words(music_path)")
+            
+            // Unique constraint'ler ekle (Data integrity için)
+            try db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_music_files_path_unique ON music_files(path)")
+            try db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_tracks_path_unique ON tracks(path)")
+            try db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_playlists_path_unique ON playlists(path)")
+            
             DebugLogger.shared.logDatabase("✅ SQLite tabloları oluşturuldu")
+            DebugLogger.shared.logDatabase("✅ Foreign key constraint'ler eklendi")
+            DebugLogger.shared.logDatabase("✅ Index'ler eklendi")
+            DebugLogger.shared.logDatabase("✅ Unique constraint'ler eklendi")
         } catch {
             DebugLogger.shared.logError(error, context: "SQLite tablo oluşturma hatası", category: "Database")
         }
