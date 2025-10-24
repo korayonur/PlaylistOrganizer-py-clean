@@ -137,8 +137,8 @@ struct ContentView: View {
                             .padding()
                         } else {
                             // Normal track listesi
-                            ForEach(viewModel.tracks) { track in
-                                TrackRowView(track: track)
+                        ForEach(viewModel.tracks) { track in
+                            TrackRowView(track: track)
                             }
                         }
                     }
@@ -155,64 +155,188 @@ struct ContentView: View {
             // Import Progress Overlay
             Group {
                 if importService.isImporting {
-                    VStack(spacing: 15) {
-                        // Progress Bar
+                    VStack(spacing: 20) {
+                        // Başlık
+                        Text("Import İşlemi")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        // Ana Progress Bar
                         VStack(spacing: 8) {
                             ProgressView(value: importService.importProgress)
                                 .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-                                .frame(width: 300)
+                                .frame(width: 400)
                             
-                            Text("\(importService.importStats.currentStage): \(Int(importService.importProgress * 100))%")
+                            Text("\(importService.importStats.currentStage): %\(Int(importService.importProgress * 100))")
                                 .foregroundColor(.white)
                                 .font(.system(size: 14, weight: .medium))
                         }
                         
-                        // Ayrı Tablolar için İlerleme
-                        VStack(spacing: 8) {
-                            // Müzik Dosyaları İlerleme
-                            HStack {
-                                Text("Müzik Dosyaları:")
-                                    .foregroundColor(.green)
-                                    .font(.system(size: 12, weight: .medium))
-                                Spacer()
-                                Text("\(importService.importStats.musicFilesProcessed)/\(importService.importStats.musicFilesFound)")
-                                    .foregroundColor(.green)
-                                    .font(.system(size: 12))
+                        // Aşama Detayları
+                        VStack(spacing: 12) {
+                            // AŞAMA 1: Klasör Tarama
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("📁 AŞAMA 1: Klasör Tarama")
+                                        .foregroundColor(.green)
+                                        .font(.system(size: 13, weight: .bold))
+                                    Spacer()
+                                    Text("0% - 80%")
+                                        .foregroundColor(.gray)
+                                        .font(.system(size: 11))
+                                }
+                                
+                                if importService.importStats.currentStage.contains("Tarama") {
+                                    HStack {
+                                        Text("Müzik Dosyaları:")
+                                            .foregroundColor(.green)
+                                            .font(.system(size: 11))
+                                        Spacer()
+                                        Text("\(importService.importStats.musicFilesFound)")
+                                            .foregroundColor(.green)
+                                            .font(.system(size: 11))
+                                    }
+                                    
+                                    HStack {
+                                        Text("Playlist Dosyaları:")
+                                            .foregroundColor(.blue)
+                                            .font(.system(size: 11))
+                                        Spacer()
+                                        Text("\(importService.importStats.playlistFilesFound)")
+                                            .foregroundColor(.blue)
+                                            .font(.system(size: 11))
+                                    }
+                                }
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(6)
                             
-                            // Playlist Dosyaları İlerleme
-                            HStack {
-                                Text("Playlist Dosyaları:")
-                                    .foregroundColor(.blue)
-                                    .font(.system(size: 12, weight: .medium))
-                                Spacer()
-                                Text("\(importService.importStats.playlistFilesProcessed)/\(importService.importStats.playlistFilesFound)")
-                                    .foregroundColor(.blue)
-                                    .font(.system(size: 12))
+                            // AŞAMA 2: Database Temizleme
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("🗄️ AŞAMA 2: Database Temizleme")
+                                        .foregroundColor(.orange)
+                                        .font(.system(size: 13, weight: .bold))
+                        Spacer()
+                                    Text("80% - 85%")
+                                        .foregroundColor(.gray)
+                                        .font(.system(size: 11))
+                                }
+                                
+                                if importService.importStats.currentStage.contains("Temizleme") {
+                                    Text("Tablolar temizleniyor...")
+                                        .foregroundColor(.orange)
+                                        .font(.system(size: 11))
+                                }
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(6)
                             
-                            // Track İlerleme
-                            HStack {
-                                Text("Track'ler:")
-                                    .foregroundColor(.orange)
-                                    .font(.system(size: 12, weight: .medium))
-                                Spacer()
-                                Text("\(importService.importStats.tracksProcessed)/\(importService.importStats.tracksFound)")
-                                    .foregroundColor(.orange)
-                                    .font(.system(size: 12))
+                            // AŞAMA 3: Müzik Ekleme
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("📝 AŞAMA 3: Müzik Ekleme")
+                                        .foregroundColor(.purple)
+                                        .font(.system(size: 13, weight: .bold))
+                                    Spacer()
+                                    Text("85% - 95%")
+                            .foregroundColor(.gray)
+                                        .font(.system(size: 11))
+                                }
+                                
+                                if importService.importStats.currentStage.contains("Ekleme") {
+                                    HStack {
+                                        Text("İşlenen:")
+                                            .foregroundColor(.purple)
+                                            .font(.system(size: 11))
+                                        Spacer()
+                                        Text("\(importService.importStats.musicFilesProcessed)/\(importService.importStats.musicFilesFound)")
+                                            .foregroundColor(.purple)
+                                            .font(.system(size: 11))
+                                    }
+                                    
+                                    HStack {
+                                        Text("Eklenen:")
+                                            .foregroundColor(.green)
+                                            .font(.system(size: 11))
+                                        Spacer()
+                                        Text("\(importService.importStats.musicFilesAdded)")
+                                            .foregroundColor(.green)
+                                            .font(.system(size: 11))
+                                    }
+                                    
+                                    HStack {
+                                        Text("Atlanan:")
+                                            .foregroundColor(.yellow)
+                                            .font(.system(size: 11))
+                                        Spacer()
+                                        Text("\(importService.importStats.musicFilesSkipped)")
+                                            .foregroundColor(.yellow)
+                                            .font(.system(size: 11))
+                                    }
+                                }
                             }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.purple.opacity(0.1))
+                            .cornerRadius(6)
                             
-                            // Genel İstatistikler
+                            // AŞAMA 4: Playlist İşleme
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text("🎶 AŞAMA 4: Playlist İşleme")
+                                        .foregroundColor(.cyan)
+                                        .font(.system(size: 13, weight: .bold))
+                                    Spacer()
+                                    Text("95% - 100%")
+                                        .foregroundColor(.gray)
+                                        .font(.system(size: 11))
+                                }
+                                
+                                if importService.importStats.currentStage.contains("İşleme") {
+                                    HStack {
+                                        Text("İşlenen:")
+                                            .foregroundColor(.cyan)
+                                            .font(.system(size: 11))
+                                        Spacer()
+                                        Text("\(importService.importStats.playlistFilesProcessed)/\(importService.importStats.playlistFilesFound)")
+                                            .foregroundColor(.cyan)
+                                            .font(.system(size: 11))
+                                    }
+                                    
+                                    HStack {
+                                        Text("Track'ler:")
+                                            .foregroundColor(.orange)
+                                            .font(.system(size: 11))
+                                        Spacer()
+                                        Text("\(importService.importStats.tracksProcessed)/\(importService.importStats.tracksFound)")
+                                            .foregroundColor(.orange)
+                                            .font(.system(size: 11))
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.cyan.opacity(0.1))
+                            .cornerRadius(6)
+                        }
+                        
+                        // Genel İstatistikler
+                        VStack(spacing: 6) {
                             Divider()
                                 .background(Color.gray)
                             
-                            HStack {
+        HStack {
                                 Text("Toplam İşlenen:")
                                     .foregroundColor(.white)
                                     .font(.system(size: 12, weight: .medium))
                                 Spacer()
                                 Text("\(importService.importStats.totalFilesProcessed)/\(importService.importStats.totalFilesFound)")
-                                    .foregroundColor(.white)
+                    .foregroundColor(.white)
                                     .font(.system(size: 12))
                             }
                             
@@ -231,16 +355,36 @@ struct ContentView: View {
                         
                         // Cancel Button
                         Button("İptal") {
-                            // TODO: Import'u iptal et
+                            // Import'u iptal et ve dialog'u kapat
                             importService.isImporting = false
+                            importService.importProgress = 0.0
+                            importService.importStats.currentStage = "❌ Import İptal Edildi"
                         }
                         .foregroundColor(.red)
                         .font(.system(size: 12))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(Color.red.opacity(0.2))
+                        .cornerRadius(6)
+                        
+                        // Kapat Button - Import tamamlandığında görünür
+                        if importService.importProgress >= 1.0 {
+                            Button("Kapat") {
+                                // Dialog'u kapat
+                                importService.isImporting = false
+                            }
+                            .foregroundColor(.blue)
+                            .font(.system(size: 12))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            .background(Color.blue.opacity(0.2))
+                            .cornerRadius(6)
+                        }
                     }
-                    .padding(20)
-                    .background(Color.black.opacity(0.9))
-                    .cornerRadius(12)
-                    .frame(maxWidth: 450)
+                    .padding(25)
+                    .background(Color.black.opacity(0.95))
+                    .cornerRadius(15)
+                    .frame(maxWidth: 500)
                 }
             }
         )

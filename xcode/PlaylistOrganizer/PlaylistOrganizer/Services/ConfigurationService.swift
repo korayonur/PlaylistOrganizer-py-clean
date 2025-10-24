@@ -81,7 +81,9 @@ class ConfigurationService: ObservableObject {
     
     /// Müzik dosyası uzantısı mı kontrol et
     func isMusicExtension(_ fileExtension: String) -> Bool {
-        return musicExtensions.contains(fileExtension.lowercased())
+        let ext = fileExtension.lowercased()
+        // Hem nokta ile hem nokta olmadan kontrol et
+        return musicExtensions.contains(ext) || musicExtensions.contains(".\(ext)")
     }
     
     /// Bir path'in dışlanacak klasörlerde olup olmadığını kontrol et
@@ -121,6 +123,18 @@ class ConfigurationService: ObservableObject {
         default:
             return .unknown
         }
+    }
+    
+    /// M3U uzantısı mı kontrol et
+    func isM3UExtension(_ fileExtension: String) -> Bool {
+        let ext = fileExtension.lowercased()
+        return ext == "m3u" || ext == "m3u8" || ext == ".m3u" || ext == ".m3u8"
+    }
+    
+    /// VDJFolder uzantısı mı kontrol et
+    func isVDJFolderExtension(_ fileExtension: String) -> Bool {
+        let ext = fileExtension.lowercased()
+        return ext == "vdjfolder" || ext == ".vdjfolder"
     }
 }
 

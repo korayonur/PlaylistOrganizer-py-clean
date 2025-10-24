@@ -14,7 +14,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationWillTerminate(_ notification: Notification) {
-        print("🔄 Uygulama kapatılıyor...")
+        DebugLogger.shared.logUI("🔄 Uygulama kapatılıyor...")
+        DebugLogger.shared.logSystemHealth()
         // Database bağlantısını kapat
         // TODO: DatabaseManager'da cleanup metodu ekle
     }

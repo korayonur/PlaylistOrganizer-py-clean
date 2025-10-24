@@ -8,15 +8,6 @@
 import Foundation
 import SQLite
 
-// MARK: - Array Extension
-extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        return stride(from: 0, to: count, by: size).map {
-            Array(self[$0..<Swift.min($0 + size, count)])
-        }
-    }
-}
-
 /// Database import operations service
 /// Handles all database operations for import process
 class DatabaseImportService {
@@ -43,33 +34,33 @@ class DatabaseImportService {
         do {
             // Foreign keys kapat
             try db.run("PRAGMA foreign_keys = OFF")
-            print("🔓 Foreign keys kapatıldı")
+            DebugLogger.shared.logDatabase("🔓 Foreign keys kapatıldı")
             
             // İlişki tablosunu temizle
             try db.run("DELETE FROM playlist_tracks")
-            print("✅ playlist_tracks temizlendi")
+            DebugLogger.shared.logDatabase("✅ playlist_tracks temizlendi")
             
             // Ana tabloları temizle
             try db.run("DELETE FROM playlists")
-            print("✅ playlists temizlendi")
+            DebugLogger.shared.logDatabase("✅ playlists temizlendi")
             
             try db.run("DELETE FROM tracks")
-            print("✅ tracks temizlendi")
+            DebugLogger.shared.logDatabase("✅ tracks temizlendi")
             
             try db.run("DELETE FROM music_files")
-            print("✅ music_files temizlendi")
+            DebugLogger.shared.logDatabase("✅ music_files temizlendi")
             
             // Word index'leri temizle
             try db.run("DELETE FROM word_index")
-            print("✅ word_index temizlendi")
+            DebugLogger.shared.logDatabase("✅ word_index temizlendi")
             
             // Sessions temizle
             try db.run("DELETE FROM import_sessions")
-            print("✅ import_sessions temizlendi")
+            DebugLogger.shared.logDatabase("✅ import_sessions temizlendi")
             
             // Foreign keys aç
             try db.run("PRAGMA foreign_keys = ON")
-            print("🔒 Foreign keys açıldı")
+            DebugLogger.shared.logDatabase("🔒 Foreign keys açıldı")
             
         } catch {
             // Foreign keys'i tekrar aç
@@ -137,6 +128,39 @@ class DatabaseImportService {
         return BulkAddResult(added: added, skipped: skipped)
     }
     
+    /// Create playlist in database
+    /// - Parameters:
+    ///   - path: Playlist file path
+    ///   - name: Playlist name
+    ///   - type: Playlist type
+    ///   - trackCount: Number of tracks
+    /// - Returns: Created playlist ID
+    /// - Throws: Database operation errors
+    func createPlaylist(path: String, name: String, type: PlaylistType, trackCount: Int) async throws -> Int {
+        guard let db = databaseManager.getConnection() else {
+            throw DatabaseError.connectionFailed
+        }
+        
+        do {
+            let insertStmt = try db.prepare("""
+                INSERT INTO playlists (path, name, type, trackCount, createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """)
+            
+            let now = ISO8601DateFormatter().string(from: Date())
+            let typeString = type == .m3u ? "m3u" : "vdjfolder"
+            
+            _ = try insertStmt.run(path, name, typeString, trackCount, now, now)
+            
+            // Son eklenen ID'yi al
+            let lastId = db.lastInsertRowid
+            return Int(lastId)
+            
+        } catch {
+            throw DatabaseError.savePlaylistTracksFailed(error)
+        }
+    }
+    
     /// Save playlist tracks to database
     /// - Parameters:
     ///   - playlistId: Playlist ID
@@ -190,28 +214,32 @@ class DatabaseImportService {
     /// - Returns: Track ID
     /// - Throws: Database operation errors
     private func findOrCreateTrack(_ track: ScannedTrack, db: Connection) throws -> Int {
-        // Track'i bul
+        // Track'i bul - Parametreyi bind et
         let findStmt = try db.prepare("SELECT id FROM tracks WHERE path = ?")
-        if let existingTrack = findStmt.first(where: { $0[0] as? String == track.path }) {
-            return existingTrack[0] as? Int ?? 0
+        let bindedStmt = findStmt.bind(track.path)
+        
+        for row in bindedStmt {
+            if let trackId = row[0] as? Int64 {
+                DebugLogger.shared.logDatabase("✅ Track bulundu: \(track.path) - ID: \(trackId)")
+                return Int(trackId)
+            }
         }
         
         // Track yoksa oluştur
+        DebugLogger.shared.logDatabase("📝 Track oluşturuluyor: \(track.path)")
         let insertStmt = try db.prepare("""
             INSERT OR IGNORE INTO tracks (path, fileName, fileNameOnly, normalizedFileName, createdAt)
             VALUES (?, ?, ?, ?, ?)
         """)
         
-        let result = try insertStmt.run(track.path, track.fileName, track.fileNameOnly, 
+        try insertStmt.run(track.path, track.fileName, track.fileNameOnly, 
                                      track.normalizedFileName, 
                                      ISO8601DateFormatter().string(from: Date()))
         
-        // Track ID'yi almak için tekrar sorgula
-        if let insertedTrack = findStmt.first(where: { $0[0] as? String == track.path }) {
-            return insertedTrack[0] as? Int ?? 0
-        }
-        
-        return 0
+        // Yeni oluşturulan track'in ID'sini al
+        let trackId = db.lastInsertRowid
+        DebugLogger.shared.logDatabase("✅ Track oluşturuldu: \(track.path) - ID: \(trackId)")
+        return Int(trackId)
     }
 }
 

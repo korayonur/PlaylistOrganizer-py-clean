@@ -34,7 +34,7 @@ class ImportLogger {
     }
     
     /// Log mesajını hem console'a hem dosyaya yaz
-    func log(_ message: String, level: LogLevel = .info) {
+    func log(_ message: String, level: ImportLogLevel = .info) {
         let timestamp = dateFormatter.string(from: Date())
         let logMessage = "[\(timestamp)] [\(level.rawValue)] \(message)"
         
@@ -76,7 +76,7 @@ class ImportLogger {
     }
 }
 
-enum LogLevel: String {
+enum ImportLogLevel: String {
     case info = "INFO"
     case warning = "WARN"
     case error = "ERROR"

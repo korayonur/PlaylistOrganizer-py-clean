@@ -42,5 +42,6 @@ struct ScannedTrack {
 struct ScannedPlaylistFile {
     let path: String
     let fileName: String
+    let fileExtension: String
     let type: PlaylistType
 }

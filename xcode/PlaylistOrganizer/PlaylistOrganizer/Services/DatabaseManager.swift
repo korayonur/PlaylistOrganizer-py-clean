@@ -12,8 +12,9 @@ class DatabaseManager {
     private var db: Connection?
     
     init() {
+        DebugLogger.shared.logDatabase("🚀 DatabaseManager başlatılıyor...")
         setupDatabase()
-        print("✅ DatabaseManager başlatıldı - SQLite.swift aktif")
+        DebugLogger.shared.logDatabase("✅ DatabaseManager başlatıldı - SQLite.swift aktif")
     }
     
     private func setupDatabase() {
@@ -22,10 +23,10 @@ class DatabaseManager {
             let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
             let dbPath = documentsPath.appendingPathComponent("playlist_organizer_swiftui.db")
             db = try Connection(dbPath.path)
-            print("✅ SQLite veritabanı bağlantısı kuruldu: \(dbPath.path)")
+            DebugLogger.shared.logDatabase("✅ SQLite veritabanı bağlantısı kuruldu: \(dbPath.path)")
             createTables()
         } catch {
-            print("❌ SQLite veritabanı bağlantı hatası: \(error)")
+            DebugLogger.shared.logError(error, context: "SQLite veritabanı bağlantı hatası", category: "Database")
         }
     }
     
@@ -135,9 +136,27 @@ class DatabaseManager {
                 t.column(trackCreatedAt, defaultValue: "")
             })
             
-            print("✅ SQLite tabloları oluşturuldu")
+            // Playlist Tracks İlişki Tablosu
+            let playlistTracks = Table("playlist_tracks")
+            let ptId = Expression<Int>("id")
+            let ptPlaylistId = Expression<Int>("playlist_id")
+            let ptTrackId = Expression<Int>("track_id")
+            let ptCreatedAt = Expression<String>("created_at")
+            
+            try db.run(playlistTracks.create(ifNotExists: true) { t in
+                t.column(ptId, primaryKey: .autoincrement)
+                t.column(ptPlaylistId)
+                t.column(ptTrackId)
+                t.column(ptCreatedAt, defaultValue: "")
+                
+                // Foreign key constraints
+                t.foreignKey(ptPlaylistId, references: playlists, playlistId, delete: .cascade)
+                t.foreignKey(ptTrackId, references: tracks, trackId, delete: .cascade)
+            })
+            
+            DebugLogger.shared.logDatabase("✅ SQLite tabloları oluşturuldu")
         } catch {
-            print("❌ SQLite tablo oluşturma hatası: \(error)")
+            DebugLogger.shared.logError(error, context: "SQLite tablo oluşturma hatası", category: "Database")
         }
     }
     
@@ -149,22 +168,22 @@ class DatabaseManager {
     
     func testConnection() -> Bool {
         guard let db = db else {
-            print("❌ DatabaseManager test başarısız - bağlantı yok")
+            DebugLogger.shared.logDatabase("❌ DatabaseManager test başarısız - bağlantı yok")
             return false
         }
         
         do {
             let count = try db.scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table'") as! Int64
-            print("✅ DatabaseManager test başarılı - \(count) tablo bulundu")
+            DebugLogger.shared.logDatabase("✅ DatabaseManager test başarılı - \(count) tablo bulundu")
             return true
         } catch {
-            print("❌ DatabaseManager test başarısız: \(error)")
+            DebugLogger.shared.logError(error, context: "DatabaseManager test başarısız", category: "Database")
             return false
         }
     }
     
     func closeConnection() {
         db = nil
-        print("🔄 DatabaseManager bağlantısı kapatıldı")
+        DebugLogger.shared.logDatabase("🔄 DatabaseManager bağlantısı kapatıldı")
     }
 }
