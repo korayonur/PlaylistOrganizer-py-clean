@@ -40,15 +40,8 @@ class WordIndexingService {
                 )
             """)
             
-            // Create music_words table if not exists
-            try db.run("""
-                CREATE TABLE IF NOT EXISTS music_words (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    music_path TEXT NOT NULL,
-                    word TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )
-            """)
+            // music_words tablosu DatabaseManager'da oluşturuluyor, burada oluşturmaya gerek yok
+            // Sadece batch processing yap
             
             // Batch processing (1000 tracks per batch)
             let batchSize = 1000
@@ -75,15 +68,8 @@ class WordIndexingService {
         }
         
         do {
-            // Create music_words table if not exists
-            try db.run("""
-                CREATE TABLE IF NOT EXISTS music_words (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    music_path TEXT NOT NULL,
-                    word TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )
-            """)
+            // music_words tablosu DatabaseManager'da oluşturuluyor, burada oluşturmaya gerek yok
+            // Sadece batch processing yap
             
             // Batch processing (1000 files per batch)
             let batchSize = 1000
