@@ -228,18 +228,56 @@ class DatabaseImportService {
         // Track yoksa oluştur
         DebugLogger.shared.logDatabase("📝 Track oluşturuluyor: \(track.path)")
         let insertStmt = try db.prepare("""
-            INSERT OR IGNORE INTO tracks (path, fileName, fileNameOnly, normalizedFileName, createdAt)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT OR IGNORE INTO tracks (path, file_name, file_name_only, normalized_file_name, music_file_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
         """)
         
+        // music_file_id için music_files tablosundan ID bul
+        let musicFileId = try findOrCreateMusicFile(track: track, db: db)
+        
         try insertStmt.run(track.path, track.fileName, track.fileNameOnly, 
-                                     track.normalizedFileName, 
+                                     track.normalizedFileName, musicFileId,
                                      ISO8601DateFormatter().string(from: Date()))
         
         // Yeni oluşturulan track'in ID'sini al
         let trackId = db.lastInsertRowid
         DebugLogger.shared.logDatabase("✅ Track oluşturuldu: \(track.path) - ID: \(trackId)")
         return Int(trackId)
+    }
+    
+    /// Find or create music file record
+    /// - Parameters:
+    ///   - track: Track to find/create music file for
+    ///   - db: Database connection
+    /// - Returns: Music file ID
+    /// - Throws: Database operation errors
+    private func findOrCreateMusicFile(track: ScannedTrack, db: Connection) throws -> Int? {
+        // Music file'i bul
+        let findStmt = try db.prepare("SELECT id FROM music_files WHERE path = ?")
+        let bindedStmt = findStmt.bind(track.path)
+        
+        for row in bindedStmt {
+            if let musicFileId = row[0] as? Int64 {
+                DebugLogger.shared.logDatabase("✅ Music file bulundu: \(track.path) - ID: \(musicFileId)")
+                return Int(musicFileId)
+            }
+        }
+        
+        // Music file yoksa oluştur
+        DebugLogger.shared.logDatabase("📝 Music file oluşturuluyor: \(track.path)")
+        let insertStmt = try db.prepare("""
+            INSERT OR IGNORE INTO music_files (path, file_name, file_name_only, normalized_file_name, file_extension, file_size, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """)
+        
+        try insertStmt.run(track.path, track.fileName, track.fileNameOnly, 
+                                     track.normalizedFileName, track.fileExtension, 0, // size yok, 0 kullan
+                                     ISO8601DateFormatter().string(from: Date()))
+        
+        // Yeni oluşturulan music file'in ID'sini al
+        let musicFileId = db.lastInsertRowid
+        DebugLogger.shared.logDatabase("✅ Music file oluşturuldu: \(track.path) - ID: \(musicFileId)")
+        return Int(musicFileId)
     }
 }
 
