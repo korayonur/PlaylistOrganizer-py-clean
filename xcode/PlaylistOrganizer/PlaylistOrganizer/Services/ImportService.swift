@@ -196,8 +196,8 @@ class ImportService: ObservableObject {
                         totalTracksProcessed += vdjTracks.count
                     }
                     
-                    // Progress güncelle - sadece her 100 playlist'te bir
-                    if (index + 1) % 100 == 0 || index == virtualDJResult.playlistFiles.count - 1 {
+                    // Progress güncelle - her 10 playlist'te bir (daha sık)
+                    if (index + 1) % 10 == 0 || index == virtualDJResult.playlistFiles.count - 1 {
                         reportProgress("Playlist İşleme", index + 1, virtualDJResult.playlistFiles.count, "Playlist işleniyor...", 0.1)
                     }
                 } catch {
@@ -317,8 +317,8 @@ class ImportService: ObservableObject {
                 
                 DebugLogger.shared.logDatabase("📦 Batch \(batchNumber)/\(totalBatches) işleniyor (\(batch.count) dosya)")
                 
-                // Progress güncelle - SADECE ana klasör için
-                if isMainDirectory && (batchNumber % 10 == 0 || batchNumber == totalBatches) {
+                // Progress güncelle - SADECE ana klasör için (her batch'te bir)
+                if isMainDirectory {
                     let progress = Double(i) / Double(items.count)
                     await MainActor.run {
                         self.importProgress = progress * 0.8 // %80'e kadar

@@ -11,6 +11,7 @@ struct ContentView: View {
     @StateObject private var viewModel = PlaylistOrganizerViewModel()
     @StateObject private var importService = ImportService()
     @StateObject private var searchService = SearchService()
+    @StateObject private var importLogger = ImportLogger.shared
     // File picker kaldırıldı
     
     var body: some View {
@@ -152,9 +153,11 @@ struct ContentView: View {
         .background(Color(red: 0.12, green: 0.12, blue: 0.12))
         // File picker sheet kaldırıldı
         .overlay(
-            // Import Progress Overlay
-            Group {
-                if importService.isImporting {
+            // Import Progress Overlay + Log Panel
+            HStack(spacing: 0) {
+                // Import Progress Overlay
+                Group {
+                    if importService.isImporting {
                     VStack(spacing: 20) {
                         // Başlık
                         Text("Import İşlemi")
@@ -385,6 +388,58 @@ struct ContentView: View {
                     .background(Color.black.opacity(0.95))
                     .cornerRadius(15)
                     .frame(maxWidth: 500)
+                }
+                }
+                
+                // Log Panel - Import sırasında görünür
+                if importService.isImporting {
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Log Panel Başlığı
+                        HStack {
+                            Text("📝 Import Logları")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                            Spacer()
+                            Button("Temizle") {
+                                importLogger.logEntries.removeAll()
+                            }
+                            .foregroundColor(.gray)
+                            .font(.system(size: 10))
+                        }
+                        .padding(.horizontal, 15)
+                        .padding(.vertical, 10)
+                        .background(Color.gray.opacity(0.2))
+                        
+                        // Log Entries
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 2) {
+                                ForEach(importLogger.logEntries.suffix(50)) { entry in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Text(entry.timestamp)
+                                            .font(.system(size: 9, family: .monospaced))
+                                            .foregroundColor(.gray)
+                                            .frame(width: 80, alignment: .leading)
+                                        
+                                        Text("[\(entry.level.rawValue)]")
+                                            .font(.system(size: 9, weight: .bold))
+                                            .foregroundColor(entry.level == .error ? .red : entry.level == .warning ? .yellow : .green)
+                                            .frame(width: 50, alignment: .leading)
+                                        
+                                        Text(entry.message)
+                                            .font(.system(size: 9))
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 2)
+                                }
+                            }
+                        }
+                        .frame(maxHeight: 300)
+                    }
+                    .frame(width: 400)
+                    .background(Color.black.opacity(0.95))
+                    .cornerRadius(15)
                 }
             }
         )

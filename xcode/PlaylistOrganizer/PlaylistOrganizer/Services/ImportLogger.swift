@@ -1,13 +1,25 @@
 import Foundation
+import SwiftUI
 import os.log
 
 /// Import süreci için özel logger
-class ImportLogger {
+class ImportLogger: ObservableObject {
     static let shared = ImportLogger()
+    
+    @Published var logEntries: [LogEntry] = []
+    @Published var isLogging = false
     
     private let logFileURL: URL
     private let fileHandle: FileHandle?
     private let dateFormatter: DateFormatter
+    
+    struct LogEntry: Identifiable {
+        let id = UUID()
+        let timestamp: String
+        let level: ImportLogLevel
+        let message: String
+        let category: String
+    }
     
     private init() {
         // Documents klasöründe log dosyası oluştur
@@ -33,8 +45,8 @@ class ImportLogger {
         fileHandle?.closeFile()
     }
     
-    /// Log mesajını hem console'a hem dosyaya yaz
-    func log(_ message: String, level: ImportLogLevel = .info) {
+    /// Log mesajını hem console'a hem dosyaya hem UI'ya yaz
+    func log(_ message: String, level: ImportLogLevel = .info, category: String = "Import") {
         let timestamp = dateFormatter.string(from: Date())
         let logMessage = "[\(timestamp)] [\(level.rawValue)] \(message)"
         
@@ -46,6 +58,22 @@ class ImportLogger {
             let data = (logMessage + "\n").data(using: .utf8) ?? Data()
             fileHandle.seekToEndOfFile()
             fileHandle.write(data)
+        }
+        
+        // UI'ya yaz (MainActor'da)
+        Task { @MainActor in
+            let logEntry = LogEntry(
+                timestamp: timestamp,
+                level: level,
+                message: message,
+                category: category
+            )
+            logEntries.append(logEntry)
+            
+            // Log entries'i sınırla (son 1000 entry)
+            if logEntries.count > 1000 {
+                logEntries.removeFirst(logEntries.count - 1000)
+            }
         }
     }
     
