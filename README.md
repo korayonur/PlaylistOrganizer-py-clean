@@ -1,31 +1,50 @@
-# 🎵 Playlist Organizer - Clean Architecture
+# 🎵 Playlist Organizer - Multi-Platform Project
 
-**Version:** 2.0 (Clean Architecture)  
-**Last Update:** 14 Ekim 2025  
-**Status:** ✅ Production Ready
+**Version:** 2.0 (Clean Architecture + Avalonia Migration)  
+**Last Update:** 30 Ekim 2025  
+**Status:** 🔄 Migration In Progress
 
 ## 📋 Overview
 
-Modern full-stack music management system with Clean Architecture, word-based search, and intelligent track matching.
+Modern music management system with multiple implementations:
 
-**Key Features:**
-- 🏗️ **Clean Architecture** - SOLID principles, Domain-Driven Design
-- 🔍 **Word-based Search** - Normalized, multi-language support
-- 📊 **Session Tracking** - Audit trail for all operations
-- 🎯 **Repository Pattern** - Database abstraction layer
-- 🚀 **CLI + HTTP API** - Flexible usage patterns
+- **Old System**: Node.js API + Angular Frontend (Clean Architecture)
+- **New System**: Avalonia Desktop App (Cross-platform .NET)
 
-## 🏗️ Architecture
+Both systems share the same SQLite database for seamless migration.
+
+## 🏗️ Project Structure
+
+```
+PlaylistOrganizer-py-backup/
+├── apps/
+│   ├── old-nodejs-api/          # Angular + Node.js (legacy)
+│   │   ├── api/                 # Backend (Clean Architecture)
+│   │   └── frontend/            # Angular 18 UI
+│   └── avalonia/                # Avalonia Desktop App (new)
+│       └── PlaylistOrganizerAvalonia/
+├── shared/
+│   ├── database/                # Shared SQLite database
+│   ├── logs/                    # Shared logs
+│   └── scripts/                 # Build & start scripts
+├── docs/                        # Documentation
+├── openspec/                    # Specification-driven development
+└── PlaylistOrganizer.code-workspace  # VS Code workspace
+```
+
+## 🚀 Quick Start
+
+### Option 1: Old Node.js API + Angular (Legacy)
 
 **Backend:** Node.js + Clean Architecture (Domain, Application, Infrastructure, Presentation)  
 **Frontend:** Angular 18 (Standalone Components)  
 **Database:** SQLite3 (better-sqlite3 + Repository Pattern)  
 **CLI:** Commander.js (7 commands)
 
-### Clean Architecture Layers
+#### Clean Architecture Layers
 
 ```
-api/src/
+apps/old-nodejs-api/api/src/
 ├── domain/              # Business entities & repository interfaces
 │   ├── entities/        # BaseEntity, Track, Playlist, MusicFile, etc.
 │   └── repositories/    # IRepository, ITrackRepository, etc.
@@ -47,36 +66,50 @@ api/src/
 
 ## 🚀 Quick Start
 
-### Development Mode (Recommended)
+### Option 1: Old Node.js API + Angular (Legacy)
 
 ```bash
-./start-new.sh
+./shared/scripts/start-nodejs-api.sh
 ```
 
 **What it does:**
+
 - ✅ Starts backend API (Port 50001, hot reload with nodemon)
 - ✅ Starts frontend (Port 4200, Angular HMR)
 - ✅ Opens browser automatically
 - ✅ Monitors file changes
 
 **Access:**
+
 - Backend API: http://localhost:50001
 - Frontend: http://localhost:4200
 - Health Check: http://localhost:50001/api/health
 
-### Manual Start
+### Option 2: Avalonia Desktop App (New)
+
+```bash
+cd apps/avalonia/PlaylistOrganizerAvalonia
+dotnet run
+
+# Or use the script:
+./shared/scripts/test-avalonia-import.sh    # Import test with progress monitoring
+```
+
+### Manual Start (Legacy System)
 
 **Backend:**
+
 ```bash
-cd api
+cd apps/old-nodejs-api/api
 npm run dev
 # or
 npm start
 ```
 
 **Frontend:**
+
 ```bash
-cd frontend
+cd apps/old-nodejs-api/frontend
 npm start
 # or
 ng serve --open
@@ -87,7 +120,7 @@ ng serve --open
 The CLI provides powerful tools for managing your music library without starting the HTTP server.
 
 ```bash
-cd api
+cd apps/old-nodejs-api/api
 
 # Import & Session Management
 node cli.js import <path>                    # Import music files and playlists
@@ -159,34 +192,34 @@ Import to Insomnia/Postman and start testing all endpoints immediately!
 ```bash
 # Clone repository
 git clone <repository-url>
-cd PlaylistOrganizer-py
+cd PlaylistOrganizer-py-backup
 
-# Install all dependencies (workspace + api + frontend)
-npm run install:all
-
-# Or install individually
-npm install          # Workspace
-cd api && npm install
-cd frontend && npm install
+# Install dependencies
+cd apps/old-nodejs-api/api && npm install
+cd ../frontend && npm install
 ```
 
 ### First Run
 
 ```bash
 # Start in development mode
-./start-new.sh
-
-# Or use npm scripts
-npm start
-# or
-npm run dev
+./shared/scripts/start-nodejs-api.sh
 ```
 
 ## 📊 Database
 
-**Location:** `musicfiles.db` (shared between CLI and API)
+**Locations:**
+- **Old Node.js API:** `apps/old-nodejs-api/musicfiles.db` 
+- **Avalonia App:** `apps/avalonia/PlaylistOrganizerAvalonia/playlistorganizer.db`
+
+**Schema Files:**
+- **Old Node.js API:** `apps/old-nodejs-api/schema.sql` (relational with junction tables)
+- **Avalonia App:** `apps/avalonia/.../Database/schema.sql` (flat denormalized)
+
+Each system has its own database with compatible schemas for independent operation.
 
 **Tables:**
+
 - `music_files` - Physical music files on disk
 - `tracks` - Tracks from playlists
 - `playlists` - M3U/VPL playlist files
@@ -196,6 +229,7 @@ npm run dev
 - `import_sessions` - Session tracking and audit trail
 
 **Views:**
+
 - `v_unmatched_tracks` - Tracks without matching music files
 - `v_exact_path_matches` - Exact path matches
 - `v_filename_matches` - Filename-based matches
@@ -221,74 +255,73 @@ npm run dev
 ## 📚 Tech Stack
 
 **Backend:**
+
 - Node.js 18+
 - Express.js (HTTP server)
 - Better-sqlite3 (Database driver)
 - Commander.js (CLI framework)
 
 **Frontend:**
+
 - Angular 18 (Standalone Components)
 - RxJS (Reactive programming)
 - Angular Material (UI components)
 
 **Database:**
+
 - SQLite3 (File-based database)
 
 **Development:**
+
 - Nodemon (Hot reload)
 - Angular CLI (HMR)
 - Concurrently (Multi-process management)
 
 ## 📝 Migration Note
 
-This project was migrated from `nodejs-api/` to `api/` with Clean Architecture on **October 14, 2025**.
+This project is currently in transition:
 
-**What changed:**
-- ❌ Old monolithic backend (`nodejs-api/`)
-- ✅ New Clean Architecture backend (`api/`)
-- ✅ Repository Pattern for database access
-- ✅ Use Cases for business logic
-- ✅ CLI commands for operations
-- ✅ Improved logging and session tracking
+- **Legacy System:** Node.js API + Angular Frontend (Clean Architecture) in `apps/old-nodejs-api/`
+- **New System:** Avalonia Desktop App in `apps/avalonia/`
 
-**Old backend backup:** Available in `nodejs-api-backup/` if needed.
+Each system has its own database with compatible schemas for independent operation.
 
-## 🛠️ NPM Scripts
+**Project Structure Reorganization:**
+
+- ✅ Organized into `apps/` for different implementations
+- ✅ Each app has its own database file
+- ✅ Shared resources in `shared/` (schemas, logs, scripts)
+- ✅ Clean separation between legacy and new systems
+
+## 🛠️ Scripts & Commands
 
 ```bash
-# Development
-npm start                # Start with start-new.sh
-npm run dev              # Same as start
-npm run dev:all          # Start both backend and frontend with concurrently
+# Development (from project root)
+./shared/scripts/start-nodejs-api.sh   # Start old Node.js API + Angular frontend
+./shared/scripts/test-avalonia-import.sh   # Test Avalonia import with progress
 
 # Individual services
-npm run start:backend    # Start backend only
-npm run start:frontend   # Start frontend only
-npm run dev:backend      # Backend with hot reload
-npm run dev:frontend     # Frontend with HMR
+cd apps/old-nodejs-api/api
+npm run dev                             # Backend with hot reload (nodemon)
+cd ../frontend
+npm start                               # Frontend with HMR
 
 # Build
-npm run build:frontend   # Build frontend for production
+cd apps/old-nodejs-api/frontend
+npm run build                           # Build frontend for production
 
-# Installation
-npm run install:all      # Install all dependencies
-npm run install:backend  # Install backend dependencies
-npm run install:frontend # Install frontend dependencies
-
-# CLI shortcuts
-npm run cli              # Access CLI (cd api && node cli.js)
-npm run health           # Check API health
-npm run status           # Get database stats
-
-# Cleanup
-npm run clean            # Clean all node_modules
+# CLI commands
+cd apps/old-nodejs-api/api
+node cli.js db:stats                    # Database statistics
+node cli.js search "query"              # Search tracks
+node cli.js import <path>               # Import files
 ```
 
 ## 📖 Documentation
 
-- **Insomnia Collection:** `insomnia-modular-api-collection.json`
-- **Migration Plan:** `clean-architecture-migration.plan.md`
-- **Old Documentation:** `old-docs/` directory
+- **OpenSpec:** `openspec/` - Specification-driven development
+- **Migration Plans:** `docs/current/` - Current migration plans
+- **Avalonia Migration:** `openspec/changes/api-to-avalonia-migration/`
 
 ## 🔒 License
 

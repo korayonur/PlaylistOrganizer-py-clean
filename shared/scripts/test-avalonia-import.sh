@@ -1,18 +1,26 @@
 #!/bin/bash
 
-# Import progress test script
+# Avalonia Import Progress Test Script
 # Arka planda çalıştır ve 1 saniyede bir log analizi yap
 
-cd "$(dirname "$0")/PlaylistOrganizerAvalonia" || exit 1
+PROJECT_ROOT="/Users/koray/projects/PlaylistOrganizer-py-backup"
+AVALONIA_DIR="$PROJECT_ROOT/apps/avalonia/PlaylistOrganizerAvalonia"
+LOG_DIR="$PROJECT_ROOT/shared/logs"
 
-LOG_FILE="../logs/import_progress_$(date +%Y%m%d_%H%M%S).log"
+# Log dizini yoksa oluştur
+mkdir -p "$LOG_DIR"
 
-echo "🚀 Import başlatılıyor (arka planda)..."
+LOG_FILE="$LOG_DIR/avalonia_import_$(date +%Y%m%d_%H%M%S).log"
+
+echo "🚀 Avalonia Import başlatılıyor (arka planda)..."
 echo "📝 Log dosyası: $LOG_FILE"
 echo ""
 
+# Avalonia dizinine git
+cd "$AVALONIA_DIR" || exit 1
+
 # Arka planda çalıştır
-dotnet run --test-import-progress > "$LOG_FILE" 2>&1 &
+dotnet run -- --test-import > "$LOG_FILE" 2>&1 &
 IMPORT_PID=$!
 
 echo "🔄 Import PID: $IMPORT_PID"
@@ -43,4 +51,5 @@ echo "📄 Final Log:"
 echo "─────────────────────────────────────────────────────────────────"
 tail -30 "$LOG_FILE"
 echo "─────────────────────────────────────────────────────────────────"
+
 

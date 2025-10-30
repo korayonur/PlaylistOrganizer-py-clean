@@ -2,6 +2,7 @@
 
 const fs = require('fs-extra');
 const path = require('path');
+const config = require('./config');
 
 /**
  * Ortak Logging Sistemi
@@ -10,7 +11,8 @@ const path = require('path');
  */
 class Logger {
     constructor() {
-        this.logDir = path.join(__dirname, '../../../api/logs');
+        // Config'ten log path'i al
+        this.logDir = config.getLogsPath();
         this.ensureLogDir();
         this.interceptConsole();
     }

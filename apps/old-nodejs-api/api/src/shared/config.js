@@ -6,14 +6,16 @@ const path = require('path');
  */
 class Config {
     constructor() {
-        // Ana proje klasörü (PlaylistOrganizer-py)
-        this.projectRoot = path.join(__dirname, '../../../');
+        // Ana proje klasörü (PlaylistOrganizer-py-backup root)
+        // __dirname: apps/old-nodejs-api/api/src/shared
+        // Root'a gitmek için 5 seviye yukarı çıkmamız lazım
+        this.projectRoot = path.join(__dirname, '../../../../../');
         
-        // Database path'i - tek noktadan yönetim
-        this.databasePath = path.join(this.projectRoot, 'musicfiles.db');
+        // API Database path - apps/old-nodejs-api/ klasöründe
+        this.databasePath = path.join(__dirname, '../../../musicfiles.db');
         
-        // Log klasörü
-        this.logsPath = path.join(this.projectRoot, 'api/logs');
+        // Log klasörü (shared/logs/)
+        this.logsPath = path.join(this.projectRoot, 'shared/logs');
         
         // Import klasörleri
         this.importPaths = {

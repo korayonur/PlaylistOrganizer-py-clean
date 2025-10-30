@@ -37,8 +37,8 @@ info() {
 
 # Proje dizinleri
 PROJECT_ROOT="/Users/koray/projects/PlaylistOrganizer-py-backup"
-BACKEND_DIR="$PROJECT_ROOT/api"
-FRONTEND_DIR="$PROJECT_ROOT/frontend"
+BACKEND_DIR="$PROJECT_ROOT/apps/old-nodejs-api/api"
+FRONTEND_DIR="$PROJECT_ROOT/apps/old-nodejs-api/frontend"
 
 # PID dosyaları
 BACKEND_PID_FILE="/tmp/playlist_organizer_api.pid"
@@ -159,7 +159,7 @@ fi
 
 # Backend'i başlat (nodemon ile hot reload)
 log "Backend development server başlatılıyor (hot reload)..."
-npm run dev 2>&1 | tee "$PROJECT_ROOT/logs/api_dev.log" &
+npm run dev 2>&1 | tee "$PROJECT_ROOT/shared/logs/api_dev.log" &
 BACKEND_PID=$!
 echo $BACKEND_PID > "$BACKEND_PID_FILE"
 
@@ -211,7 +211,7 @@ fi
 
 # Frontend'i başlat
 log "Frontend development server başlatılıyor (HMR)..."
-ng serve --port 4200 --host 0.0.0.0 --open 2>&1 | tee "$PROJECT_ROOT/logs/frontend_dev.log" &
+ng serve --port 4200 --host 0.0.0.0 --open 2>&1 | tee "$PROJECT_ROOT/shared/logs/frontend_dev.log" &
 FRONTEND_PID=$!
 echo $FRONTEND_PID > "$FRONTEND_PID_FILE"
 
@@ -252,12 +252,12 @@ echo -e "${PURPLE}🚀 Development Özellikleri:${NC}"
 echo -e "  • Backend: Nodemon ile otomatik yeniden başlatma"
 echo -e "  • Frontend: Angular HMR (Hot Module Replacement)"
 echo -e "  • Dosya değişikliklerini otomatik algılama"
-echo -e "  • Console log'ları: api/logs/"
+echo -e "  • Console log'ları: shared/logs/"
 echo ""
 echo -e "${PURPLE}📚 Faydalı Komutlar:${NC}"
 echo -e "  • Health check: curl http://localhost:50001/api/health"
-echo -e "  • Database stats: cd api && node cli.js db:stats"
-echo -e "  • Search: cd api && node cli.js search 'query'"
+echo -e "  • Database stats: cd apps/old-nodejs-api/api && node cli.js db:stats"
+echo -e "  • Search: cd apps/old-nodejs-api/api && node cli.js search 'query'"
 echo ""
 echo -e "${YELLOW}Uygulamayı kapatmak için Ctrl+C tuşlayın${NC}"
 echo ""

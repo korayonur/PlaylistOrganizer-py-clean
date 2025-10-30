@@ -1,0 +1,42 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch PlaylistOrganizer Avalonia",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/bin/Debug/net9.0/PlaylistOrganizerAvalonia.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia",
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "env": {
+                "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
+                "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+            }
+        },
+        {
+            "name": "Launch PlaylistOrganizer Avalonia (Hot Reload)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "watch",
+            "program": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/bin/Debug/net9.0/PlaylistOrganizerAvalonia.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia",
+            "stopAtEntry": false,
+            "console": "internalConsole",
+            "env": {
+                "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
+                "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH",
+                "DOTNET_WATCH": "1"
+            }
+        },
+        {
+            "name": "Attach to PlaylistOrganizer Avalonia",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ]
+}

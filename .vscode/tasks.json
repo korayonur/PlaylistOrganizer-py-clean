@@ -1,0 +1,108 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/PlaylistOrganizerAvalonia.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": "$msCompile",
+            "options": {
+                "env": {
+                    "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
+                    "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                }
+            }
+        },
+        {
+            "label": "publish",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/PlaylistOrganizerAvalonia.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": "$msCompile",
+            "options": {
+                "env": {
+                    "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
+                    "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                }
+            }
+        },
+        {
+            "label": "watch",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "watch",
+                "run",
+                "--project",
+                "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/PlaylistOrganizerAvalonia.csproj"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "dotnet-watch",
+                "pattern": {
+                    "regexp": "^(.*)\\((\\d+),(\\d+)\\):\\s+(warning|error)\\s+([A-Za-z0-9]+):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "code": 5,
+                    "message": 6
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "dotnet watch 🔥 Hot reload enabled",
+                    "endsPattern": "dotnet watch ⌚"
+                }
+            },
+            "options": {
+                "env": {
+                    "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
+                    "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                }
+            }
+        },
+        {
+            "label": "clean",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "clean",
+                "${workspaceFolder}/PlaylistOrganizerAvalonia/PlaylistOrganizerAvalonia.csproj"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "options": {
+                "env": {
+                    "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
+                    "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                }
+            }
+        }
+    ]
+}

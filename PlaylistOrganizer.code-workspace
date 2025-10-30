@@ -1,0 +1,45 @@
+{
+    "folders": [
+        {
+            "name": "PlaylistOrganizer Root",
+            "path": "."
+        },
+        {
+            "name": "Old Node.js API",
+            "path": "./apps/old-nodejs-api"
+        },
+        {
+            "name": "Avalonia App",
+            "path": "./apps/avalonia/PlaylistOrganizerAvalonia"
+        },
+        {
+            "name": "Shared Resources",
+            "path": "./shared"
+        }
+    ],
+    "settings": {
+        "dotnet.defaultSolution": "apps/avalonia/PlaylistOrganizerAvalonia/PlaylistOrganizerAvalonia.csproj",
+        "files.exclude": {
+            "**/bin": true,
+            "**/obj": true,
+            "**/.vs": true,
+            "**/node_modules": true,
+            "**/logs": true
+        },
+        "search.exclude": {
+            "**/bin": true,
+            "**/obj": true,
+            "**/.vs": true,
+            "**/node_modules": true,
+            "**/logs": true
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-dotnettools.csharp",
+            "ms-dotnettools.vscode-dotnet-runtime",
+            "ms-dotnettools.csdevkit",
+            "avaloniaui.avalonia-vscode"
+        ]
+    }
+}

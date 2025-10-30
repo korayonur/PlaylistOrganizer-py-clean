@@ -35,9 +35,7 @@ yarn-error.log
 *.swo
 *~
 *.backup*
-*_backup*
-*_old*
-*_test*
+*_backup_*
 
 # Sistem dosyaları
 .DS_Store
@@ -68,15 +66,10 @@ frontend/**/*.pack.old
 
 # Docs ve geçici markdown dosyalar
 docs/
-*.md
-!README.md
+*.md.tmp
+*_tmp.md
+test_*.md
 
-# VS Code
-.vscode/
-*.code-workspace
-launch.json
-tasks.json
-extensions.json
 
 # Ortam değişkenleri ve gizli bilgiler
 .env
@@ -178,14 +171,29 @@ musicfiles.db*
 *.db.backup*
 *.db-*
 
+# Database files by location
+# App-specific databases
+apps/old-nodejs-api/*.db
+apps/old-nodejs-api/*.db-shm
+apps/old-nodejs-api/*.db-wal
+apps/avalonia/**/*.db
+apps/avalonia/**/*.db-shm
+apps/avalonia/**/*.db-wal
+
+# Shared location - keep SQL schemas, ignore DB files
+shared/database/*.db
+shared/database/*.db-shm
+shared/database/*.db-wal
+
+# Keep schema.sql files - they contain the schema definitions
+!**/schema.sql
+!apps/old-nodejs-api/schema.sql
+!apps/avalonia/**/schema.sql
+
 # Cache files
 **/cache/
 **/.cache/
-api/cache/
 
-# Logs
-*.log
-logs/
 
 # Cache ve geçici dosyalar
 **/__pycache__/
@@ -211,6 +219,7 @@ yarn.lock
 # Development server dosyaları
 logs/api_dev.log
 logs/frontend_dev.log
+shared/logs/*.log
 
 # Test ve analiz dosyaları
 .playwright-mcp/
@@ -226,12 +235,6 @@ logs/frontend_dev.log
 **/test-report.md
 **/search-test-scenarios.json
 
-# .NET build dosyaları
-**/bin/
-**/obj/
-**/project.assets.json
-**/*.csproj.nuget.dgspec.json
-
 # Ana package-lock.json (workspace seviyesinde)
 package-lock.json
 
@@ -240,12 +243,11 @@ package-lock.json
 *.DS_Store
 **/.DS_Store
 xcode/PlaylistOrganizer/.build/
-
-
 # Xcode
 *.pbxuser
 *.mode1v3
 *.mode2v3
+*.mode3v3
 *.perspectivev3
 *.xcuserstate
 *.xcworkspace/xcuserdata/
@@ -258,23 +260,6 @@ DerivedData/
 timeline.xctimeline
 playground.xcworkspace
 .build/
-*.swp
-*~.nib
-*.moved-aside
-*.xccheckout
-*.xcscmblueprint
-*.xcuserstate
-*.xcworkspace/xcuserdata/
-*.xcworkspace/xcshareddata/
-DerivedData/
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM
-timeline.xctimeline
-playground.xcworkspace
-.build/
-*.swp
 *~.nib
 *.moved-aside
 *.xccheckout
