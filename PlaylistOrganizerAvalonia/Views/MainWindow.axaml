@@ -1,0 +1,234 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PlaylistOrganizerAvalonia.ViewModels"
+        xmlns:local="using:PlaylistOrganizerAvalonia.Converters"
+        xmlns:conv="using:PlaylistOrganizerAvalonia.Converters"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+        x:Class="PlaylistOrganizerAvalonia.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="Playlist Organizer"
+        MinWidth="1000" MinHeight="700"
+        Background="#2D2D2D">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Window.Resources>
+        <local:RootFolderIconConverter x:Key="RootFolderIconConverter"/>
+        <local:PlaylistTypeToIconConverter x:Key="PlaylistTypeToIconConverter"/>
+        <local:PlaylistTypeToColorConverter x:Key="PlaylistTypeToColorConverter"/>
+        <local:ChildrenToVisibilityConverter x:Key="ChildrenToVisibilityConverter"/>
+        <local:TrackStatusToIconConverter x:Key="TrackStatusToIconConverter"/>
+        <local:TrackStatusToColorConverter x:Key="TrackStatusToColorConverter"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Menu Bar -->
+        <Menu Grid.Row="0" Background="#2D2D2D" Foreground="White">
+            <MenuItem Header="_File">
+                <MenuItem Header="_Import Playlists..." 
+                          Command="{Binding ImportCommand}"/>
+                <Separator/>
+                <MenuItem Header="_Exit" 
+                          Command="{Binding ExitCommand}"/>
+            </MenuItem>
+            
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_Refresh" 
+                          Command="{Binding RefreshCommand}"/>
+                <MenuItem Header="_Fix Suggestions" 
+                          Command="{Binding FixSuggestionsCommand}"/>
+            </MenuItem>
+            
+            <MenuItem Header="_Tools">
+                <MenuItem Header="_Settings..." 
+                          Command="{Binding SettingsCommand}"/>
+            </MenuItem>
+        </Menu>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="350"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+        <!-- Left Sidebar - Playlist Management -->
+        <Border Grid.Column="0" Background="#3A3A3A" BorderBrush="#555555" BorderThickness="0,0,1,0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Search Input -->
+                <Border Grid.Row="0" Padding="16,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        
+                        <TextBox Grid.Column="0"
+                                 Text="{Binding SearchQuery}" 
+                                 Watermark="Playlist ara..."
+                                 Background="#4A4A4A"
+                                 Foreground="White"
+                                 BorderBrush="#666666"
+                                 Padding="8,6"/>
+                        
+                        <Button Grid.Column="1"
+                                Content="🔍"
+                                Command="{Binding SearchCommand}"
+                                Background="#555555"
+                                Foreground="White"
+                                BorderBrush="#666666"
+                                Margin="4,0,2,0"
+                                Padding="8,6"
+                                ToolTip.Tip="Ara"/>
+                        
+                        <Button Grid.Column="2"
+                                Content="✕"
+                                Command="{Binding ClearSearchCommand}"
+                                Background="#555555"
+                                Foreground="White"
+                                BorderBrush="#666666"
+                                Margin="2,0,0,0"
+                                Padding="8,6"
+                                ToolTip.Tip="Temizle"/>
+                    </Grid>
+                </Border>
+
+                <!-- Filter Checkbox -->
+                <Border Grid.Row="1" Padding="16,0,16,8">
+                    <CheckBox Content="Sadece eksik track içeren playlist'ler"
+                              Foreground="White"
+                              IsChecked="{Binding ShowOnlyMissingTracks}"/>
+                </Border>
+
+                <!-- Playlist Tree -->
+                <Border Grid.Row="2" Padding="16">
+                    <TreeView ItemsSource="{Binding Playlists}"
+                              SelectedItem="{Binding SelectedPlaylist}">
+                        <TreeView.ItemTemplate>
+                            <TreeDataTemplate ItemsSource="{Binding Children}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <!-- Root Folder Icon -->
+                                    <TextBlock Text="{Binding ParentId, Converter={StaticResource RootFolderIconConverter}}"
+                                               FontSize="16"
+                                               IsVisible="{Binding ParentId, Converter={StaticResource ChildrenToVisibilityConverter}, ConverterParameter=root}"/>
+                                    
+                                    <!-- Regular Folder/Playlist Icon -->
+                                    <TextBlock Text="{Binding Type, Converter={StaticResource PlaylistTypeToIconConverter}}"
+                                               FontSize="16"
+                                               Foreground="{Binding Type, Converter={StaticResource PlaylistTypeToColorConverter}}"
+                                               IsVisible="{Binding ParentId, Converter={StaticResource ChildrenToVisibilityConverter}, ConverterParameter=notroot}"/>
+                                    
+                                    <TextBlock Text="{Binding Name}" 
+                                               Foreground="White"
+                                               FontWeight="Bold"/>
+                                    
+                                    <TextBlock Text="{Binding TrackCount, StringFormat='({0})'}" 
+                                               Foreground="Gray"
+                                               FontSize="12"/>
+                                </StackPanel>
+                            </TreeDataTemplate>
+                        </TreeView.ItemTemplate>
+                    </TreeView>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Right Content Area - Track Details -->
+        <Border Grid.Column="1" Background="#2D2D2D" Padding="20">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Selected Playlist Info -->
+                <Border Grid.Row="0" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="{Binding SelectedPlaylist.Name, StringFormat='Playlist: {0}'}" 
+                                   FontSize="24" 
+                                   FontWeight="Bold" 
+                                   Foreground="White"
+                                   IsVisible="{Binding SelectedPlaylist, Converter={StaticResource ChildrenToVisibilityConverter}, ConverterParameter=notroot}"/>
+                        <TextBlock Text="{Binding SelectedPlaylist.Path}" 
+                                   FontSize="12" 
+                                   Foreground="Gray"
+                                   IsVisible="{Binding SelectedPlaylist, Converter={StaticResource ChildrenToVisibilityConverter}, ConverterParameter=notroot}"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Statistics -->
+                <Border Grid.Row="1" Margin="0,0,0,20">
+                    <StackPanel Orientation="Horizontal" Spacing="20">
+                        <TextBlock Text="{Binding TotalTracks, StringFormat='Toplam: {0}'}" 
+                                   Foreground="White" 
+                                   FontWeight="Bold"/>
+                        <TextBlock Text="{Binding FoundTracks, StringFormat='Bulunan: {0}'}" 
+                                   Foreground="Green" 
+                                   FontWeight="Bold"/>
+                        <TextBlock Text="{Binding MissingTracks, StringFormat='Eksik: {0}'}" 
+                                   Foreground="Red" 
+                                   FontWeight="Bold"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Track List -->
+                <Border Grid.Row="2" Margin="0,0,0,20">
+                    <ListBox ItemsSource="{Binding Tracks}"
+                             Background="#3A3A3A"
+                             BorderBrush="#555555">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="8">
+                                    <TextBlock Text="{Binding Status, Converter={StaticResource TrackStatusToIconConverter}}" 
+                                               FontSize="16"/>
+                                    <TextBlock Text="{Binding FileName}" 
+                                               Foreground="White"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Status, Converter={StaticResource TrackStatusToColorConverter}}" 
+                                               Foreground="{Binding Status, Converter={StaticResource TrackStatusToColorConverter}}"
+                                               FontSize="12"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+
+                <!-- Action Buttons -->
+                <Border Grid.Row="3">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Content="Yenile" 
+                                Command="{Binding RefreshCommand}"
+                                Background="#0078D4"
+                                Foreground="White"
+                                Padding="12,6"/>
+                        <Button Content="Fix Önerileri" 
+                                Command="{Binding FixSuggestionsCommand}"
+                                Background="#28A745"
+                                Foreground="White"
+                                Padding="12,6"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+        </Grid>
+    </Grid>
+</Window>

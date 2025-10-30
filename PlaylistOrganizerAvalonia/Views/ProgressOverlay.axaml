@@ -1,0 +1,106 @@
+<UserControl x:Class="PlaylistOrganizerAvalonia.Views.ProgressOverlay"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:PlaylistOrganizerAvalonia.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="200"
+             x:DataType="vm:ProgressViewModel">
+
+  <Grid>
+    <!-- Progress Overlay -->
+    <Grid Background="#80000000" IsVisible="{Binding IsOperationInProgress}">
+      <Border Background="#2D2D2D" 
+              CornerRadius="8" 
+              Padding="20"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center"
+              MinWidth="300">
+        
+        <StackPanel>
+          <!-- Progress Header -->
+          <TextBlock Text="{Binding CurrentOperation}"
+                     FontSize="16"
+                     FontWeight="Bold"
+                     Foreground="White"
+                     HorizontalAlignment="Center"
+                     Margin="0,0,0,10"/>
+          
+          <!-- Progress Bar -->
+          <ProgressBar Value="{Binding ProgressPercentage}"
+                       Maximum="100"
+                       Height="8"
+                       Margin="0,0,0,10"
+                       Foreground="#4CAF50"/>
+          
+          <!-- Status Message -->
+          <TextBlock Text="{Binding StatusMessage}"
+                     FontSize="12"
+                     Foreground="#CCCCCC"
+                     HorizontalAlignment="Center"
+                     Margin="0,0,0,15"/>
+          
+          <!-- Cancel Button -->
+          <Button Content="Cancel"
+                  Command="{Binding CancelOperationCommand}"
+                  HorizontalAlignment="Center"
+                  Background="#F44336"
+                  Foreground="White"
+                  BorderThickness="0"
+                  Padding="20,8"
+                  CornerRadius="4"/>
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <!-- Error Overlay -->
+    <Grid Background="#80000000" IsVisible="{Binding HasError}">
+      <Border Background="#2D2D2D" 
+              CornerRadius="8" 
+              Padding="20"
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center"
+              MinWidth="350">
+        
+        <StackPanel>
+          <!-- Error Header -->
+          <TextBlock Text="⚠️ Operation Failed"
+                     FontSize="16"
+                     FontWeight="Bold"
+                     Foreground="#F44336"
+                     HorizontalAlignment="Center"
+                     Margin="0,0,0,10"/>
+          
+          <!-- Error Message -->
+          <TextBlock Text="{Binding ErrorMessage}"
+                     FontSize="12"
+                     Foreground="#FFCDD2"
+                     TextWrapping="Wrap"
+                     Margin="0,0,0,15"
+                     MaxWidth="300"/>
+          
+          <!-- Action Buttons -->
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+            <Button Content="Retry"
+                    Command="{Binding RetryOperationCommand}"
+                    Background="#4CAF50"
+                    Foreground="White"
+                    BorderThickness="0"
+                    Padding="15,8"
+                    CornerRadius="4"
+                    Margin="0,0,10,0"/>
+            
+            <Button Content="Clear"
+                    Command="{Binding ClearErrorCommand}"
+                    Background="#757575"
+                    Foreground="White"
+                    BorderThickness="0"
+                    Padding="15,8"
+                    CornerRadius="4"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+
+</UserControl>

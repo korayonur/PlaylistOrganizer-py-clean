@@ -1,107 +1,158 @@
-# PlaylistOrganizer SwiftUI Projesi
+# PlaylistOrganizer Avalonia Projesi
 
 ## Proje Genel Bakış
 
-**PlaylistOrganizer**, müzik playlist'lerini organize etmek ve yönetmek için geliştirilmiş native macOS uygulamasıdır. SwiftUI ile geliştirilmiş, Mac'te sorunsuz çalışan modern bir uygulamadır.
+**PlaylistOrganizer**, müzik playlist'lerini organize etmek ve yönetmek için geliştirilmiş cross-platform uygulamasıdır. Avalonia UI ile geliştirilmiş, macOS, Windows ve Linux'ta çalışan modern bir uygulamadır.
 
 ## Teknoloji Yığını
 
 ### Ana Teknolojiler
-- **SwiftUI** - Native macOS UI framework
-- **Swift** - Programlama dili
-- **Xcode** - IDE
-- **macOS** - Hedef platform (macOS 13.0+)
+- **Avalonia UI** - Cross-platform UI framework
+- **C#** - Programlama dili
+- **.NET 9** - Runtime ve framework
+- **SQLite** - Veri yönetimi
+- **MVVM** - Model-View-ViewModel deseni
+
+### Clean Architecture Prensipleri (ZORUNLU)
+- **Interface'ler zorunlu**: Her service için interface oluştur
+- **Dependency Injection zorunlu**: Constructor injection kullan
+- **Repository Pattern zorunlu**: Veri erişimi için repository kullan
+- **Separation of Concerns**: Her katman kendi sorumluluğuna odaklanmalı
+- **Dependency Direction**: Dış katmanlar → İç katmanlara bağımlı olabilir
+- **Business Logic**: UI'dan bağımsız olmalı
+- **Testability**: Mock'lanabilir interface'ler kullan
 
 ### Mimari
+- **Clean Architecture** - Temiz mimari prensipleri
 - **MVVM Pattern** - Model-View-ViewModel deseni
-- **Combine Framework** - Reactive programming
-- **Core Data** - Veri yönetimi (opsiyonel)
-- **Protocol-oriented programming** - Swift'in güçlü yanı
+- **Dependency Injection** - Bağımlılık enjeksiyonu
+- **Repository Pattern** - Veri erişim deseni
+- **Async/Await** - Asenkron programlama
 
 ### Katmanlar
-1. **Models** - Veri modelleri (Playlist, Track, Artist)
-2. **ViewModels** - İş mantığı (@ObservableObject)
-3. **Views** - UI bileşenleri (SwiftUI Views)
-4. **Services** - Harici servisler (MockDataService)
+1. **Models** - Veri modelleri (Playlist, Track, MusicFile)
+2. **ViewModels** - İş mantığı (MainWindowViewModel)
+3. **Views** - UI bileşenleri (MainWindow.axaml)
+4. **Services** - Servisler (DatabaseManager)
+5. **Converters** - Value converter'lar
 
 ## Hedef Platformlar
 
-- **macOS** - Ana hedef platform (macOS 13.0+)
-- **macOS 26.0** - Güncel SDK hedefi
+- **macOS** - Ana hedef platform
+- **Windows** - Cross-platform desteği
+- **Linux** - Cross-platform desteği
 
 ## Özellikler
 
 ### Temel Özellikler ✅
-- ✅ Playlist listesi görüntüleme
+- ✅ Playlist hierarchy görüntüleme (TreeView)
+- ✅ Playlist tıklama işlevselliği
 - ✅ Track listesi görüntüleme
+- ✅ Track durumu gösterimi (Found/Missing/Updated)
+- ✅ Real-time dosya varlığı kontrolü
 - ✅ Arama ve filtreleme
 - ✅ İstatistik kartları (Toplam/Bulunan/Eksik)
 - ✅ Dark theme UI
+- ✅ 0-track filtreleme
 
 ### Gelişmiş Özellikler (Planlanan)
-- 🔄 Müzik dosyası import/export
+- 🔄 Track editing işlevselliği
+- 🔄 Advanced filtering
+- 🔄 Track preview/playback
 - 🔄 Playlist oluşturma ve düzenleme
-- 🔄 Akıllı playlist önerileri
 - 🔄 Cloud senkronizasyonu
-- 🔄 Offline çalışma desteği
 
 ## Geliştirme Kuralları
 
 ### Kod Standartları
-- Swift coding conventions
-- SwiftUI best practices
+- C# coding conventions
+- Avalonia UI best practices
 - MVVM pattern zorunlu
-- @StateObject ve @ObservedObject kullanımı
-- Combine framework ile reactive programming
+- Clean Architecture prensipleri
+- Async/await kullanımı
+- Dependency Injection
+
+### Test Kuralları (ZORUNLU)
+- **TDD ZORUNLU**: Test'leri önce yaz, sonra implement et
+- **Unit test coverage %80+ ZORUNLU**
+- **Her adımda test çalıştır ZORUNLU**
+- **Test başarısız olursa dur ZORUNLU**
+- Mock'ları kullan
+- Integration test'ler zorunlu
+- UI test'ler zorunlu
+- Performance test'ler zorunlu
+- Test automation zorunlu
+- Test coverage monitoring zorunlu
+- Test başarısızken merge etme YASAK
+- Test olmadan kod yazma YASAK
 
 ### Git Workflow
-- Feature branch'ler
-- Pull request'ler
-- Code review
-- Conventional commits
+- Feature branch kullan (feature/avalonia-development)
+- Açıklayıcı commit mesajları yaz
+- Pull request'ler zorunlu
+- Code review yap
+- Commit'leri küçük ve anlamlı tut
+
+### Dil Kuralları
+- Always respond in Türkçe
+- Kod yorumları Türkçe olabilir
+- Değişken ve fonksiyon isimleri İngilizce olmalı
+- Git commit mesajları Türkçe olabilir
 
 ### Dokümantasyon
 - Tüm belgeler Türkçe
 - OpenSpec ile spec-driven development
-- SwiftUI preview'ları
+- Avalonia UI best practices
 - Kullanıcı kılavuzu
 
 ## Kurulum ve Çalıştırma
 
 ### Gereksinimler
-- **Xcode 15.0+** (macOS geliştirme için)
-- **Swift 6.2+**
-- **macOS 13.0+** (hedef platform)
+- **.NET 9 SDK**
+- **Avalonia UI**
+- **SQLite**
 
 ### Çalıştırma
 ```bash
-# Xcode ile açma
-open PlaylistOrganizer.xcodeproj
+# Proje dizinine git
+cd PlaylistOrganizerAvalonia
 
-# Terminal'den build
-xcodebuild -project PlaylistOrganizer.xcodeproj -scheme PlaylistOrganizer -configuration Debug build
+# Restore packages
+dotnet restore
 
-# Çalıştırma
-xcodebuild -project PlaylistOrganizer.xcodeproj -scheme PlaylistOrganizer -configuration Debug -destination 'platform=macOS' run
+# Build
+dotnet build
+
+# Run
+dotnet run
 ```
 
 ## Proje Yapısı
 
 ```
-xcode/PlaylistOrganizer/
-├── PlaylistOrganizer.xcodeproj/     # Xcode proje dosyası
-└── PlaylistOrganizer/
-    ├── PlaylistOrganizerApp.swift   # Ana uygulama
-    ├── ContentView.swift            # Ana UI view
-    ├── PlaylistOrganizerViewModel.swift # ViewModel ve modeller
-    └── Assets.xcassets/            # Uygulama varlıkları
+PlaylistOrganizerAvalonia/
+├── Models/                    # Veri modelleri
+│   ├── Playlist.cs
+│   ├── Track.cs
+│   ├── MusicFile.cs
+│   └── TrackStatus.cs
+├── ViewModels/               # ViewModel'ler
+│   └── MainWindowViewModel.cs
+├── Views/                    # UI Views
+│   └── MainWindow.axaml
+├── Services/                 # Servisler
+│   └── DatabaseManager.cs
+├── Converters/               # Value converter'lar
+│   ├── StatusToColorConverter.cs
+│   └── ChildrenToVisibilityConverter.cs
+└── Program.cs               # Ana program
 ```
 
 ## Katkıda Bulunma
 
 1. Feature branch oluştur
 2. Değişiklikleri yap
-3. SwiftUI preview'ları test et
+3. Avalonia UI test et
 4. Pull request oluştur
 5. Code review bekle
 6. Merge et

@@ -1,0 +1,84 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:PlaylistOrganizerAvalonia.ViewModels"
+        x:Class="PlaylistOrganizerAvalonia.Views.ImportProgressDialog"
+        x:DataType="vm:ImportProgressViewModel"
+        Title="Import İşlemi"
+        Width="500"
+        Height="300"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Başlık -->
+        <TextBlock Grid.Row="0" 
+                   Text="Playlist ve Müzik Dosyaları Import Ediliyor"
+                   FontSize="18"
+                   FontWeight="Bold"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,20"/>
+
+        <!-- Mevcut Aşama -->
+        <TextBlock Grid.Row="1" 
+                   Text="{Binding CurrentStage}"
+                   FontSize="14"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,10"/>
+
+        <!-- Progress Bar -->
+        <ProgressBar Grid.Row="2"
+                     Value="{Binding ProgressPercentage}"
+                     Maximum="100"
+                     Height="20"
+                     Margin="0,0,0,10"/>
+
+        <!-- Yüzde -->
+        <TextBlock Grid.Row="3" 
+                   Text="{Binding ProgressPercentage, StringFormat='%{0}'}"
+                   FontSize="12"
+                   HorizontalAlignment="Center"
+                   Margin="0,0,0,20"/>
+
+        <!-- Detaylar -->
+        <ScrollViewer Grid.Row="4" 
+                      VerticalScrollBarVisibility="Auto"
+                      Margin="0,0,0,20">
+            <StackPanel>
+                <TextBlock Text="{Binding MusicFilesCount, StringFormat='Müzik Dosyaları: {0}'}"
+                           Margin="0,0,0,5"/>
+                <TextBlock Text="{Binding PlaylistFilesCount, StringFormat='Playlist Dosyaları: {0}'}"
+                           Margin="0,0,0,5"/>
+                <TextBlock Text="{Binding TracksCount, StringFormat='Track Sayısı: {0}'}"
+                           Margin="0,0,0,5"/>
+                <TextBlock Text="{Binding CurrentFile, StringFormat='Mevcut Dosya: {0}'}"
+                           Margin="0,0,0,5"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Butonlar -->
+        <StackPanel Grid.Row="5" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Center">
+            <Button Name="CancelButton"
+                    Content="İptal"
+                    Width="100"
+                    Margin="0,0,10,0"
+                    IsEnabled="{Binding CanCancel}"
+                    Command="{Binding CancelImportCommand}"/>
+            <Button Name="CloseButton"
+                    Content="Kapat"
+                    Width="100"
+                    IsVisible="{Binding IsCompleted}"/>
+        </StackPanel>
+    </Grid>
+</Window>
