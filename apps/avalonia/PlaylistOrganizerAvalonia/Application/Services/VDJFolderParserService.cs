@@ -127,15 +127,17 @@ namespace PlaylistOrganizerAvalonia.Application.Services
             {
                 var fileContent = await File.ReadAllTextAsync(filePath);
                 var xmlDoc = XDocument.Parse(fileContent);
-                var trackElements = xmlDoc.Descendants("track");
+                // VDJFolder uses "song" elements, not "track" (consistent with ParseVDJFolderAsync)
+                var trackElements = xmlDoc.Descendants("song");
 
                 bool updated = false;
                 foreach (var trackElement in trackElements)
                 {
-                    var pathElement = trackElement.Element("path");
-                    if (pathElement != null && pathElement.Value == oldPath)
+                    // VDJFolder stores path in "path" attribute, not element
+                    var pathAttribute = trackElement.Attribute("path");
+                    if (pathAttribute != null && pathAttribute.Value == oldPath)
                     {
-                        pathElement.Value = newPath;
+                        pathAttribute.Value = newPath;
                         updated = true;
                     }
                 }
