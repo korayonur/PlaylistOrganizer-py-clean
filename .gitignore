@@ -207,10 +207,16 @@ shared/database/*.db-wal
 **/.Python
 **/*.so
 
-# Test dosyaları ve sonuçları
+# Test dosyaları ve sonuçları (Python - old project)
 **/tests/
 **/test-results/
 **/.playwright-mcp/
+
+# Test databases (keep schema and test files, ignore test DB files)
+!**/Tests/
+**/Tests/**/*.db
+**/Tests/**/*.db-shm
+**/Tests/**/*.db-wal
 
 # Package lock dosyaları - sadece ana seviyede ignore et
 package-lock.json
@@ -228,10 +234,6 @@ shared/logs/*.log
 *_analysis_report_*.json
 *_test_results.json
 *_missing.json
-
-# Test dosyaları ve raporları
-**/tests/
-**/test-results/
 **/test-report.md
 **/search-test-scenarios.json
 

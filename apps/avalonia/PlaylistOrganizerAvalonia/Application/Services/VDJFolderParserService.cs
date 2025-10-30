@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
 using PlaylistOrganizerAvalonia.Application.Common;
-using PlaylistOrganizerAvalonia.Shared.Services;
 using PlaylistOrganizerAvalonia.Domain.Entities;
+using PlaylistOrganizerAvalonia.Shared.Services;
 
 namespace PlaylistOrganizerAvalonia.Application.Services
 {
@@ -16,7 +16,7 @@ namespace PlaylistOrganizerAvalonia.Application.Services
     /// </summary>
     public class VDJFolderParserService : BaseParserService
     {
-        public VDJFolderParserService(ILogger<VDJFolderParserService> logger) 
+        public VDJFolderParserService(ILogger<VDJFolderParserService> logger)
             : base(logger) { }
 
         /// <summary>

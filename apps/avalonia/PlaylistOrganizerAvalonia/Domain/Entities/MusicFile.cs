@@ -58,10 +58,10 @@ namespace PlaylistOrganizerAvalonia.Domain.Entities
 
         private static string FormatBytes(long bytes)
         {
-            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+            string[] suffixes = { "B", "KB", "MB", "GB", "TB", "PB", "EB" };
             int counter = 0;
             decimal number = bytes;
-            while (Math.Round(number / 1024) >= 1)
+            while (Math.Round(number / 1024) >= 1 && counter < suffixes.Length - 1)
             {
                 number /= 1024;
                 counter++;
