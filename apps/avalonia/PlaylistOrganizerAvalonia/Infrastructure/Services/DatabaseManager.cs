@@ -23,9 +23,20 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
             _databasePath = configuration["Database:Path"]
                 ?? throw new InvalidOperationException("Database:Path configuration not found");
 
-            // Debug için path'i yazdır
-            Console.WriteLine($"Database path: {_databasePath}");
-            Console.WriteLine($"Database exists: {File.Exists(_databasePath)}");
+            // Debug için path'i yazdır - relative path ise full path'e çevir
+            if (!Path.IsPathRooted(_databasePath))
+            {
+                var fullPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _databasePath));
+                Console.WriteLine($"📊 Database path (relative): {_databasePath}");
+                Console.WriteLine($"📊 Database full path: {fullPath}");
+                Console.WriteLine($"📊 Database exists: {File.Exists(fullPath)}");
+                _databasePath = fullPath; // Full path kullan
+            }
+            else
+            {
+                Console.WriteLine($"📊 Database full path: {_databasePath}");
+                Console.WriteLine($"📊 Database exists: {File.Exists(_databasePath)}");
+            }
         }
 
         public SqliteConnection GetConnection()
@@ -108,6 +119,58 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
             return playlists;
         }
 
+        public async Task<List<Domain.Entities.Playlist>> GetPlaylistsWithMissingTracksAsync()
+        {
+            List<Domain.Entities.Playlist> playlists = new List<Domain.Entities.Playlist>();
+
+            try
+            {
+                using var connection = GetConnection();
+                if (connection.State != System.Data.ConnectionState.Open)
+                {
+                    await connection.OpenAsync();
+                }
+
+                // Basit SQL: Sadece eksik track içeren playlist'leri getir
+                using SqliteCommand command = new SqliteCommand(@"
+                    SELECT DISTINCT p.id, p.path, p.type, p.track_count, p.created_at, p.updated_at
+                    FROM playlists p
+                    INNER JOIN tracks t ON t.playlist_file_path = p.path
+                    WHERE t.status = 'Missing'
+                    ORDER BY p.path",
+                    connection);
+
+                using SqliteDataReader reader = await command.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    Domain.Entities.Playlist playlist = new Domain.Entities.Playlist
+                    {
+                        Id = reader.GetInt32(0),
+                        Path = reader.GetString(1),
+                        Type = reader.GetString(2).ToLower() switch
+                        {
+                            "m3u" => PlaylistType.Playlist,
+                            "playlist" => PlaylistType.Playlist,
+                            "vdjfolder" => PlaylistType.VDJFolder,
+                            "folder" => PlaylistType.VDJFolder,
+                            "root" => PlaylistType.Root,
+                            _ => PlaylistType.Folder
+                        },
+                        TrackCount = reader.GetInt32(3),
+                        CreatedAt = reader.GetDateTime(4),
+                        UpdatedAt = reader.GetDateTime(5)
+                    };
+                    playlists.Add(playlist);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading playlists with missing tracks: {ex.Message}");
+            }
+
+            return playlists;
+        }
+
         // Not: EnsureParentIdColumnExists metodu artık kullanılmıyor
         // Schema.sql'de parent_id kolonu zaten tanımlı
         // Bu metod import sırasında çağrılmıyor, bu yüzden kaldırıldı
@@ -121,14 +184,25 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
                 using SqliteConnection connection = new SqliteConnection($"Data Source={_databasePath}");
                 await connection.OpenAsync();
 
-                using SqliteCommand command = new SqliteCommand(@"
-                SELECT t.id, t.path, t.fileName, t.fileNameOnly, t.normalizedFileName, t.status, t.created_at
-                FROM tracks t
-                INNER JOIN playlist_tracks pt ON t.id = pt.track_id
-                WHERE pt.playlist_id = @playlistId
-                ORDER BY pt.track_order", connection);
+                // Önce playlist path'ini al
+                using SqliteCommand pathCommand = new SqliteCommand("SELECT path FROM playlists WHERE id = @playlistId", connection);
+                pathCommand.Parameters.AddWithValue("@playlistId", playlistId);
+                var playlistPath = await pathCommand.ExecuteScalarAsync() as string;
 
-                _ = command.Parameters.AddWithValue("@playlistId", playlistId);
+                if (string.IsNullOrEmpty(playlistPath))
+                {
+                    Console.WriteLine($"Playlist not found: {playlistId}");
+                    return tracks;
+                }
+
+                // Tracks'leri playlist_file_path'e göre filtrele
+                using SqliteCommand command = new SqliteCommand(@"
+                SELECT id, path, fileName, fileNameOnly, normalizedFileName, status, playlist_file_path, track_order, created_at
+                FROM tracks
+                WHERE playlist_file_path = @playlistPath
+                ORDER BY track_order", connection);
+
+                command.Parameters.AddWithValue("@playlistPath", playlistPath);
 
                 using SqliteDataReader reader = await command.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -147,7 +221,9 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
                             "updated" => TrackStatus.Found,
                             _ => TrackStatus.Missing
                         },
-                        CreatedAt = reader.GetDateTime(6)
+                        PlaylistFilePath = reader.GetString(6),
+                        TrackOrder = reader.GetInt32(7),
+                        CreatedAt = reader.GetDateTime(8)
                     };
                     tracks.Add(track);
                 }
@@ -560,17 +636,8 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
                     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE SET NULL,
                     FOREIGN KEY (music_file_id) REFERENCES music_files(path) ON DELETE SET NULL
                 );
-
-                CREATE TABLE IF NOT EXISTS playlist_tracks (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    playlist_id INTEGER NOT NULL,
-                    track_id INTEGER NOT NULL,
-                    track_order INTEGER,
-                    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE,
-                    FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE,
-                    UNIQUE(playlist_id, track_id)
-                );
+                
+                -- playlist_tracks tablosu kaldırıldı - tracks içinde playlist_file_path kullanılıyor
             ";
 
             using var command = new SqliteCommand(basicSchema, connection);

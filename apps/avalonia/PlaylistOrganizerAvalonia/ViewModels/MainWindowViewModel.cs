@@ -24,6 +24,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         private string _searchQuery = string.Empty;
         private string _currentFilter = "all";
         private bool _showOnlyMissingTracks;
+        private HashSet<int>? _filteredPlaylistIds = null; // Filtreleme için eksik içeren playlist ID'leri
 
         public MainWindowViewModel()
         {
@@ -34,9 +35,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             Playlists = [];
             Tracks = [];
 
-            // Hierarchical yapı için Children'ları organize et
-            OrganizePlaylistHierarchy();
-
+            // Hierarchical playlist yapısını oluştur
             // Commands
             RefreshCommand = new RelayCommand(RefreshData);
             FixSuggestionsCommand = new RelayCommand(ShowFixSuggestions);
@@ -144,40 +143,34 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 List<Playlist> playlists = await _databaseManager.GetPlaylistsAsync();
                 Console.WriteLine($"Loaded {playlists.Count} playlists from database");
 
-                // Database verilerini analiz et
-                Console.WriteLine("=== DATABASE ANALYSIS ===");
-                List<IGrouping<int?, Playlist>> parentIdGroups = playlists.GroupBy(p => p.ParentId).ToList();
-                foreach (IGrouping<int?, Playlist>? group in parentIdGroups.Take(10))
-                {
-                    Console.WriteLine($"ParentId {group.Key}: {group.Count()} playlists");
-                    if (group.Count() <= 5)
-                    {
-                        foreach (Playlist? playlist in group)
-                        {
-                            Console.WriteLine($"  - {playlist.Name} (ID: {playlist.Id})");
-                        }
-                    }
-                }
-                Console.WriteLine("=== END DATABASE ANALYSIS ===");
-
                 // UI thread'de güncelle
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
+                    Console.WriteLine("=== UI THREAD UPDATE START ===");
                     Console.WriteLine("Clearing existing playlists...");
                     Playlists.Clear();
+                    Console.WriteLine($"Playlists collection cleared. Current count: {Playlists.Count}");
 
-                    Console.WriteLine($"Adding {playlists.Count} playlists to collection...");
-                    foreach (Playlist playlist in playlists)
+                    // Filtreleme field'ını temizle (normal veri yükleme)
+                    _filteredPlaylistIds = null;
+
+                    Console.WriteLine($"Building hierarchical tree from {playlists.Count} playlists...");
+                    
+                    // Hierarchy'yi organize et (playlists'i memory'de organize eder)
+                    ConvertDatabaseToHierarchy(playlists);
+
+                    Console.WriteLine($"✅ ConvertDatabaseToHierarchy complete. Playlists count: {Playlists.Count}");
+                    
+                    // Her bir root folder'ı listele
+                    for (int i = 0; i < Playlists.Count; i++)
                     {
-                        Playlists.Add(playlist);
+                        var root = Playlists[i];
+                        Console.WriteLine($"  Root[{i}]: {root.Name} (Type: {root.Type}, Children: {root.Children.Count}, TrackCount: {root.TrackCount})");
                     }
-
-                    // Hierarchy'yi organize et
-                    Console.WriteLine("Organizing hierarchy...");
-                    OrganizePlaylistHierarchy();
 
                     OnPropertyChanged(nameof(TotalPlaylists));
                     Console.WriteLine($"TotalPlaylists updated: {TotalPlaylists}");
+                    Console.WriteLine("=== UI THREAD UPDATE END ===");
                 });
             }
             catch (Exception ex)
@@ -267,49 +260,67 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             }
         }
 
-        private void FilterPlaylists()
+        private async void FilterPlaylists()
         {
-            // TODO: Implement playlist filtering based on ShowOnlyMissingTracks
-            OnPropertyChanged(nameof(Playlists));
-        }
-
-        private void OrganizePlaylistHierarchy()
-        {
-            Console.WriteLine("=== OrganizePlaylistHierarchy START ===");
-
-            // Tüm playlist'leri temizle
-            List<Playlist> allPlaylists = [.. Playlists];
-            Console.WriteLine($"All playlists count: {allPlaylists.Count}");
-
-            Playlists.Clear();
-
-            // Root playlist'leri bul (ParentId = 0)
-            List<Playlist> rootPlaylists = allPlaylists.Where(static p => p.ParentId == 0).ToList();
-            Console.WriteLine($"Root playlists count: {rootPlaylists.Count}");
-
-            // Database'deki verileri hierarchy'ye dönüştür
-            Console.WriteLine("Converting database data to hierarchy...");
-            ConvertDatabaseToHierarchy(allPlaylists);
-
-            Console.WriteLine($"Final Playlists count: {Playlists.Count}");
-            foreach (Playlist playlist in Playlists)
+            if (!ShowOnlyMissingTracks)
             {
-                Console.WriteLine($"  - {playlist.Name} (ID: {playlist.Id}, Children: {playlist.Children.Count})");
-                foreach (Playlist child in playlist.Children)
-                {
-                    Console.WriteLine($"    └─ {child.Name} (ID: {child.Id})");
-                }
+                // Filtre kapalıysa normal veriyi yükle
+                RefreshData();
+                return;
             }
-            Console.WriteLine("=== OrganizePlaylistHierarchy END ===");
+
+            // Filtre açıksa eksik track içeren playlist'leri göster
+            try
+            {
+                Console.WriteLine("=== FilterPlaylists: ShowOnlyMissingTracks=TRUE ===");
+                
+                // Basit SQL sorgusu ile eksik track içeren playlist'leri al
+                var playlistsWithMissingTracks = await _databaseManager.GetPlaylistsWithMissingTracksAsync();
+                
+                Console.WriteLine($"Found {playlistsWithMissingTracks.Count} playlists with missing tracks");
+
+                // Eksik içeren playlist ID'lerini bir HashSet'e çevir (hızlı lookup için)
+                var playlistIdsSet = playlistsWithMissingTracks.Select(p => p.Id).ToHashSet();
+                
+                // UI thread'de güncelle
+                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    Console.WriteLine("=== UI THREAD UPDATE: FILTERED PLAYLISTS ===");
+                    Playlists.Clear();
+                    
+                    // Seçili playlist'i temizle (eğer eksik içermiyorsa)
+                    if (SelectedPlaylist != null && !playlistIdsSet.Contains(SelectedPlaylist.Id))
+                    {
+                        SelectedPlaylist = null;
+                        Tracks.Clear();
+                        OnPropertyChanged(nameof(TotalTracks));
+                        OnPropertyChanged(nameof(FoundTracks));
+                        OnPropertyChanged(nameof(MissingTracks));
+                        Console.WriteLine("Selected playlist cleared (no missing tracks)");
+                    }
+                    
+                    // Hierarchy'yi organize et (sadece eksik içeren playlist'ler)
+                    ConvertDatabaseToHierarchy(playlistsWithMissingTracks, playlistIdsSet);
+                    
+                    Console.WriteLine($"✅ Filtered hierarchy complete. Playlists count: {Playlists.Count}");
+                    OnPropertyChanged(nameof(TotalPlaylists));
+                    Console.WriteLine($"TotalPlaylists updated: {TotalPlaylists}");
+                    Console.WriteLine("=== UI THREAD UPDATE END ===");
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error filtering playlists: {ex.Message}");
+            }
         }
 
-        private void ConvertDatabaseToHierarchy(List<Playlist> allPlaylists)
+        private void ConvertDatabaseToHierarchy(List<Playlist> allPlaylists, HashSet<int>? allowedPlaylistIds = null)
         {
             Console.WriteLine("=== ConvertDatabaseToHierarchy START ===");
 
             // API'deki gibi hierarchy oluştur
             Console.WriteLine("Building playlist tree like API...");
-            BuildPlaylistTreeLikeAPI(allPlaylists);
+            BuildPlaylistTreeLikeAPI(allPlaylists, allowedPlaylistIds);
 
             Console.WriteLine($"Final count: {Playlists.Count} playlists");
             Console.WriteLine("=== ConvertDatabaseToHierarchy END ===");
@@ -318,9 +329,17 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         /// <summary>
         /// API'deki gibi playlist tree oluştur - TERMINAL TEST PROGRAMINDAN KOPYALANDI
         /// </summary>
-        private void BuildPlaylistTreeLikeAPI(List<Playlist> playlists)
+        private void BuildPlaylistTreeLikeAPI(List<Playlist> playlists, HashSet<int>? allowedPlaylistIds = null)
         {
+            // Filtreleme için allowed playlist ID'lerini set et
+            _filteredPlaylistIds = allowedPlaylistIds;
+            
             Console.WriteLine($"=== BuildPlaylistTreeLikeAPI START - {playlists.Count} playlists ===");
+            Console.WriteLine($"📊 Building tree for {playlists.Count} playlists");
+            if (_filteredPlaylistIds != null)
+            {
+                Console.WriteLine($"🔍 Filtering enabled: {_filteredPlaylistIds.Count} allowed playlist IDs");
+            }
 
             // 1. BASE KLASÖRLERI OLUŞTUR (Name computed from Path)
             var tree = new Dictionary<string, Playlist>
@@ -330,6 +349,8 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 ["MyLists"] = new Playlist { Id = 9998, Type = PlaylistType.VDJFolder, TrackCount = 0, ParentId = 0, Path = "/MyLists" },
                 ["Sideview"] = new Playlist { Id = 9997, Type = PlaylistType.VDJFolder, TrackCount = 0, ParentId = 0, Path = "/Sideview" }
             };
+            
+            Console.WriteLine($"✅ Created 4 base folder roots");
 
             // 2. HER PLAYLIST'İ TREE'YE EKLE
             foreach (var playlist in playlists)
@@ -393,7 +414,21 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     .ToList();
 
                 var playlistItems = rootFolder.Children
-                    .Where(c => c.Type != PlaylistType.VDJFolder && c.TrackCount > 0)
+                    .Where(c => 
+                    {
+                        // Filtreleme aktifse, sadece allowed playlist'leri göster
+                        if (_filteredPlaylistIds != null)
+                        {
+                            return c.Type != PlaylistType.VDJFolder && 
+                                   c.TrackCount > 0 && 
+                                   _filteredPlaylistIds.Contains(c.Id);
+                        }
+                        else
+                        {
+                            // Filtreleme yoksa: normal filtreleme
+                            return c.Type != PlaylistType.VDJFolder && c.TrackCount > 0;
+                        }
+                    })
                     .OrderBy(c => c.Name)
                     .ToList();
 
@@ -428,10 +463,12 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 }
 
                 Playlists.Add(rootFolder);
+                Console.WriteLine($"✅ Added to Playlists collection: {rootFolder.Name} (Type: {rootFolder.Type}, Children: {rootFolder.Children.Count})");
                 Console.WriteLine($"=== END PROCESSING ROOT FOLDER: {rootFolder.Name} ===");
             }
 
             Console.WriteLine($"=== BuildPlaylistTreeLikeAPI END - {Playlists.Count} root folders ===");
+            Console.WriteLine($"📊 Final Playlists collection has {Playlists.Count} items");
         }
 
         /// <summary>
@@ -443,9 +480,29 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
             // En az bir geçerli child var mı?
             return folder.Children.Any(child =>
-                (child.Type == PlaylistType.VDJFolder &&
-                 (child.TrackCount > 0 || HasValidChildren(child))) ||
-                (child.Type != PlaylistType.VDJFolder && child.TrackCount > 0));
+            {
+                // Eğer filtreleme aktifse, sadece allowed playlist'leri kontrol et
+                if (_filteredPlaylistIds != null)
+                {
+                    if (child.Type == PlaylistType.VDJFolder)
+                    {
+                        // Klasör için: içinde allowed playlist varsa geçerli
+                        return child.TrackCount > 0 || HasValidChildren(child);
+                    }
+                    else
+                    {
+                        // Playlist için: allowed ID'ye sahipse ve track count > 0 ise geçerli
+                        return _filteredPlaylistIds.Contains(child.Id) && child.TrackCount > 0;
+                    }
+                }
+                else
+                {
+                    // Filtreleme yoksa: normal kontrol
+                    return (child.Type == PlaylistType.VDJFolder &&
+                           (child.TrackCount > 0 || HasValidChildren(child))) ||
+                           (child.Type != PlaylistType.VDJFolder && child.TrackCount > 0);
+                }
+            });
         }
 
         /// <summary>
@@ -458,6 +515,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             Console.WriteLine($"  🔍 Filtering children of '{folder.Name}': {folder.Children.Count} children");
 
             // Children'ları filtrele - BOŞ CHILDREN'LARI DA GİZLE
+            // Eğer filtreleme aktifse, sadece allowed playlist'leri göster
             var filteredFolders = folder.Children
                 .Where(c => c.Type == PlaylistType.VDJFolder &&
                            (c.TrackCount > 0 ||
@@ -466,7 +524,21 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 .ToList();
 
             var filteredPlaylists = folder.Children
-                .Where(c => c.Type != PlaylistType.VDJFolder && c.TrackCount > 0)
+                .Where(c => 
+                {
+                    // Filtreleme aktifse, sadece allowed playlist'leri göster
+                    if (_filteredPlaylistIds != null)
+                    {
+                        return c.Type != PlaylistType.VDJFolder && 
+                               c.TrackCount > 0 && 
+                               _filteredPlaylistIds.Contains(c.Id);
+                    }
+                    else
+                    {
+                        // Filtreleme yoksa: normal filtreleme
+                        return c.Type != PlaylistType.VDJFolder && c.TrackCount > 0;
+                    }
+                })
                 .OrderBy(c => c.Name)
                 .ToList();
 
@@ -592,10 +664,12 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             }
         }
 
-        private Window? GetTopLevel()
+        private static Window? GetTopLevel()
         {
-            // Bu method MainWindow'u döndürmeli
-            return null; // TODO: Implement
+            return Avalonia.Application.Current?.ApplicationLifetime is 
+                Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
+                ? desktop.MainWindow 
+                : null;
         }
 
         private void ExitApplication()

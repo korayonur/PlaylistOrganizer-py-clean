@@ -322,16 +322,28 @@ namespace PlaylistOrganizerAvalonia.Application.Services
                 // Parse progress (startPercent ile startPercent + 10 arası)
                 var parseEndPercent = startPercent + 10;
                 var parsePercent = startPercent + (int)(10 * (double)parsedPlaylistCount / totalPlaylists);
-                progress?.Report(new ImportProgress
+                
+                // Progress güncellemesini daha sık yap (her 10 dosyada bir)
+                if (parsedPlaylistCount % 10 == 0 || parsedPlaylistCount == totalPlaylists)
                 {
-                    CurrentStage = $"Playlist parse ediliyor... ({parsedPlaylistCount}/{totalPlaylists}) - {playlistFile.Name}",
-                    ProgressPercentage = parsePercent,
-                    ProcessedFiles = parsedPlaylistCount,
-                    TotalFiles = totalPlaylists,
-                    CurrentFile = playlistFile.Name
-                });
-
+                    progress?.Report(new ImportProgress
+                    {
+                        CurrentStage = $"Playlist parse ediliyor... ({parsedPlaylistCount}/{totalPlaylists}) - {playlistFile.Name}",
+                        ProgressPercentage = parsePercent,
+                        ProcessedFiles = parsedPlaylistCount,
+                        TotalFiles = totalPlaylists,
+                        CurrentFile = playlistFile.Name
+                    });
+                }
+                
+                // Her dosyada son log
                 LogInfo($"✅ {parsedTracks.Count} track '{playlistFile.Name}' playlist dosyasından parse edildi");
+                
+                // UI thread'e nefes almak için fırsat ver (her 100 dosyada bir)
+                if (parsedPlaylistCount % 100 == 0)
+                {
+                    await Task.Yield();
+                }
             }
 
             // Batch'ler halinde insert et (startPercent + 10 ile endPercent arası)

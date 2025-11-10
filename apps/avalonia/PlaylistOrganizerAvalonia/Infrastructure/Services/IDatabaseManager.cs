@@ -23,6 +23,11 @@ public interface IDatabaseManager : IDisposable
     Task<List<Track>> GetTracksForPlaylistAsync(int playlistId);
     
     /// <summary>
+    /// Eksik track içeren playlist'leri getir
+    /// </summary>
+    Task<List<Playlist>> GetPlaylistsWithMissingTracksAsync();
+    
+    /// <summary>
     /// Playlist ekle
     /// </summary>
     Task InsertPlaylistAsync(Playlist playlist);

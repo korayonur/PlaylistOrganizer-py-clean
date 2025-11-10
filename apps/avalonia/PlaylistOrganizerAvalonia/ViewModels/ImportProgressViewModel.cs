@@ -15,6 +15,8 @@ namespace PlaylistOrganizerAvalonia.ViewModels
     {
         private readonly ILogger<ImportProgressViewModel> _logger;
         private readonly DapperImportService _importService;
+        
+        public event EventHandler? CloseRequested;
 
         [ObservableProperty]
         private string _currentStage = "Hazırlanıyor...";
@@ -77,6 +79,19 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     _canCancel = false;
                     
                     _logger.LogInformation($"Import tamamlandı: {result.MusicFilesImported} müzik, {result.PlaylistFilesImported} playlist");
+                    
+                    // UI thread'de güncelle
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        CurrentStage = _currentStage;
+                        ProgressPercentage = _progressPercentage;
+                        IsCompleted = _isCompleted;
+                        CanCancel = _canCancel;
+                    });
+                    
+                    // 2 saniye bekle, sonra dialog'u kapat (kullanıcı sonucu görebilsin)
+                    await Task.Delay(2000);
+                    CloseRequested?.Invoke(this, EventArgs.Empty);
                 }
                 else
                 {
@@ -115,13 +130,34 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         {
             if (_cancellationRequested) return;
 
-            CurrentStage = progress.CurrentStage;
-            ProgressPercentage = progress.ProgressPercentage;
-            
-            if (!string.IsNullOrEmpty(progress.CurrentFile))
+            // UI thread'de güncelle
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
-                CurrentFile = progress.CurrentFile;
-            }
+                CurrentStage = progress.CurrentStage;
+                ProgressPercentage = progress.ProgressPercentage;
+                
+                if (!string.IsNullOrEmpty(progress.CurrentFile))
+                {
+                    CurrentFile = progress.CurrentFile;
+                }
+
+                // Sahneye gore sayaclari guncelle
+                var stage = progress.CurrentStage?.ToLowerInvariant() ?? string.Empty;
+                if (stage.Contains("müzik dosyaları") || stage.Contains("muzik dosyalari"))
+                {
+                    // Tarama veya import asamasinda toplami goster
+                    MusicFilesCount = progress.TotalFiles > 0 ? progress.TotalFiles : MusicFilesCount;
+                }
+                else if (stage.Contains("playlist") && (stage.Contains("tara") || stage.Contains("parse") || stage.Contains("import")))
+                {
+                    PlaylistFilesCount = progress.TotalFiles > 0 ? progress.TotalFiles : PlaylistFilesCount;
+                }
+                else if (stage.Contains("track") && (stage.Contains("import") || stage.Contains("parse")))
+                {
+                    // Track sayisini toplam islenecek ya da su ana kadar islenen ile guncelle
+                    TracksCount = progress.TotalFiles > 0 ? progress.TotalFiles : (progress.ProcessedFiles > 0 ? progress.ProcessedFiles : TracksCount);
+                }
+            });
         }
 
         partial void OnProgressPercentageChanged(int value)
@@ -135,6 +171,13 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             {
                 CanCancel = false;
             }
+        }
+
+        [RelayCommand]
+        private void Close()
+        {
+            // Dialog kapatma isteği
+            CloseRequested?.Invoke(this, EventArgs.Empty);
         }
     }
 }

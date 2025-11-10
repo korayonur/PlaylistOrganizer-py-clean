@@ -9,10 +9,6 @@
         WindowStartupLocation="CenterScreen"
         CanResize="False">
 
-    <Design.DataContext>
-        <vm:SettingsViewModel />
-    </Design.DataContext>
-
     <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

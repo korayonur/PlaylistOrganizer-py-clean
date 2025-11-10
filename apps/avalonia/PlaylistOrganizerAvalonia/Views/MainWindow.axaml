@@ -13,12 +13,7 @@
         MinWidth="1000" MinHeight="700"
         Background="#2D2D2D">
 
-    <Design.DataContext>
-        <vm:MainWindowViewModel/>
-    </Design.DataContext>
-
     <Window.Resources>
-        <local:RootFolderIconConverter x:Key="RootFolderIconConverter"/>
         <local:PlaylistTypeToIconConverter x:Key="PlaylistTypeToIconConverter"/>
         <local:PlaylistTypeToColorConverter x:Key="PlaylistTypeToColorConverter"/>
         <local:ChildrenToVisibilityConverter x:Key="ChildrenToVisibilityConverter"/>
@@ -123,16 +118,10 @@
                         <TreeView.ItemTemplate>
                             <TreeDataTemplate ItemsSource="{Binding Children}">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <!-- Root Folder Icon -->
-                                    <TextBlock Text="{Binding ParentId, Converter={StaticResource RootFolderIconConverter}}"
-                                               FontSize="16"
-                                               IsVisible="{Binding ParentId, Converter={StaticResource ChildrenToVisibilityConverter}, ConverterParameter=root}"/>
-                                    
-                                    <!-- Regular Folder/Playlist Icon -->
+                                    <!-- Playlist/Folder Icon -->
                                     <TextBlock Text="{Binding Type, Converter={StaticResource PlaylistTypeToIconConverter}}"
                                                FontSize="16"
-                                               Foreground="{Binding Type, Converter={StaticResource PlaylistTypeToColorConverter}}"
-                                               IsVisible="{Binding ParentId, Converter={StaticResource ChildrenToVisibilityConverter}, ConverterParameter=notroot}"/>
+                                               Foreground="{Binding Type, Converter={StaticResource PlaylistTypeToColorConverter}}"/>
                                     
                                     <TextBlock Text="{Binding Name}" 
                                                Foreground="White"

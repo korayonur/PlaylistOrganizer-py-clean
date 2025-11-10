@@ -158,8 +158,8 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Database
 
                 var stats = new DatabaseStatistics();
 
-                // Get table counts
-                var tables = new[] { "music_files", "playlists", "tracks", "playlist_tracks", "track_words", "music_words" };
+                // Get table counts - basitleştirilmiş schema
+                var tables = new[] { "music_files", "playlists", "tracks", "track_words", "music_words" };
                 
                 foreach (var table in tables)
                 {
@@ -177,9 +177,6 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Database
                         case "tracks":
                             stats.TracksCount = count;
                             break;
-                        case "playlist_tracks":
-                            stats.PlaylistTracksCount = count;
-                            break;
                         case "track_words":
                             stats.TrackWordsCount = count;
                             break;
@@ -188,6 +185,9 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Database
                             break;
                     }
                 }
+                
+                // PlaylistTracks artık yok - tracks içinde playlist_file_path var
+                stats.PlaylistTracksCount = 0;
 
                 // Get database file size
                 var dbPath = GetDatabasePath();
@@ -249,9 +249,10 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Database
 
         private async Task VerifyTablesAsync(SqliteConnection connection)
         {
+            // Basitleştirilmiş schema - playlist_tracks tablosu kaldırıldı (tracks içinde playlist_file_path var)
             var expectedTables = new[] 
             { 
-                "music_files", "playlists", "tracks", "playlist_tracks", 
+                "music_files", "playlists", "tracks", 
                 "track_words", "music_words", "import_sessions" 
             };
 
@@ -298,13 +299,14 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Database
         public int MusicFilesCount { get; set; }
         public int PlaylistsCount { get; set; }
         public int TracksCount { get; set; }
-        public int PlaylistTracksCount { get; set; }
+        public int PlaylistTracksCount { get; set; } // Deprecated - kept for backwards compatibility
         public int TrackWordsCount { get; set; }
         public int MusicWordsCount { get; set; }
         public long DatabaseSizeBytes { get; set; }
 
         public string DatabaseSizeFormatted => FormatBytes(DatabaseSizeBytes);
-        public int TotalRecords => MusicFilesCount + PlaylistsCount + TracksCount + PlaylistTracksCount + TrackWordsCount + MusicWordsCount;
+        // Basitleştirilmiş schema - PlaylistTracksCount artık 0 (tracks içinde playlist_file_path var)
+        public int TotalRecords => MusicFilesCount + PlaylistsCount + TracksCount + TrackWordsCount + MusicWordsCount;
 
         private static string FormatBytes(long bytes)
         {

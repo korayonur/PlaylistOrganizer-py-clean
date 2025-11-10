@@ -5,7 +5,7 @@
         x:DataType="vm:ImportProgressViewModel"
         Title="Import İşlemi"
         Width="500"
-        Height="300"
+        Height="400"
         CanResize="False"
         WindowStartupLocation="CenterOwner">
 
@@ -78,6 +78,7 @@
             <Button Name="CloseButton"
                     Content="Kapat"
                     Width="100"
+                    Command="{Binding CloseCommand}"
                     IsVisible="{Binding IsCompleted}"/>
         </StackPanel>
     </Grid>

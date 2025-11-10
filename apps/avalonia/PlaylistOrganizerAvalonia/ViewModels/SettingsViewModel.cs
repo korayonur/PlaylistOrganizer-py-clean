@@ -78,8 +78,18 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
         private void LoadSettings()
         {
-            // Database settings
-            DatabasePath = _configuration["Database:Path"] ?? "playlistorganizer.db";
+            // Database settings - tam path göster
+            var dbPath = _configuration["Database:Path"] ?? "playlistorganizer.db";
+            if (!Path.IsPathRooted(dbPath))
+            {
+                // Relative path ise, full path'e çevir
+                var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                DatabasePath = Path.GetFullPath(Path.Combine(baseDir, dbPath));
+            }
+            else
+            {
+                DatabasePath = dbPath;
+            }
             
             // Import paths (from old project)
             MusicFolderPath = _configuration["ImportPaths:Music"] ?? "/Users/koray/Music/KorayMusics";

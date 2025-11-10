@@ -6,18 +6,21 @@ namespace PlaylistOrganizerAvalonia.Views
 {
     public partial class ImportProgressDialog : Window
     {
+        private readonly ImportProgressViewModel _viewModel;
+
         public ImportProgressDialog()
         {
             InitializeComponent();
-            DataContext = new ImportProgressViewModel();
+            _viewModel = new ImportProgressViewModel();
+            DataContext = _viewModel;
+            
+            // CloseCommand için window kapatma callback
+            _viewModel.CloseRequested += (s, e) => Close(true);
             
             // Dialog açıldığında otomatik import başlat
             Loaded += async (s, e) => 
             {
-                if (DataContext is ImportProgressViewModel vm)
-                {
-                    await vm.StartImportAsync();
-                }
+                await _viewModel.StartImportAsync();
             };
         }
 
