@@ -41,7 +41,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IConfigurationService, ConfigurationService>();
 
         // Logging
-        services.AddLogging(builder => builder.AddConsole());
+        services.AddLogging(builder => builder
+            .AddConsole()
+            .SetMinimumLevel(LogLevel.Debug));
         services.AddSingleton<ILoggingService, ConsoleLoggingService>();
 
         // Caching
@@ -66,6 +68,9 @@ public static class ServiceCollectionExtensions
 
         // File Operations
         services.AddSingleton<FileScannerService>();
+
+        // Playlist Tree
+        services.AddSingleton<PlaylistTreeService>();
 
         // Import
         services.AddSingleton<DapperImportService>();

@@ -9,6 +9,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using PlaylistOrganizerAvalonia.Domain.Entities;
 using PlaylistOrganizerAvalonia.Domain.Enums;
+using PlaylistOrganizerAvalonia.Infrastructure.Services;
 
 namespace PlaylistOrganizerAvalonia.Infrastructure.Services
 {
@@ -16,9 +17,12 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
     {
         private SqliteConnection? _connection;
         private readonly string _databasePath;
+        private readonly ILoggingService? _loggingService;
 
-        public DatabaseManager(IConfiguration configuration)
+        public DatabaseManager(IConfiguration configuration, ILoggingService? loggingService = null)
         {
+            _loggingService = loggingService;
+            
             // Configuration'dan database path'i al
             _databasePath = configuration["Database:Path"]
                 ?? throw new InvalidOperationException("Database:Path configuration not found");
@@ -27,15 +31,16 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
             if (!Path.IsPathRooted(_databasePath))
             {
                 var fullPath = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _databasePath));
-                Console.WriteLine($"📊 Database path (relative): {_databasePath}");
-                Console.WriteLine($"📊 Database full path: {fullPath}");
-                Console.WriteLine($"📊 Database exists: {File.Exists(fullPath)}");
+                var message = $"📊 Database path (relative): {_databasePath}\n📊 Database full path: {fullPath}\n📊 Database exists: {File.Exists(fullPath)}";
+                Console.WriteLine(message);
+                _loggingService?.LogInformation(message);
                 _databasePath = fullPath; // Full path kullan
             }
             else
             {
-                Console.WriteLine($"📊 Database full path: {_databasePath}");
-                Console.WriteLine($"📊 Database exists: {File.Exists(_databasePath)}");
+                var message = $"📊 Database full path: {_databasePath}\n📊 Database exists: {File.Exists(_databasePath)}";
+                Console.WriteLine(message);
+                _loggingService?.LogInformation(message);
             }
         }
 
@@ -131,16 +136,26 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
                     await connection.OpenAsync();
                 }
 
-                // Basit SQL: Sadece eksik track içeren playlist'leri getir
-                using SqliteCommand command = new SqliteCommand(@"
+                // SQL sorgusu
+                string sql = @"
                     SELECT DISTINCT p.id, p.path, p.type, p.track_count, p.created_at, p.updated_at
                     FROM playlists p
                     INNER JOIN tracks t ON t.playlist_file_path = p.path
                     WHERE t.status = 'Missing'
-                    ORDER BY p.path",
-                    connection);
-
+                    ORDER BY p.path";
+                
+                // SQL debug log
+                _loggingService?.LogSqlDebug("========================================");
+                _loggingService?.LogSqlDebug("GetPlaylistsWithMissingTracksAsync");
+                _loggingService?.LogSqlDebug($"SQL: {sql}");
+                _loggingService?.LogSqlDebug("========================================");
+                
+                var startTime = DateTime.Now;
+                
+                using SqliteCommand command = new SqliteCommand(sql, connection);
                 using SqliteDataReader reader = await command.ExecuteReaderAsync();
+                
+                int count = 0;
                 while (await reader.ReadAsync())
                 {
                     Domain.Entities.Playlist playlist = new Domain.Entities.Playlist
@@ -161,11 +176,27 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
                         UpdatedAt = reader.GetDateTime(5)
                     };
                     playlists.Add(playlist);
+                    count++;
+                    
+                    // İlk 10 playlist'i detaylı logla
+                    if (count <= 10)
+                    {
+                        _loggingService?.LogSqlDebug($"Playlist[{count}]: ID={playlist.Id}, Path={playlist.Path}, Type={playlist.Type}, TrackCount={playlist.TrackCount}");
+                    }
                 }
+                
+                var endTime = DateTime.Now;
+                var duration = (endTime - startTime).TotalMilliseconds;
+                
+                // Sonuçları logla
+                _loggingService?.LogSqlDebug($"Toplam {count} playlist bulundu, süre: {duration}ms");
+                _loggingService?.LogSqlDebug("========================================");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading playlists with missing tracks: {ex.Message}");
+                var errorMessage = $"Error loading playlists with missing tracks: {ex.Message}";
+                Console.WriteLine(errorMessage);
+                _loggingService?.LogError(errorMessage, ex);
             }
 
             return playlists;
@@ -185,26 +216,46 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
                 await connection.OpenAsync();
 
                 // Önce playlist path'ini al
-                using SqliteCommand pathCommand = new SqliteCommand("SELECT path FROM playlists WHERE id = @playlistId", connection);
+                string pathSql = "SELECT path FROM playlists WHERE id = @playlistId";
+                _loggingService?.LogSqlDebug("========================================");
+                _loggingService?.LogSqlDebug($"GetTracksForPlaylistAsync - PlaylistId: {playlistId}");
+                _loggingService?.LogSqlDebug($"Path SQL: {pathSql}");
+                _loggingService?.LogSqlDebug($"Parameter: @playlistId = {playlistId}");
+                
+                using SqliteCommand pathCommand = new SqliteCommand(pathSql, connection);
                 pathCommand.Parameters.AddWithValue("@playlistId", playlistId);
                 var playlistPath = await pathCommand.ExecuteScalarAsync() as string;
 
                 if (string.IsNullOrEmpty(playlistPath))
                 {
-                    Console.WriteLine($"Playlist not found: {playlistId}");
+                    var notFoundMessage = $"Playlist not found: {playlistId}";
+                    Console.WriteLine(notFoundMessage);
+                    _loggingService?.LogSqlDebug(notFoundMessage);
+                    _loggingService?.LogSqlDebug("========================================");
                     return tracks;
                 }
 
-                // Tracks'leri playlist_file_path'e göre filtrele
-                using SqliteCommand command = new SqliteCommand(@"
-                SELECT id, path, fileName, fileNameOnly, normalizedFileName, status, playlist_file_path, track_order, created_at
-                FROM tracks
-                WHERE playlist_file_path = @playlistPath
-                ORDER BY track_order", connection);
+                _loggingService?.LogSqlDebug($"Playlist Path: {playlistPath}");
 
+                // Tracks'leri playlist_file_path'e göre filtrele
+                string tracksSql = @"
+                    SELECT id, path, fileName, fileNameOnly, normalizedFileName, status, playlist_file_path, track_order, created_at
+                    FROM tracks
+                    WHERE playlist_file_path = @playlistPath
+                    ORDER BY track_order";
+                
+                _loggingService?.LogSqlDebug($"Tracks SQL: {tracksSql}");
+                _loggingService?.LogSqlDebug($"Parameter: @playlistPath = {playlistPath}");
+
+                var startTime = DateTime.Now;
+
+                using SqliteCommand command = new SqliteCommand(tracksSql, connection);
                 command.Parameters.AddWithValue("@playlistPath", playlistPath);
 
                 using SqliteDataReader reader = await command.ExecuteReaderAsync();
+                int foundCount = 0;
+                int missingCount = 0;
+                
                 while (await reader.ReadAsync())
                 {
                     Domain.Entities.Track track = new Domain.Entities.Track
@@ -226,11 +277,22 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
                         CreatedAt = reader.GetDateTime(8)
                     };
                     tracks.Add(track);
+                    
+                    if (track.Status == TrackStatus.Found) foundCount++;
+                    else missingCount++;
                 }
+                
+                var endTime = DateTime.Now;
+                var duration = (endTime - startTime).TotalMilliseconds;
+                
+                _loggingService?.LogSqlDebug($"Toplam {tracks.Count} track bulundu (Found: {foundCount}, Missing: {missingCount}), süre: {duration}ms");
+                _loggingService?.LogSqlDebug("========================================");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading tracks for playlist {playlistId}: {ex.Message}");
+                var errorMessage = $"Error loading tracks for playlist {playlistId}: {ex.Message}";
+                Console.WriteLine(errorMessage);
+                _loggingService?.LogError(errorMessage, ex);
             }
 
             return tracks;
@@ -801,6 +863,9 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
         }
 
         // Track status'larını toplu güncelle (Available/Missing)
+        // NOT: Sadece dosya sistemine göre kontrol eder, music_files tablosuna bakmaz
+        // Çünkü import sırasında music_files tablosuna yazılıyor ama path eşleşmeleri
+        // tutarsız olabiliyor. Dosya sistemini kontrol etmek daha güvenilir.
         public async Task UpdateTrackStatusesAsync()
         {
             using var connection = GetConnection();
@@ -809,22 +874,74 @@ namespace PlaylistOrganizerAvalonia.Infrastructure.Services
                 await connection.OpenAsync();
             }
 
-            LogInfo("🔄 Track status'ları güncelleniyor...");
+            LogInfo("🔄 Track status'ları güncelleniyor (dosya sistemine göre)...");
 
+            // Tüm track'leri al (sadece Missing olanları değil, tümünü kontrol et)
+            // Çünkü bir dosya silinmiş olabilir (Found -> Missing)
             var sql = @"
-                UPDATE tracks 
-                SET status = CASE 
-                    WHEN EXISTS (
-                        SELECT 1 FROM music_files m 
-                        WHERE m.path = tracks.path 
-                        OR m.normalizedFileName = tracks.normalizedFileName
-                    ) THEN 'Found'
-                    ELSE 'Missing'
-                END,
-                updated_at = CURRENT_TIMESTAMP";
+                SELECT id, path, status 
+                FROM tracks 
+                WHERE path IS NOT NULL AND path != ''";
 
-            var affectedRows = await connection.ExecuteAsync(sql);
-            LogInfo($"✅ {affectedRows} track status'u güncellendi");
+            var allTracks = await connection.QueryAsync<(int id, string path, string status)>(sql);
+            int updatedToFound = 0;
+            int updatedToMissing = 0;
+            int checkedCount = 0;
+            int batchSize = 100;
+
+            foreach (var (id, path, currentStatus) in allTracks)
+            {
+                checkedCount++;
+                if (string.IsNullOrEmpty(path))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    bool fileExists = File.Exists(path);
+                    string newStatus = fileExists ? "Found" : "Missing";
+                    
+                    // Sadece status değiştiyse güncelle
+                    if (currentStatus != newStatus)
+                    {
+                        var updateSql = "UPDATE tracks SET status = @status, updated_at = CURRENT_TIMESTAMP WHERE id = @id";
+                        await connection.ExecuteAsync(updateSql, new { id, status = newStatus });
+                        
+                        if (newStatus == "Found")
+                        {
+                            updatedToFound++;
+                        }
+                        else
+                        {
+                            updatedToMissing++;
+                        }
+                        
+                        // Her 100 güncellemede bir log
+                        if ((updatedToFound + updatedToMissing) % batchSize == 0)
+                        {
+                            LogInfo($"🔄 {updatedToFound + updatedToMissing} track güncellendi ({updatedToFound} Found, {updatedToMissing} Missing), {checkedCount} track kontrol edildi...");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Dosya kontrolü sırasında hata oluşursa (örn: path çok uzun, özel karakterler) sessizce devam et
+                    if (checkedCount % 1000 == 0)
+                    {
+                        LogInfo($"⚠️  Dosya kontrolü hatası (ID={id}): {ex.Message}");
+                    }
+                }
+            }
+
+            if (updatedToFound > 0 || updatedToMissing > 0)
+            {
+                LogInfo($"✅ Track status'ları güncellendi: {updatedToFound} Found, {updatedToMissing} Missing (toplam {checkedCount} track kontrol edildi)");
+            }
+            else
+            {
+                LogInfo($"ℹ️  {checkedCount} track kontrol edildi, güncellenecek track bulunamadı");
+            }
         }
 
         // Tracks'ten playlists tablosunu doldur (GROUP BY ile)

@@ -76,7 +76,9 @@ sealed class Program
             // Build service provider
             var services = new ServiceCollection()
                 .AddSingleton<IConfiguration>(configuration)
-                .AddLogging(builder => builder.AddConsole())
+                .AddLogging(builder => builder
+                    .AddConsole()
+                    .SetMinimumLevel(LogLevel.Debug))
                 .AddPlaylistOrganizerServices()
                 .BuildServiceProvider();
 

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Controls;
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PlaylistOrganizerAvalonia.Application.Services;
@@ -19,12 +21,15 @@ namespace PlaylistOrganizerAvalonia.ViewModels
     {
         private readonly IDatabaseManager _databaseManager;
         private readonly SearchService _searchService;
+        private readonly PlaylistTreeService _playlistTreeService;
+        private readonly VDJFolderParserService _vdjFolderParserService;
+        private readonly M3UParserService _m3uParserService;
         private readonly ILogger<MainWindowViewModel> _logger;
         private Playlist? _selectedPlaylist;
         private string _searchQuery = string.Empty;
         private string _currentFilter = "all";
         private bool _showOnlyMissingTracks;
-        private HashSet<int>? _filteredPlaylistIds = null; // Filtreleme için eksik içeren playlist ID'leri
+        private HashSet<string>? _filteredPlaylistPaths = null; // Filtreleme için eksik içeren playlist path'leri (ID yerine path)
 
         public MainWindowViewModel()
         {
@@ -32,6 +37,9 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             _logger = serviceProvider.GetRequiredService<ILogger<MainWindowViewModel>>();
             _searchService = serviceProvider.GetRequiredService<SearchService>();
             _databaseManager = serviceProvider.GetRequiredService<IDatabaseManager>();
+            _playlistTreeService = serviceProvider.GetRequiredService<PlaylistTreeService>();
+            _vdjFolderParserService = serviceProvider.GetRequiredService<VDJFolderParserService>();
+            _m3uParserService = serviceProvider.GetRequiredService<M3UParserService>();
             Playlists = [];
             Tracks = [];
 
@@ -62,17 +70,17 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 {
                     if (value != null)
                     {
-                        Console.WriteLine($"Selected playlist: {value.Name} (Type: {value.Type})");
+                        _logger.LogDebug($"Selected playlist: {value.Name} (Type: {value.Type})");
 
                         // Playlist ve Folder'lara tıklandığında track'leri yükle
                         if (value.Type == PlaylistType.Playlist || value.Type == PlaylistType.VDJFolder)
                         {
-                            LoadTracksForPlaylistAsync(value.Id);
+                            LoadTracksForPlaylistAsync(value.Path);
                         }
                         else
                         {
                             // Root seçildiğinde track'leri temizle
-                            Console.WriteLine($"Root selected, clearing tracks");
+                            _logger.LogDebug($"Root selected, clearing tracks");
                             Tracks.Clear();
                             OnPropertyChanged(nameof(TotalTracks));
                             OnPropertyChanged(nameof(FoundTracks));
@@ -137,65 +145,137 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         // Methods
         private async void LoadDataAsync()
         {
-            Console.WriteLine("=== LoadDataAsync START ===");
+            _logger.LogDebug("=== LoadDataAsync START ===");
             try
             {
-                List<Playlist> playlists = await _databaseManager.GetPlaylistsAsync();
-                Console.WriteLine($"Loaded {playlists.Count} playlists from database");
+                // Önce cache'den oku
+                List<Playlist>? playlists = await _playlistTreeService.LoadTreeFromCacheAsync();
+
+                // Cache yoksa dosya sisteminden oku ve cache'e yaz
+                if (playlists == null || playlists.Count == 0)
+                {
+                    _logger.LogDebug("Cache not found or empty, building tree from file system...");
+                    playlists = await _playlistTreeService.BuildTreeFromFileSystemAsync();
+                    await _playlistTreeService.SaveTreeToCacheAsync(playlists);
+                    _logger.LogDebug($"Built tree from file system: {playlists.Count} root folders");
+                }
+                else
+                {
+                    _logger.LogDebug($"Loaded {playlists.Count} root folders from cache");
+                }
 
                 // UI thread'de güncelle
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    Console.WriteLine("=== UI THREAD UPDATE START ===");
-                    Console.WriteLine("Clearing existing playlists...");
+                    _logger.LogDebug("=== UI THREAD UPDATE START ===");
+                    _logger.LogDebug("Clearing existing playlists...");
                     Playlists.Clear();
-                    Console.WriteLine($"Playlists collection cleared. Current count: {Playlists.Count}");
+                    _logger.LogDebug($"Playlists collection cleared. Current count: {Playlists.Count}");
 
                     // Filtreleme field'ını temizle (normal veri yükleme)
-                    _filteredPlaylistIds = null;
+                    _filteredPlaylistPaths = null;
 
-                    Console.WriteLine($"Building hierarchical tree from {playlists.Count} playlists...");
-                    
-                    // Hierarchy'yi organize et (playlists'i memory'de organize eder)
-                    ConvertDatabaseToHierarchy(playlists);
+                    _logger.LogDebug($"Adding {playlists.Count} root folders to UI...");
 
-                    Console.WriteLine($"✅ ConvertDatabaseToHierarchy complete. Playlists count: {Playlists.Count}");
+                    // 0 track count'lu playlist'leri filtrele
+                    var filteredPlaylists = FilterEmptyPlaylists(playlists);
+                    _logger.LogDebug($"After filtering empty playlists: {filteredPlaylists.Count} root folders");
+
+                    // Root folder'ları direkt ekle (zaten hiyerarşik yapıda)
+                    foreach (var root in filteredPlaylists)
+                    {
+                        Playlists.Add(root);
+                    }
+
+                    _logger.LogDebug($"✅ LoadDataAsync complete. Playlists count: {Playlists.Count}");
                     
                     // Her bir root folder'ı listele
                     for (int i = 0; i < Playlists.Count; i++)
                     {
                         var root = Playlists[i];
-                        Console.WriteLine($"  Root[{i}]: {root.Name} (Type: {root.Type}, Children: {root.Children.Count}, TrackCount: {root.TrackCount})");
+                        _logger.LogDebug($"  Root[{i}]: {root.Name} (Type: {root.Type}, Children: {root.Children.Count}, TrackCount: {root.TrackCount})");
                     }
 
                     OnPropertyChanged(nameof(TotalPlaylists));
-                    Console.WriteLine($"TotalPlaylists updated: {TotalPlaylists}");
-                    Console.WriteLine("=== UI THREAD UPDATE END ===");
+                    _logger.LogDebug($"TotalPlaylists updated: {TotalPlaylists}");
+                    _logger.LogDebug("=== UI THREAD UPDATE END ===");
                 });
             }
             catch (Exception ex)
             {
                 // Error handling
-                Console.WriteLine($"Error loading data: {ex.Message}");
+                _logger.LogError(ex, $"Error loading data: {ex.Message}");
             }
-            Console.WriteLine("=== LoadDataAsync END ===");
+            _logger.LogDebug("=== LoadDataAsync END ===");
         }
 
-        private async void LoadTracksForPlaylistAsync(int playlistId)
+        private async void LoadTracksForPlaylistAsync(string playlistPath)
         {
             try
             {
-                Console.WriteLine($"=== LoadTracksForPlaylistAsync START - PlaylistId: {playlistId} ===");
+                _logger.LogDebug($"=== LoadTracksForPlaylistAsync START - PlaylistPath: {playlistPath} ===");
 
-                List<Track> tracks = await _databaseManager.GetTracksForPlaylistAsync(playlistId);
-                Console.WriteLine($"Loaded {tracks.Count} tracks from database");
-
-                // Track status'larını güncelle (dosya varlığını kontrol et)
-                foreach (var track in tracks)
+                if (string.IsNullOrEmpty(playlistPath) || !System.IO.File.Exists(playlistPath))
                 {
-                    track.Status = track.ExistsOnDisk ? TrackStatus.Found : TrackStatus.Missing;
+                    _logger.LogWarning($"Playlist file not found: {playlistPath}");
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        Tracks.Clear();
+                        OnPropertyChanged(nameof(TotalTracks));
+                        OnPropertyChanged(nameof(FoundTracks));
+                        OnPropertyChanged(nameof(MissingTracks));
+                    });
+                    return;
                 }
 
+                // Dosya uzantısına göre parse et
+                var extension = System.IO.Path.GetExtension(playlistPath).ToLowerInvariant();
+                List<Application.Services.ParsedTrack> parsedTracks;
+
+                if (extension == ".vdjfolder")
+                {
+                    parsedTracks = await _vdjFolderParserService.ParseVDJFolderAsync(playlistPath);
+                }
+                else if (extension == ".m3u" || extension == ".m3u8")
+                {
+                    parsedTracks = await _m3uParserService.ParseM3UFileAsync(playlistPath);
+                }
+                else
+                {
+                    _logger.LogWarning($"Unsupported playlist format: {extension}");
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        Tracks.Clear();
+                        OnPropertyChanged(nameof(TotalTracks));
+                        OnPropertyChanged(nameof(FoundTracks));
+                        OnPropertyChanged(nameof(MissingTracks));
+                    });
+                    return;
+                }
+
+                _logger.LogDebug($"Parsed {parsedTracks.Count} tracks from file");
+
+                // ParsedTrack'leri Track entity'lere dönüştür ve dosya varlığını kontrol et
+                var tracks = new List<Track>();
+                int trackOrder = 0;
+                foreach (var parsedTrack in parsedTracks)
+                {
+                    var track = new Track
+                    {
+                        Path = parsedTrack.OriginalPath,
+                        FileName = System.IO.Path.GetFileName(parsedTrack.OriginalPath),
+                        FileNameOnly = System.IO.Path.GetFileNameWithoutExtension(parsedTrack.OriginalPath),
+                        NormalizedFileName = parsedTrack.NormalizedName,
+                        PlaylistFilePath = playlistPath,
+                        TrackOrder = trackOrder++,
+                        Status = System.IO.File.Exists(parsedTrack.OriginalPath) ? TrackStatus.Found : TrackStatus.Missing
+                    };
+                    tracks.Add(track);
+                }
+
+                _logger.LogDebug($"Converted to {tracks.Count} track entities, {tracks.Count(t => t.Status == TrackStatus.Found)} found, {tracks.Count(t => t.Status == TrackStatus.Missing)} missing");
+
+                // UI thread'de güncelle
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     Tracks.Clear();
@@ -209,14 +289,14 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     OnPropertyChanged(nameof(FoundTracks));
                     OnPropertyChanged(nameof(MissingTracks));
 
-                    Console.WriteLine($"UI updated: {Tracks.Count} tracks, {FoundTracks} found, {MissingTracks} missing");
+                    _logger.LogDebug($"UI updated: {Tracks.Count} tracks, {FoundTracks} found, {MissingTracks} missing");
                 });
 
-                Console.WriteLine("=== LoadTracksForPlaylistAsync END ===");
+                _logger.LogDebug("=== LoadTracksForPlaylistAsync END ===");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading tracks: {ex.Message}");
+                _logger.LogError(ex, $"Error loading tracks: {ex.Message}");
             }
         }
 
@@ -230,13 +310,18 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
         public void RefreshData()
         {
+            _logger.LogDebug("=== RefreshData START ===");
+            // Cache'i temizle
+            _playlistTreeService.ClearCache();
+            _logger.LogDebug("Cache cleared, reloading from file system...");
+            // Dosya sisteminden yeniden oku
             LoadDataAsync();
         }
 
         private void ShowFixSuggestions()
         {
             // TODO: Implement fix suggestions dialog
-            Console.WriteLine("Fix suggestions clicked");
+            _logger.LogDebug("Fix suggestions clicked");
         }
 
         private async void ShowSettings()
@@ -272,178 +357,445 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             // Filtre açıksa eksik track içeren playlist'leri göster
             try
             {
-                Console.WriteLine("=== FilterPlaylists: ShowOnlyMissingTracks=TRUE ===");
-                
-                // Basit SQL sorgusu ile eksik track içeren playlist'leri al
-                var playlistsWithMissingTracks = await _databaseManager.GetPlaylistsWithMissingTracksAsync();
-                
-                Console.WriteLine($"Found {playlistsWithMissingTracks.Count} playlists with missing tracks");
+                _logger.LogDebug("=== FilterPlaylists: ShowOnlyMissingTracks=TRUE ===");
 
-                // Eksik içeren playlist ID'lerini bir HashSet'e çevir (hızlı lookup için)
-                var playlistIdsSet = playlistsWithMissingTracks.Select(p => p.Id).ToHashSet();
+                // Dosya sisteminden tüm playlist'leri al
+                var allPlaylists = await _playlistTreeService.BuildTreeFromFileSystemAsync();
+                _logger.LogDebug($"Built tree from file system: {allPlaylists.Count} root folders");
+
+                // Tüm leaf playlist'leri topla (recursive)
+                var leafPlaylists = new List<Playlist>();
+                CollectLeafPlaylists(allPlaylists, leafPlaylists);
+                _logger.LogDebug($"Found {leafPlaylists.Count} leaf playlists to check");
+
+                // Her leaf playlist'i parse et ve missing track kontrolü yap
+                var playlistsWithMissingTracks = new HashSet<string>();
+                int checkedCount = 0;
+                foreach (var playlist in leafPlaylists)
+                {
+                    checkedCount++;
+                    if (checkedCount % 10 == 0)
+                    {
+                        _logger.LogDebug($"Checking playlist {checkedCount}/{leafPlaylists.Count}...");
+                    }
+
+                    try
+                    {
+                        if (string.IsNullOrEmpty(playlist.Path) || !System.IO.File.Exists(playlist.Path))
+                        {
+                            continue;
+                        }
+
+                        // Parse et
+                        var extension = System.IO.Path.GetExtension(playlist.Path).ToLowerInvariant();
+                        List<Application.Services.ParsedTrack> parsedTracks;
+
+                        if (extension == ".vdjfolder")
+                        {
+                            parsedTracks = await _vdjFolderParserService.ParseVDJFolderAsync(playlist.Path);
+                        }
+                        else if (extension == ".m3u" || extension == ".m3u8")
+                        {
+                            parsedTracks = await _m3uParserService.ParseM3UFileAsync(playlist.Path);
+                        }
+                        else
+                        {
+                            continue;
+                        }
+
+                        // Missing track kontrolü
+                        bool hasMissingTracks = parsedTracks.Any(pt => !System.IO.File.Exists(pt.OriginalPath));
+                        if (hasMissingTracks)
+                        {
+                            playlistsWithMissingTracks.Add(playlist.Path);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, $"Error checking playlist {playlist.Path}: {ex.Message}");
+                    }
+                }
+
+                _logger.LogDebug($"Found {playlistsWithMissingTracks.Count} playlists with missing tracks");
+
+                // Filtreleme için path set'ini kaydet
+                _filteredPlaylistPaths = playlistsWithMissingTracks;
                 
                 // UI thread'de güncelle
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    Console.WriteLine("=== UI THREAD UPDATE: FILTERED PLAYLISTS ===");
+                    _logger.LogDebug("=== UI THREAD UPDATE: FILTERED PLAYLISTS ===");
                     Playlists.Clear();
                     
                     // Seçili playlist'i temizle (eğer eksik içermiyorsa)
-                    if (SelectedPlaylist != null && !playlistIdsSet.Contains(SelectedPlaylist.Id))
+                    if (SelectedPlaylist != null && !playlistsWithMissingTracks.Contains(SelectedPlaylist.Path))
                     {
+                        _logger.LogDebug($"Selected playlist cleared (no missing tracks): Path={SelectedPlaylist.Path}, Name={SelectedPlaylist.Name}");
                         SelectedPlaylist = null;
                         Tracks.Clear();
                         OnPropertyChanged(nameof(TotalTracks));
                         OnPropertyChanged(nameof(FoundTracks));
                         OnPropertyChanged(nameof(MissingTracks));
-                        Console.WriteLine("Selected playlist cleared (no missing tracks)");
                     }
                     
-                    // Hierarchy'yi organize et (sadece eksik içeren playlist'ler)
-                    ConvertDatabaseToHierarchy(playlistsWithMissingTracks, playlistIdsSet);
+                    // Filtrelenmiş ağaç yapısını oluştur
+                    FilterTreeByMissingTracks(allPlaylists, playlistsWithMissingTracks);
                     
-                    Console.WriteLine($"✅ Filtered hierarchy complete. Playlists count: {Playlists.Count}");
+                    _logger.LogDebug($"✅ Filtered hierarchy complete. Playlists count: {Playlists.Count}");
                     OnPropertyChanged(nameof(TotalPlaylists));
-                    Console.WriteLine($"TotalPlaylists updated: {TotalPlaylists}");
-                    Console.WriteLine("=== UI THREAD UPDATE END ===");
+                    _logger.LogDebug($"TotalPlaylists updated: {TotalPlaylists}");
+                    _logger.LogDebug("=== UI THREAD UPDATE END ===");
                 });
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error filtering playlists: {ex.Message}");
+                _logger.LogError(ex, $"Error filtering playlists: {ex.Message}");
             }
         }
 
-        private void ConvertDatabaseToHierarchy(List<Playlist> allPlaylists, HashSet<int>? allowedPlaylistIds = null)
+        /// <summary>
+        /// Leaf playlist'leri recursive olarak topla
+        /// </summary>
+        private void CollectLeafPlaylists(List<Playlist> playlists, List<Playlist> leafPlaylists)
         {
-            Console.WriteLine("=== ConvertDatabaseToHierarchy START ===");
+            foreach (var playlist in playlists)
+            {
+                if (playlist.Children.Count == 0 && (playlist.Type == PlaylistType.Playlist || playlist.Type == PlaylistType.VDJFolder))
+                {
+                    // Leaf playlist (dosya)
+                    leafPlaylists.Add(playlist);
+                }
+                else if (playlist.Children.Count > 0)
+                {
+                    // Klasör, children'ları recursive kontrol et
+                    CollectLeafPlaylists(playlist.Children.ToList(), leafPlaylists);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ağaç yapısını missing track içeren playlist'lere göre filtrele
+        /// </summary>
+        private void FilterTreeByMissingTracks(List<Playlist> roots, HashSet<string> playlistsWithMissingTracks)
+        {
+            foreach (var root in roots)
+            {
+                var filteredRoot = FilterPlaylistRecursive(root, playlistsWithMissingTracks);
+                if (filteredRoot != null)
+                {
+                    // 0 track count'lu playlist'leri de filtrele
+                    var finalRoot = FilterEmptyPlaylistRecursive(filteredRoot);
+                    if (finalRoot != null && (finalRoot.TrackCount > 0 || finalRoot.Children.Count > 0))
+                    {
+                        Playlists.Add(finalRoot);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Playlist'i recursive olarak filtrele
+        /// </summary>
+        private Playlist? FilterPlaylistRecursive(Playlist playlist, HashSet<string> playlistsWithMissingTracks)
+        {
+            // Leaf playlist ise, missing track içeriyorsa dahil et
+            if (playlist.Children.Count == 0)
+            {
+                if (playlistsWithMissingTracks.Contains(playlist.Path))
+                {
+                    return new Playlist
+                    {
+                        Path = playlist.Path,
+                        Type = playlist.Type,
+                        TrackCount = playlist.TrackCount
+                    };
+                }
+                return null;
+            }
+
+            // Klasör ise, children'ları filtrele
+            var filteredChildren = new List<Playlist>();
+            foreach (var child in playlist.Children)
+            {
+                var filteredChild = FilterPlaylistRecursive(child, playlistsWithMissingTracks);
+                if (filteredChild != null)
+                {
+                    filteredChildren.Add(filteredChild);
+                }
+            }
+
+            // Eğer geçerli children varsa, klasörü dahil et
+            if (filteredChildren.Count > 0)
+            {
+                var filteredPlaylist = new Playlist
+                {
+                    Path = playlist.Path,
+                    Type = playlist.Type,
+                    TrackCount = playlist.TrackCount
+                };
+                foreach (var child in filteredChildren)
+                {
+                    filteredPlaylist.Children.Add(child);
+                }
+                return filteredPlaylist;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 0 track count'lu playlist'leri recursive olarak filtrele
+        /// </summary>
+        private List<Playlist> FilterEmptyPlaylists(List<Playlist> roots)
+        {
+            var filteredRoots = new List<Playlist>();
+            foreach (var root in roots)
+            {
+                var filteredRoot = FilterEmptyPlaylistRecursive(root);
+                if (filteredRoot != null && (filteredRoot.TrackCount > 0 || filteredRoot.Children.Count > 0))
+                {
+                    filteredRoots.Add(filteredRoot);
+                }
+            }
+            return filteredRoots;
+        }
+
+        /// <summary>
+        /// Playlist'i recursive olarak filtrele - 0 track count'lu olanları kaldır
+        /// </summary>
+        private Playlist? FilterEmptyPlaylistRecursive(Playlist playlist)
+        {
+            // Leaf playlist ise, track count > 0 ise dahil et
+            if (playlist.Children.Count == 0)
+            {
+                if (playlist.TrackCount > 0)
+                {
+                    return new Playlist
+                    {
+                        Path = playlist.Path,
+                        Type = playlist.Type,
+                        TrackCount = playlist.TrackCount
+                    };
+                }
+                return null;
+            }
+
+            // Klasör ise, children'ları filtrele
+            var filteredChildren = new List<Playlist>();
+            foreach (var child in playlist.Children)
+            {
+                var filteredChild = FilterEmptyPlaylistRecursive(child);
+                if (filteredChild != null)
+                {
+                    filteredChildren.Add(filteredChild);
+                }
+            }
+
+            // Eğer geçerli children varsa VEYA kendi track count'u > 0 ise, klasörü dahil et
+            if (filteredChildren.Count > 0 || playlist.TrackCount > 0)
+            {
+                // Children'ları alfabetik sırala
+                filteredChildren = filteredChildren
+                    .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var filteredPlaylist = new Playlist
+                {
+                    Path = playlist.Path,
+                    Type = playlist.Type,
+                    TrackCount = playlist.TrackCount
+                };
+                foreach (var child in filteredChildren)
+                {
+                    filteredPlaylist.Children.Add(child);
+                }
+                return filteredPlaylist;
+            }
+
+            return null;
+        }
+
+        private void ConvertDatabaseToHierarchy(List<Playlist> allPlaylists, HashSet<string>? allowedPlaylistPaths = null)
+        {
+            _logger.LogDebug("=== ConvertDatabaseToHierarchy START ===");
+            _logger.LogDebug($"Input: {allPlaylists.Count} playlists, AllowedPlaylistPaths: {(allowedPlaylistPaths != null ? allowedPlaylistPaths.Count.ToString() : "null")}");
 
             // API'deki gibi hierarchy oluştur
-            Console.WriteLine("Building playlist tree like API...");
-            BuildPlaylistTreeLikeAPI(allPlaylists, allowedPlaylistIds);
+            _logger.LogDebug("Building playlist tree like API...");
+            BuildPlaylistTreeLikeAPI(allPlaylists, allowedPlaylistPaths);
 
-            Console.WriteLine($"Final count: {Playlists.Count} playlists");
-            Console.WriteLine("=== ConvertDatabaseToHierarchy END ===");
+            _logger.LogDebug($"Final count: {Playlists.Count} playlists");
+            _logger.LogDebug("=== ConvertDatabaseToHierarchy END ===");
         }
 
         /// <summary>
         /// API'deki gibi playlist tree oluştur - TERMINAL TEST PROGRAMINDAN KOPYALANDI
         /// </summary>
-        private void BuildPlaylistTreeLikeAPI(List<Playlist> playlists, HashSet<int>? allowedPlaylistIds = null)
+        private void BuildPlaylistTreeLikeAPI(List<Playlist> playlists, HashSet<string>? allowedPlaylistPaths = null)
         {
-            // Filtreleme için allowed playlist ID'lerini set et
-            _filteredPlaylistIds = allowedPlaylistIds;
-            
-            Console.WriteLine($"=== BuildPlaylistTreeLikeAPI START - {playlists.Count} playlists ===");
-            Console.WriteLine($"📊 Building tree for {playlists.Count} playlists");
-            if (_filteredPlaylistIds != null)
+            // Filtreleme için allowed playlist path'lerini set et
+            _filteredPlaylistPaths = allowedPlaylistPaths;
+
+            // ÖNEMLİ: UI'ı güncellemek için önce collection'ı temizle
+            // Aksi halde eski veriler kalır ve yeni veriler üzerine eklenir
+            Playlists.Clear();
+            _logger.LogDebug($"Playlists collection cleared at start of BuildPlaylistTreeLikeAPI. Count: {Playlists.Count}");
+
+            _logger.LogDebug($"=== BuildPlaylistTreeLikeAPI START - {playlists.Count} playlists ===");
+            _logger.LogDebug($"📊 Building tree for {playlists.Count} playlists");
+            if (_filteredPlaylistPaths != null)
             {
-                Console.WriteLine($"🔍 Filtering enabled: {_filteredPlaylistIds.Count} allowed playlist IDs");
+                _logger.LogDebug($"🔍 Filtering enabled: {_filteredPlaylistPaths.Count} allowed playlist paths");
             }
 
             // 1. BASE KLASÖRLERI OLUŞTUR (Name computed from Path)
             var tree = new Dictionary<string, Playlist>
             {
-                ["__folders_temp"] = new Playlist { Id = 9996, Type = PlaylistType.VDJFolder, TrackCount = 0, ParentId = 0, Path = "/Folders" },
-                ["History"] = new Playlist { Id = 9999, Type = PlaylistType.VDJFolder, TrackCount = 0, ParentId = 0, Path = "/History" },
-                ["MyLists"] = new Playlist { Id = 9998, Type = PlaylistType.VDJFolder, TrackCount = 0, ParentId = 0, Path = "/MyLists" },
-                ["Sideview"] = new Playlist { Id = 9997, Type = PlaylistType.VDJFolder, TrackCount = 0, ParentId = 0, Path = "/Sideview" }
+                ["__folders_temp"] = new Playlist { Type = PlaylistType.VDJFolder, TrackCount = 0, Path = "/Folders" },
+                ["History"] = new Playlist { Type = PlaylistType.VDJFolder, TrackCount = 0, Path = "/History" },
+                ["MyLists"] = new Playlist { Type = PlaylistType.VDJFolder, TrackCount = 0, Path = "/MyLists" },
+                ["Sideview"] = new Playlist { Type = PlaylistType.VDJFolder, TrackCount = 0, Path = "/Sideview" }
             };
-            
-            Console.WriteLine($"✅ Created 4 base folder roots");
+
+            _logger.LogDebug($"✅ Created 4 base folder roots");
 
             // 2. HER PLAYLIST'İ TREE'YE EKLE
+            int processedCount = 0;
+            int parseErrorCount = 0;
             foreach (var playlist in playlists)
             {
                 var parts = ExtractPathParts(playlist.Path);
                 if (parts.Count == 0)
                 {
-                    Console.WriteLine($"⚠️  Path parse edilemedi: {playlist.Path}");
+                    _logger.LogWarning($"⚠️  Path parse edilemedi: {playlist.Path}");
+                    parseErrorCount++;
                     continue;
                 }
 
                 // İlk part base folder (History, MyLists, Folders, etc.)
                 var baseFolder = parts[0];
+                _logger.LogDebug($"Processing playlist Path={playlist.Path}, BaseFolder={baseFolder}, Parts=[{string.Join(", ", parts)}]");
 
                 // Folders ise geçici folder'a ekle
                 if (baseFolder == "Folders")
                 {
                     InsertIntoTree(tree["__folders_temp"].Children, parts.Skip(1).ToList(), playlist);
                     tree["__folders_temp"].TrackCount += playlist.TrackCount;
+                    _logger.LogDebug($"  Added to __folders_temp, remaining parts: [{string.Join(", ", parts.Skip(1))}]");
                 }
                 else if (tree.ContainsKey(baseFolder))
                 {
                     // Diğerleri normal
                     InsertIntoTree(tree[baseFolder].Children, parts.Skip(1).ToList(), playlist);
                     tree[baseFolder].TrackCount += playlist.TrackCount;
+                    _logger.LogDebug($"  Added to {baseFolder}, remaining parts: [{string.Join(", ", parts.Skip(1))}]");
                 }
                 else
                 {
-                    Console.WriteLine($"⚠️  Bilinmeyen base folder: {baseFolder} in path: {playlist.Path}");
+                    _logger.LogWarning($"⚠️  Bilinmeyen base folder: {baseFolder} in path: {playlist.Path}");
                 }
+                processedCount++;
             }
+            _logger.LogDebug($"Processed {processedCount} playlists, {parseErrorCount} parse errors");
 
             // 3. Folders'ın children'ını root'a taşı (koray, PlayLists, Serato)
             var foldersChildren = tree["__folders_temp"].Children;
-            Console.WriteLine($"=== FOLDERS CHILDREN DEBUG ===");
-            Console.WriteLine($"Folders children count: {foldersChildren.Count}");
+            _logger.LogDebug($"=== FOLDERS CHILDREN DEBUG ===");
+            _logger.LogDebug($"Folders children count: {foldersChildren.Count}");
             foreach (var child in foldersChildren)
             {
-                Console.WriteLine($"Moving folder to root: {child.Name} ({child.TrackCount} tracks, {child.Children.Count} children)");
+                _logger.LogDebug($"Moving folder to root: {child.Name} ({child.TrackCount} tracks, {child.Children.Count} children)");
                 tree[child.Name] = child;
             }
             tree.Remove("__folders_temp");  // Geçici folder'ı sil
 
             // 4. Tree'yi Playlists collection'a ekle (0 track'li klasörleri gizle + alfabetik sırala)
+            _logger.LogDebug("=== ROOT FOLDER FILTERING ===");
             var sortedRootFolders = tree.Values
-                .Where(f => f.TrackCount > 0 || (f.Children.Count > 0 && HasValidChildren(f))) // Track'i olan VEYA geçerli children'ı olan klasörler
-                .OrderBy(f => f.Name)
+                .Where(f =>
+                {
+                    bool isValid = false;
+                    if (_filteredPlaylistPaths != null)
+                    {
+                        // Filtre aktifken root ancak allowed playlist'e ulaşabiliyorsa gösterilsin
+                        isValid = HasValidChildren(f);
+                        _logger.LogDebug($"Root folder '{f.Name}': HasValidChildren={isValid} (filtered mode)");
+                    }
+                    else
+                    {
+                        isValid = f.TrackCount > 0 || (f.Children.Count > 0 && HasValidChildren(f));
+                        _logger.LogDebug($"Root folder '{f.Name}': TrackCount={f.TrackCount}, Children={f.Children.Count}, HasValidChildren={HasValidChildren(f)}, IsValid={isValid} (normal mode)");
+                    }
+                    return isValid;
+                }) // Track'i olan VEYA geçerli children'ı olan klasörler
+                .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase) // Alfabetik sıralama
                 .ToList();
+            _logger.LogDebug($"Root folders after filtering: {sortedRootFolders.Count} folders");
 
             foreach (var rootFolder in sortedRootFolders)
             {
-                Console.WriteLine($"=== PROCESSING ROOT FOLDER: {rootFolder.Name} ===");
-                Console.WriteLine($"Before filtering: {rootFolder.Children.Count} children");
+                _logger.LogDebug($"=== PROCESSING ROOT FOLDER: {rootFolder.Name} ===");
+                _logger.LogDebug($"Before filtering: {rootFolder.Children.Count} children");
 
                 // Children'ları sırala: Önce klasörler, sonra playlist'ler (alfabetik) - 0 track'li olanları gizle
                 var folders = rootFolder.Children
-                    .Where(c => c.Type == PlaylistType.VDJFolder &&
-                               (c.TrackCount > 0 ||
-                                (c.Children.Count > 0 && HasValidChildren(c))))
-                    .OrderBy(c => c.Name)
+                    .Where(c =>
+                    {
+                        bool isFolder = IsFolderNode(c);
+                        if (!isFolder)
+                        {
+                            return false;
+                        }
+
+                        if (_filteredPlaylistPaths != null)
+                        {
+                            return HasValidChildren(c);
+                        }
+
+                        return c.TrackCount > 0 || HasValidChildren(c);
+                    })
+                    .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase) // Alfabetik sıralama
                     .ToList();
 
                 var playlistItems = rootFolder.Children
                     .Where(c => 
                     {
+                        bool isFolder = IsFolderNode(c);
+
                         // Filtreleme aktifse, sadece allowed playlist'leri göster
-                        if (_filteredPlaylistIds != null)
+                        if (_filteredPlaylistPaths != null)
                         {
-                            return c.Type != PlaylistType.VDJFolder && 
-                                   c.TrackCount > 0 && 
-                                   _filteredPlaylistIds.Contains(c.Id);
+                            bool notFolder = !isFolder;
+                            bool hasTracks = c.TrackCount > 0;
+                            bool inFilteredSet = _filteredPlaylistPaths.Contains(c.Path);
+                            bool result = notFolder && hasTracks && inFilteredSet;
+
+                            _logger.LogDebug($"    ROOT FILTER: '{c.Name}' (Path={c.Path}, Type={c.Type}): IsFolder={isFolder}, NotFolder={notFolder}, TrackCount={c.TrackCount}, InFilteredSet={inFilteredSet}, Result={result}");
+
+                            return result;
                         }
                         else
                         {
                             // Filtreleme yoksa: normal filtreleme
-                            return c.Type != PlaylistType.VDJFolder && c.TrackCount > 0;
+                            return !isFolder && c.TrackCount > 0;
                         }
                     })
-                    .OrderBy(c => c.Name)
+                    .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase) // Alfabetik sıralama
                     .ToList();
 
-                Console.WriteLine($"After filtering: {folders.Count} folders, {playlistItems.Count} playlists");
+                _logger.LogDebug($"After filtering: {folders.Count} folders, {playlistItems.Count} playlists");
 
                 // Debug: Filtrelenen klasörleri göster
                 foreach (var folder in folders)
                 {
-                    Console.WriteLine($"  📁 {folder.Name} ({folder.TrackCount} tracks, {folder.Children.Count} children)");
+                    _logger.LogDebug($"  📁 {folder.Name} (Path={folder.Path}, TrackCount={folder.TrackCount}, Children={folder.Children.Count})");
                 }
 
                 // Debug: Filtrelenen playlist'leri göster
                 foreach (var playlist in playlistItems)
                 {
-                    Console.WriteLine($"  🎵 {playlist.Name} ({playlist.TrackCount} tracks)");
+                    bool inFilteredSet = _filteredPlaylistPaths?.Contains(playlist.Path) ?? false;
+                    _logger.LogDebug($"  🎵 {playlist.Name} (Path={playlist.Path}, TrackCount={playlist.TrackCount}, InFilteredSet={inFilteredSet})");
                 }
 
                 rootFolder.Children.Clear();
@@ -463,46 +815,80 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 }
 
                 Playlists.Add(rootFolder);
-                Console.WriteLine($"✅ Added to Playlists collection: {rootFolder.Name} (Type: {rootFolder.Type}, Children: {rootFolder.Children.Count})");
-                Console.WriteLine($"=== END PROCESSING ROOT FOLDER: {rootFolder.Name} ===");
+                _logger.LogDebug($"✅ Added to Playlists collection: {rootFolder.Name} (Type: {rootFolder.Type}, Children: {rootFolder.Children.Count})");
+                _logger.LogDebug($"=== END PROCESSING ROOT FOLDER: {rootFolder.Name} ===");
             }
 
-            Console.WriteLine($"=== BuildPlaylistTreeLikeAPI END - {Playlists.Count} root folders ===");
-            Console.WriteLine($"📊 Final Playlists collection has {Playlists.Count} items");
+            _logger.LogDebug($"=== BuildPlaylistTreeLikeAPI END - {Playlists.Count} root folders ===");
+            _logger.LogDebug($"📊 Final Playlists collection has {Playlists.Count} items");
         }
 
         /// <summary>
         /// Klasörün geçerli children'ları var mı kontrol et (recursive)
         /// </summary>
+        private static bool IsFolderNode(Playlist playlist)
+        {
+            return playlist.Type == PlaylistType.VDJFolder && playlist.Children.Count > 0;
+        }
+
         private bool HasValidChildren(Playlist folder)
         {
-            if (folder.Children.Count == 0) return false;
+            if (folder.Children.Count == 0)
+            {
+                _logger.LogDebug($"HasValidChildren('{folder.Name}'): No children, returning false");
+                return false;
+            }
+
+            _logger.LogDebug($"HasValidChildren('{folder.Name}'): Checking {folder.Children.Count} children");
 
             // En az bir geçerli child var mı?
-            return folder.Children.Any(child =>
+            bool hasValid = folder.Children.Any(child =>
             {
+                bool childIsFolder = IsFolderNode(child);
+                bool isValid = false;
+                string reason = "";
+
                 // Eğer filtreleme aktifse, sadece allowed playlist'leri kontrol et
-                if (_filteredPlaylistIds != null)
+                if (_filteredPlaylistPaths != null)
                 {
-                    if (child.Type == PlaylistType.VDJFolder)
+                    if (childIsFolder)
                     {
-                        // Klasör için: içinde allowed playlist varsa geçerli
-                        return child.TrackCount > 0 || HasValidChildren(child);
+                        // Klasör geçerliliği: alt dallarda allowed playlist var mı?
+                        isValid = HasValidChildren(child);
+                        reason = $"Folder, HasValidChildren(recursive)={isValid}";
                     }
                     else
                     {
-                        // Playlist için: allowed ID'ye sahipse ve track count > 0 ise geçerli
-                        return _filteredPlaylistIds.Contains(child.Id) && child.TrackCount > 0;
+                        // Playlist (ya da tracks içeren vdjfolder) için: allowed path'e sahipse ve track count > 0 ise geçerli
+                        bool inFilteredSet = _filteredPlaylistPaths.Contains(child.Path);
+                        bool hasTracks = child.TrackCount > 0;
+                        isValid = inFilteredSet && hasTracks;
+                        reason = $"Playlist, Path={child.Path}, InFilteredSet={inFilteredSet}, TrackCount={child.TrackCount}, IsValid={isValid}";
                     }
                 }
                 else
                 {
                     // Filtreleme yoksa: normal kontrol
-                    return (child.Type == PlaylistType.VDJFolder &&
-                           (child.TrackCount > 0 || HasValidChildren(child))) ||
-                           (child.Type != PlaylistType.VDJFolder && child.TrackCount > 0);
+                    if (childIsFolder)
+                    {
+                        bool hasTracks = child.TrackCount > 0;
+                        bool hasValidChildren = HasValidChildren(child);
+                        isValid = hasTracks || hasValidChildren;
+                        reason = $"Folder, TrackCount={child.TrackCount}, HasValidChildren(recursive)={hasValidChildren}, IsValid={isValid}";
+                    }
+                    else
+                    {
+                        isValid = child.TrackCount > 0;
+                        reason = $"Playlist, TrackCount={child.TrackCount}, IsValid={isValid}";
+                    }
                 }
+
+                _logger.LogDebug($"  Child '{child.Name}' (Path={child.Path}, Type={child.Type}): {reason}");
+                return isValid;
             });
+
+            _logger.LogDebug($"HasValidChildren('{folder.Name}'): Result={hasValid}");
+            return hasValid;
         }
 
         /// <summary>
@@ -512,37 +898,84 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         {
             if (folder.Children.Count == 0) return;
 
-            Console.WriteLine($"  🔍 Filtering children of '{folder.Name}': {folder.Children.Count} children");
+            _logger.LogDebug($"  🔍 Filtering children of '{folder.Name}' (Path={folder.Path}): {folder.Children.Count} children");
+            if (_filteredPlaylistPaths != null)
+            {
+                _logger.LogDebug($"  📊 _filteredPlaylistPaths set has {_filteredPlaylistPaths.Count} items");
+            }
 
             // Children'ları filtrele - BOŞ CHILDREN'LARI DA GİZLE
             // Eğer filtreleme aktifse, sadece allowed playlist'leri göster
             var filteredFolders = folder.Children
-                .Where(c => c.Type == PlaylistType.VDJFolder &&
-                           (c.TrackCount > 0 ||
-                            (c.Children.Count > 0 && HasValidChildren(c))))
-                .OrderBy(c => c.Name)
+                .Where(c =>
+                {
+                    bool isFolder = IsFolderNode(c);
+                    if (!isFolder)
+                    {
+                        _logger.LogDebug($"    Child '{c.Name}' (Path={c.Path}): Not a folder node, skipping");
+                        return false;
+                    }
+
+                    bool isValid = false;
+                    if (_filteredPlaylistPaths != null)
+                    {
+                        // Filtre aktifken klasör, ancak altında allowed playlist varsa görünür olsun
+                        isValid = HasValidChildren(c);
+                        _logger.LogDebug($"    Folder '{c.Name}' (Path={c.Path}): HasValidChildren={isValid} (filtered mode)");
+                    }
+                    else
+                    {
+                        bool hasTracks = c.TrackCount > 0;
+                        bool hasValidChildren = HasValidChildren(c);
+                        isValid = hasTracks || hasValidChildren;
+                        _logger.LogDebug($"    Folder '{c.Name}' (Path={c.Path}): TrackCount={c.TrackCount}, HasValidChildren={hasValidChildren}, IsValid={isValid} (normal mode)");
+                    }
+                    return isValid;
+                })
+                .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase) // Alfabetik sıralama
                 .ToList();
 
             var filteredPlaylists = folder.Children
                 .Where(c => 
                 {
+                    bool isFolder = IsFolderNode(c);
+
                     // Filtreleme aktifse, sadece allowed playlist'leri göster
-                    if (_filteredPlaylistIds != null)
+                    if (_filteredPlaylistPaths != null)
                     {
-                        return c.Type != PlaylistType.VDJFolder && 
-                               c.TrackCount > 0 && 
-                               _filteredPlaylistIds.Contains(c.Id);
+                        bool inFilteredSet = _filteredPlaylistPaths.Contains(c.Path);
+                        bool hasTracks = c.TrackCount > 0;
+                        bool isValid = !isFolder && hasTracks && inFilteredSet;
+                        
+                        // ÖNEMLİ: Eğer playlist set'te yoksa, kesinlikle görünmemeli
+                        if (!inFilteredSet && !isFolder)
+                        {
+                            _logger.LogDebug($"    ❌ REJECTED Playlist '{c.Name}' (Path={c.Path}): NOT in filtered set (InFilteredSet={inFilteredSet}, HasTracks={hasTracks})");
+                            return false;
+                        }
+                        
+                        // ÖNEMLİ: Eğer playlist set'te varsa ama hasTracks=false ise, yine de görünmemeli
+                        if (inFilteredSet && !hasTracks && !isFolder)
+                        {
+                            _logger.LogDebug($"    ❌ REJECTED Playlist '{c.Name}' (Path={c.Path}): In filtered set but no tracks (InFilteredSet={inFilteredSet}, HasTracks={hasTracks})");
+                            return false;
+                        }
+                        
+                        _logger.LogDebug($"    ✅ ACCEPTED Playlist '{c.Name}' (Path={c.Path}): IsFolder={isFolder}, TrackCount={c.TrackCount}, InFilteredSet={inFilteredSet}, IsValid={isValid}");
+                        return isValid;
                     }
                     else
                     {
                         // Filtreleme yoksa: normal filtreleme
-                        return c.Type != PlaylistType.VDJFolder && c.TrackCount > 0;
+                        bool isValid = !isFolder && c.TrackCount > 0;
+                        _logger.LogDebug($"    Playlist '{c.Name}' (Path={c.Path}): IsFolder={isFolder}, TrackCount={c.TrackCount}, IsValid={isValid}");
+                        return isValid;
                     }
                 })
-                .OrderBy(c => c.Name)
+                .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase) // Alfabetik sıralama
                 .ToList();
 
-            Console.WriteLine($"  ✅ After filtering: {filteredFolders.Count} folders, {filteredPlaylists.Count} playlists");
+            _logger.LogDebug($"  ✅ After filtering: {filteredFolders.Count} folders, {filteredPlaylists.Count} playlists");
 
             // Children'ları temizle ve yeniden ekle
             folder.Children.Clear();
@@ -601,11 +1034,9 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 {
                     node.Add(new Playlist
                     {
-                        Id = playlist.Id,
                         // Name computed from Path
                         Type = playlist.Type,
                         TrackCount = playlist.TrackCount,
-                        ParentId = 0,
                         Path = playlist.Path
                     });
                 }
@@ -623,11 +1054,9 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 {
                     var newFolder = new Playlist
                     {
-                        Id = playlist.Id + 10000, // Geçici ID
                         // Name computed from Path
                         Type = PlaylistType.VDJFolder,
                         TrackCount = 0,
-                        ParentId = 0,
                         Path = $"/{current}"
                     };
                     node.Add(newFolder);
