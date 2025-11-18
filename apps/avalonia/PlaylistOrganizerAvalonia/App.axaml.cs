@@ -11,6 +11,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using System;
+using System.Threading.Tasks;
+using PlaylistOrganizerAvalonia.Application.Services;
 
 namespace PlaylistOrganizerAvalonia;
 
@@ -47,6 +49,25 @@ public partial class App : Avalonia.Application
                 DataContext = ServiceProvider.GetRequiredService<MainWindowViewModel>(),
             };
         }
+
+        // Word index'i background'da yükle
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var wordIndex = ServiceProvider.GetRequiredService<InMemoryWordIndex>();
+                var logger = ServiceProvider.GetRequiredService<ILogger<App>>();
+                
+                logger.LogInformation("📦 Word index yükleniyor...");
+                await wordIndex.LoadFromFileSystemAsync();
+                logger.LogInformation("✅ Word index yüklendi");
+            }
+            catch (Exception ex)
+            {
+                var logger = ServiceProvider.GetRequiredService<ILogger<App>>();
+                logger.LogError(ex, "❌ Word index yükleme hatası");
+            }
+        });
 
         base.OnFrameworkInitializationCompleted();
     }

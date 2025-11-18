@@ -78,6 +78,10 @@ public static class ServiceCollectionExtensions
         // Search & Index
         services.AddSingleton<SearchService>();
         services.AddSingleton<IWordIndexService, WordIndexService>();
+        
+        // Fix Suggestions - Memory Index & Similarity
+        services.AddSingleton<InMemoryWordIndex>();
+        services.AddSingleton<HybridSimilarityCalculator>();
 
         // Business Logic
         services.AddSingleton<PlaylistService>();

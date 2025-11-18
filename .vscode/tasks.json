@@ -91,7 +91,7 @@
             "type": "process",
             "args": [
                 "clean",
-                "${workspaceFolder}/PlaylistOrganizerAvalonia/PlaylistOrganizerAvalonia.csproj"
+                "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/PlaylistOrganizerAvalonia.csproj"
             ],
             "group": "build",
             "presentation": {

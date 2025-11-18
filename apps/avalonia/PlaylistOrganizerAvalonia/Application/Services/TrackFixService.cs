@@ -19,11 +19,20 @@ namespace PlaylistOrganizerAvalonia.Application.Services
     public class TrackFixService : BaseDatabaseService
     {
         private readonly TrackService _trackService;
+        private readonly InMemoryWordIndex _wordIndex;
+        private readonly HybridSimilarityCalculator _similarityCalculator;
 
-        public TrackFixService(ILogger<TrackFixService> logger, IDatabaseManager databaseManager, TrackService trackService) 
+        public TrackFixService(
+            ILogger<TrackFixService> logger, 
+            IDatabaseManager databaseManager, 
+            TrackService trackService,
+            InMemoryWordIndex wordIndex,
+            HybridSimilarityCalculator similarityCalculator) 
             : base(logger, databaseManager)
         {
             _trackService = trackService;
+            _wordIndex = wordIndex;
+            _similarityCalculator = similarityCalculator;
         }
 
         /// <summary>
@@ -132,6 +141,7 @@ namespace PlaylistOrganizerAvalonia.Application.Services
 
         /// <summary>
         /// Benzer dosya adlarına sahip dosyaları bul
+        /// Memory index kullanarak hızlı arama
         /// </summary>
         private async Task<List<FileMatch>> FindSimilarFilesAsync(string fileName)
         {
@@ -139,35 +149,36 @@ namespace PlaylistOrganizerAvalonia.Application.Services
             
             try
             {
-                // Müzik klasörlerini tara
-                var musicPaths = new[]
+                // Index yüklenmiş mi kontrol et
+                if (!_wordIndex.IsLoaded)
                 {
-                    "/Users/koray/Music",
-                    "/Users/koray/Desktop",
-                    "/Users/koray/Downloads"
-                };
+                    _logger.LogWarning("Word index henüz yüklenmemiş");
+                    return matches;
+                }
 
-                foreach (var musicPath in musicPaths)
+                // Normalize et
+                var normalized = StringNormalizationService.NormalizeFileName(fileName);
+                var words = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(w => w.Length > 0)
+                    .ToList();
+
+                // Memory index'ten adayları bul (ÇOK HIZLI - 0-1ms)
+                var candidates = _wordIndex.FindCandidates(words);
+
+                // Her aday için similarity hesapla
+                foreach (var candidate in candidates)
                 {
-                    if (Directory.Exists(musicPath))
+                    var similarity = _similarityCalculator.CalculateSimilarity(normalized, candidate.NormalizedFileName);
+                    var confidence = (int)(similarity * 100);
+                    
+                    if (confidence >= 70) // %70 eşik
                     {
-                        var files = Directory.GetFiles(musicPath, "*", SearchOption.AllDirectories)
-                            .Where(f => IsMusicFile(f))
-                            .ToList();
-
-                        foreach (var file in files)
+                        matches.Add(new FileMatch
                         {
-                            var similarity = CalculateSimilarity(fileName, Path.GetFileName(file));
-                            if (similarity > 70) // %70'den fazla benzerlik
-                            {
-                                matches.Add(new FileMatch
-                                {
-                                    Path = file,
-                                    FileName = Path.GetFileName(file),
-                                    Confidence = similarity
-                                });
-                            }
-                        }
+                            Path = candidate.Path,
+                            FileName = candidate.FileName,
+                            Confidence = confidence
+                        });
                     }
                 }
             }
@@ -346,57 +357,75 @@ namespace PlaylistOrganizerAvalonia.Application.Services
             }
         }
 
+        /// <summary>
+        /// Tek track için en benzer ilk 5 öneri getir
+        /// </summary>
+        public async Task<List<TrackFixSuggestion>> GetFixSuggestionsAsync(int trackId)
+        {
+            try
+            {
+                var track = await _trackService.GetTrackByIdAsync(trackId);
+                if (track == null)
+                {
+                    _logger.LogWarning($"Track not found: {trackId}");
+                    return new List<TrackFixSuggestion>();
+                }
+
+                // Dosya gerçekten var mı kontrol et
+                if (File.Exists(track.Path))
+                {
+                    return new List<TrackFixSuggestion>
+                    {
+                        new TrackFixSuggestion
+                        {
+                            TrackId = track.Id,
+                            TrackPath = track.Path,
+                            TrackFileName = track.FileName,
+                            OriginalPath = track.Path,
+                            SuggestedPath = track.Path,
+                            SuggestedFileName = track.FileName,
+                            Confidence = 100,
+                            FixType = FixType.FileExists,
+                            Reason = "File exists on disk"
+                        }
+                    };
+                }
+
+                // Benzer dosyaları bul
+                var similarFiles = await FindSimilarFilesAsync(track.FileName);
+                
+                // En yüksek confidence'e göre sırala ve ilk 5'i al
+                var suggestions = similarFiles
+                    .OrderByDescending(f => f.Confidence)
+                    .Take(5)
+                    .Select(f => new TrackFixSuggestion
+                    {
+                        TrackId = track.Id,
+                        TrackPath = track.Path,
+                        TrackFileName = track.FileName,
+                        OriginalPath = track.Path,
+                        SuggestedPath = f.Path,
+                        SuggestedFileName = f.FileName,
+                        Confidence = f.Confidence,
+                        FixType = FixType.Rename,
+                        Reason = $"Found similar file with {f.Confidence}% confidence"
+                    })
+                    .ToList();
+
+                return suggestions;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error getting fix suggestions for track: {trackId}");
+                return new List<TrackFixSuggestion>();
+            }
+        }
+
         private bool IsMusicFile(string filePath)
         {
             var extension = Path.GetExtension(filePath).ToLowerInvariant();
             var musicExtensions = new[] { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".wma" };
             return musicExtensions.Contains(extension);
-        }
-
-        private int CalculateSimilarity(string str1, string str2)
-        {
-            if (string.IsNullOrEmpty(str1) || string.IsNullOrEmpty(str2))
-                return 0;
-
-            var s1 = str1.ToLowerInvariant();
-            var s2 = str2.ToLowerInvariant();
-
-            if (s1 == s2)
-                return 100;
-
-            // Basit benzerlik hesaplama
-            var longer = s1.Length > s2.Length ? s1 : s2;
-            var shorter = s1.Length > s2.Length ? s2 : s1;
-
-            if (longer.Length == 0)
-                return 100;
-
-            var editDistance = LevenshteinDistance(longer, shorter);
-            return (int)((1.0 - (double)editDistance / longer.Length) * 100);
-        }
-
-        private int LevenshteinDistance(string s1, string s2)
-        {
-            var matrix = new int[s1.Length + 1, s2.Length + 1];
-
-            for (int i = 0; i <= s1.Length; i++)
-                matrix[i, 0] = i;
-
-            for (int j = 0; j <= s2.Length; j++)
-                matrix[0, j] = j;
-
-            for (int i = 1; i <= s1.Length; i++)
-            {
-                for (int j = 1; j <= s2.Length; j++)
-                {
-                    var cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
-                    matrix[i, j] = Math.Min(
-                        Math.Min(matrix[i - 1, j] + 1, matrix[i, j - 1] + 1),
-                        matrix[i - 1, j - 1] + cost);
-                }
-            }
-
-            return matrix[s1.Length, s2.Length];
         }
     }
 
@@ -407,6 +436,7 @@ namespace PlaylistOrganizerAvalonia.Application.Services
         public string TrackFileName { get; set; } = string.Empty;
         public string OriginalPath { get; set; } = string.Empty;
         public string? SuggestedPath { get; set; }
+        public string? SuggestedFileName { get; set; }
         public int Confidence { get; set; }
         public FixType FixType { get; set; }
         public string Reason { get; set; } = string.Empty;

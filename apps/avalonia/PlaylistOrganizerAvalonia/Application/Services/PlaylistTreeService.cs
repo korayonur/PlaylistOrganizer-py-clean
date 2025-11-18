@@ -37,9 +37,9 @@ namespace PlaylistOrganizerAvalonia.Application.Services
             _m3uParserService = m3uParserService;
             _configuration = configuration;
 
-            // Cache dosya yolu: /Users/koray/projects/PlaylistOrganizer-py-backup/data/playlist-tree.json
-            // Sabit path kullan
-            var dataDir = "/Users/koray/projects/PlaylistOrganizer-py-backup/data";
+            // Cache dosya yolu: Application base directory'de data klasörü kullan
+            var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            var dataDir = Path.Combine(baseDirectory, "data");
             if (!Directory.Exists(dataDir))
             {
                 Directory.CreateDirectory(dataDir);
@@ -81,17 +81,17 @@ namespace PlaylistOrganizerAvalonia.Application.Services
             }
 
             LogInfo($"Track counts calculated for {playlists.Count} playlists");
-            
+
             // Debug: Track count'ları logla
             var nonZeroCount = playlists.Count(p => p.TrackCount > 0);
             LogInfo($"Playlists with tracks: {nonZeroCount}/{playlists.Count}");
 
             // 3. Hiyerarşik yapıyı oluştur (mevcut BuildPlaylistTreeLikeAPI mantığını kullan)
             var tree = BuildHierarchicalTree(playlists);
-            
+
             // 4. Parent folder'ların track count'larını güncelle (recursive)
             UpdateParentTrackCounts(tree);
-            
+
             LogInfo($"Tree built: {tree.Count} root folders");
 
             return tree;
@@ -335,7 +335,7 @@ namespace PlaylistOrganizerAvalonia.Application.Services
             {
                 // 0 track count'lu playlist'leri filtrele (recursive)
                 var filteredRoots = FilterEmptyPlaylistsForCache(roots);
-                
+
                 var tree = new PlaylistTree
                 {
                     Version = "1.0",
