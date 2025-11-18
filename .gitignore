@@ -66,9 +66,8 @@ frontend/**/*.pack.old
 
 # Docs ve geçici markdown dosyalar
 docs/
-*.md.tmp
-*_tmp.md
-test_*.md
+*.md
+!README.md
 
 
 # Ortam değişkenleri ve gizli bilgiler

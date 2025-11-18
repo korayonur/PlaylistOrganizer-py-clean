@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Data;
@@ -372,10 +372,49 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             _ = LoadDataAsync(); // Fire and forget
         }
 
-        private void ShowFixSuggestions()
+        private async void ShowFixSuggestions()
         {
-            // TODO: Implement fix suggestions dialog
-            _logger.LogDebug("Fix suggestions clicked");
+            try
+            {
+                // Seçili track var mı ve eksik mi kontrol et
+                if (SelectedTrack == null)
+                {
+                    _logger.LogWarning("No track selected for fix suggestions");
+                    return;
+                }
+
+                if (!SelectedTrack.IsMissing)
+                {
+                    _logger.LogInformation("Selected track is not missing, no fix suggestions needed");
+                    return;
+                }
+
+                // FixSuggestionsDialog'u aç
+                var trackFixService = App.ServiceProvider.GetRequiredService<TrackFixService>();
+                var viewModel = new FixSuggestionsViewModel(trackFixService, _logger)
+                {
+                    SelectedTrack = SelectedTrack
+                };
+
+                var dialog = new FixSuggestionsDialog(viewModel)
+                {
+                    WindowStartupLocation = WindowStartupLocation.CenterOwner
+                };
+
+                // Önerileri yükle
+                await viewModel.LoadSuggestionsCommand.ExecuteAsync(null);
+
+                // Dialog'u göster
+                var mainWindow = GetTopLevel();
+                if (mainWindow != null)
+                {
+                    await dialog.ShowDialog(mainWindow);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error showing fix suggestions dialog");
+            }
         }
 
         private async void ShowSettings()
