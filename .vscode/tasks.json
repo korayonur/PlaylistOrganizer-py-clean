@@ -18,8 +18,8 @@
             "problemMatcher": "$msCompile",
             "options": {
                 "env": {
-                    "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
-                    "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                    "DOTNET_ROOT": "/usr/local/share/dotnet",
+                    "PATH": "/usr/local/share/dotnet:$PATH"
                 }
             }
         },
@@ -40,8 +40,8 @@
             "problemMatcher": "$msCompile",
             "options": {
                 "env": {
-                    "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
-                    "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                    "DOTNET_ROOT": "/usr/local/share/dotnet",
+                    "PATH": "/usr/local/share/dotnet:$PATH"
                 }
             }
         },
@@ -80,8 +80,8 @@
             },
             "options": {
                 "env": {
-                    "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
-                    "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                    "DOTNET_ROOT": "/usr/local/share/dotnet",
+                    "PATH": "/usr/local/share/dotnet:$PATH"
                 }
             }
         },
@@ -99,8 +99,8 @@
             },
             "options": {
                 "env": {
-                    "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
-                    "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                    "DOTNET_ROOT": "/usr/local/share/dotnet",
+                    "PATH": "/usr/local/share/dotnet:$PATH"
                 }
             }
         }

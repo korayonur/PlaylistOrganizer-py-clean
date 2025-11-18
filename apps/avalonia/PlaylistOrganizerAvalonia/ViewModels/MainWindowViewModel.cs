@@ -24,12 +24,46 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         private readonly PlaylistTreeService _playlistTreeService;
         private readonly VDJFolderParserService _vdjFolderParserService;
         private readonly M3UParserService _m3uParserService;
+        private readonly MediaPlayerService _mediaPlayerService;
         private readonly ILogger<MainWindowViewModel> _logger;
         private Playlist? _selectedPlaylist;
         private string _searchQuery = string.Empty;
         private string _currentFilter = "all";
         private bool _showOnlyMissingTracks;
         private HashSet<string>? _filteredPlaylistPaths = null; // Filtreleme için eksik içeren playlist path'leri (ID yerine path)
+        private List<Playlist>? _originalPlaylists = null; // Filtreleme öncesi orijinal veri (filtre kapalıyken geri yüklemek için)
+
+        // Media Player Properties
+        private Track? _currentPlayingTrack;
+        private bool _isPlaying;
+
+        public Track? CurrentPlayingTrack
+        {
+            get => _currentPlayingTrack;
+            set
+            {
+                _currentPlayingTrack = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(IsPlayerVisible));
+            }
+        }
+
+        public bool IsPlaying
+        {
+            get => _isPlaying;
+            set
+            {
+                _isPlaying = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool IsPlayerVisible => _currentPlayingTrack != null;
+
+        // Media Player Commands
+        public ICommand PauseTrackCommand { get; }
+        public ICommand StopTrackCommand { get; }
+        public ICommand ClosePlayerCommand { get; }
 
         public MainWindowViewModel()
         {
@@ -40,6 +74,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             _playlistTreeService = serviceProvider.GetRequiredService<PlaylistTreeService>();
             _vdjFolderParserService = serviceProvider.GetRequiredService<VDJFolderParserService>();
             _m3uParserService = serviceProvider.GetRequiredService<M3UParserService>();
+            _mediaPlayerService = serviceProvider.GetRequiredService<MediaPlayerService>();
             Playlists = [];
             Tracks = [];
 
@@ -52,9 +87,16 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             ExitCommand = new RelayCommand(ExitApplication);
             SearchCommand = new RelayCommand(PerformSearch);
             ClearSearchCommand = new RelayCommand(ClearSearch);
+            FilterMissingTracksCommand = new RelayCommand(FilterMissingTracks);
+            
+            // Media Player Commands
+            PlayTrackCommand = new RelayCommand<Track>(PlayTrackWithUI);
+            PauseTrackCommand = new RelayCommand(PauseTrack);
+            StopTrackCommand = new RelayCommand(StopTrack);
+            ClosePlayerCommand = new RelayCommand(ClosePlayer);
 
             // Veri yükleme
-            LoadDataAsync();
+            _ = LoadDataAsync(); // Fire and forget
         }
 
         // Properties
@@ -120,9 +162,15 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             get => _showOnlyMissingTracks;
             set
             {
+                _logger.LogDebug($"ShowOnlyMissingTracks setter called: {_showOnlyMissingTracks} -> {value}");
                 if (SetProperty(ref _showOnlyMissingTracks, value))
                 {
+                    _logger.LogDebug($"ShowOnlyMissingTracks changed, calling FilterPlaylists()");
                     FilterPlaylists();
+                }
+                else
+                {
+                    _logger.LogDebug($"ShowOnlyMissingTracks setter: value did not change (already {value})");
                 }
             }
         }
@@ -135,6 +183,8 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         public ICommand ExitCommand { get; }
         public ICommand SearchCommand { get; }
         public ICommand ClearSearchCommand { get; }
+        public ICommand FilterMissingTracksCommand { get; }
+        public ICommand PlayTrackCommand { get; }
 
         // Statistics
         public int TotalTracks => Tracks?.Count ?? 0;
@@ -143,7 +193,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         public int TotalPlaylists => Playlists?.Count ?? 0;
 
         // Methods
-        private async void LoadDataAsync()
+        private async Task LoadDataAsync()
         {
             _logger.LogDebug("=== LoadDataAsync START ===");
             try
@@ -180,6 +230,10 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     // 0 track count'lu playlist'leri filtrele
                     var filteredPlaylists = FilterEmptyPlaylists(playlists);
                     _logger.LogDebug($"After filtering empty playlists: {filteredPlaylists.Count} root folders");
+
+                    // Orijinal veriyi sakla (filtre kapandığında geri yüklemek için)
+                    _originalPlaylists = filteredPlaylists;
+                    _logger.LogDebug($"Original playlists saved: {_originalPlaylists.Count} root folders");
 
                     // Root folder'ları direkt ekle (zaten hiyerarşik yapıda)
                     foreach (var root in filteredPlaylists)
@@ -315,7 +369,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             _playlistTreeService.ClearCache();
             _logger.LogDebug("Cache cleared, reloading from file system...");
             // Dosya sisteminden yeniden oku
-            LoadDataAsync();
+            _ = LoadDataAsync(); // Fire and forget
         }
 
         private void ShowFixSuggestions()
@@ -347,17 +401,49 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
         private async void FilterPlaylists()
         {
+            _logger.LogInformation("=== FilterPlaylists START ===");
+            _logger.LogDebug($"ShowOnlyMissingTracks value: {ShowOnlyMissingTracks}");
+            
             if (!ShowOnlyMissingTracks)
             {
-                // Filtre kapalıysa normal veriyi yükle
-                RefreshData();
+                // Filtre kapalıysa orijinal veriyi geri yükle (YENILEME YAPMA)
+                _logger.LogInformation("Filter is OFF, restoring original playlists WITHOUT reloading from file system");
+                
+                // Eğer orijinal veri varsa, onu geri yükle
+                if (_originalPlaylists != null && _originalPlaylists.Count > 0)
+                {
+                    await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        _logger.LogDebug("=== RESTORING ORIGINAL PLAYLISTS ===");
+                        _logger.LogDebug($"Clearing current playlists. Count: {Playlists.Count}");
+                        Playlists.Clear();
+                        
+                        _logger.LogDebug($"Restoring {_originalPlaylists.Count} original root folders");
+                        foreach (var root in _originalPlaylists)
+                        {
+                            Playlists.Add(root);
+                        }
+                        
+                        _filteredPlaylistPaths = null;
+                        
+                        _logger.LogInformation($"✅ Original playlists restored. Count: {Playlists.Count}");
+                        OnPropertyChanged(nameof(TotalPlaylists));
+                    });
+                }
+                else
+                {
+                    // Orijinal veri yoksa, cache'den yükle (ama dosya sisteminden yeniden TARAMA)
+                    _logger.LogWarning("Original playlists not found, loading from cache");
+                    await LoadDataAsync();
+                }
                 return;
             }
 
             // Filtre açıksa eksik track içeren playlist'leri göster
             try
             {
-                _logger.LogDebug("=== FilterPlaylists: ShowOnlyMissingTracks=TRUE ===");
+                _logger.LogInformation("=== FilterPlaylists: ShowOnlyMissingTracks=TRUE ===");
+                _logger.LogDebug("Starting to filter playlists with missing tracks...");
 
                 // Dosya sisteminden tüm playlist'leri al
                 var allPlaylists = await _playlistTreeService.BuildTreeFromFileSystemAsync();
@@ -424,13 +510,15 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 // UI thread'de güncelle
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
-                    _logger.LogDebug("=== UI THREAD UPDATE: FILTERED PLAYLISTS ===");
+                    _logger.LogInformation("=== UI THREAD UPDATE: FILTERED PLAYLISTS ===");
+                    _logger.LogDebug($"Clearing Playlists collection. Current count: {Playlists.Count}");
                     Playlists.Clear();
+                    _logger.LogDebug($"Playlists cleared. New count: {Playlists.Count}");
                     
                     // Seçili playlist'i temizle (eğer eksik içermiyorsa)
                     if (SelectedPlaylist != null && !playlistsWithMissingTracks.Contains(SelectedPlaylist.Path))
                     {
-                        _logger.LogDebug($"Selected playlist cleared (no missing tracks): Path={SelectedPlaylist.Path}, Name={SelectedPlaylist.Name}");
+                        _logger.LogInformation($"Selected playlist cleared (no missing tracks): Path={SelectedPlaylist.Path}, Name={SelectedPlaylist.Name}");
                         SelectedPlaylist = null;
                         Tracks.Clear();
                         OnPropertyChanged(nameof(TotalTracks));
@@ -439,12 +527,21 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     }
                     
                     // Filtrelenmiş ağaç yapısını oluştur
+                    _logger.LogDebug("Calling FilterTreeByMissingTracks...");
                     FilterTreeByMissingTracks(allPlaylists, playlistsWithMissingTracks);
                     
-                    _logger.LogDebug($"✅ Filtered hierarchy complete. Playlists count: {Playlists.Count}");
+                    _logger.LogInformation($"✅ Filtered hierarchy complete. Playlists count: {Playlists.Count}");
+                    
+                    // Her root folder'ı logla
+                    for (int i = 0; i < Playlists.Count; i++)
+                    {
+                        var root = Playlists[i];
+                        _logger.LogDebug($"  Filtered Root[{i}]: {root.Name} (Type: {root.Type}, Children: {root.Children.Count}, TrackCount: {root.TrackCount})");
+                    }
+                    
                     OnPropertyChanged(nameof(TotalPlaylists));
-                    _logger.LogDebug($"TotalPlaylists updated: {TotalPlaylists}");
-                    _logger.LogDebug("=== UI THREAD UPDATE END ===");
+                    _logger.LogInformation($"TotalPlaylists updated: {TotalPlaylists}");
+                    _logger.LogInformation("=== UI THREAD UPDATE END ===");
                 });
             }
             catch (Exception ex)
@@ -1160,13 +1257,158 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 SearchQuery = string.Empty;
 
                 // Orijinal verileri yükle
-                LoadDataAsync();
+                _ = LoadDataAsync(); // Fire and forget
 
                 _logger.LogInformation("Arama temizlendi, orijinal veriler yüklendi");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Arama temizlenirken hata oluştu");
+            }
+        }
+
+        /// <summary>
+        /// "Eksik" istatistiğine tıklanınca filtreyi tetikle
+        /// </summary>
+        private void FilterMissingTracks()
+        {
+            try
+            {
+                _logger.LogInformation("=== FilterMissingTracks COMMAND TRIGGERED ===");
+                _logger.LogDebug($"Current ShowOnlyMissingTracks value: {ShowOnlyMissingTracks}");
+                
+                // Filtreyi aç/kapat
+                var newValue = !ShowOnlyMissingTracks;
+                _logger.LogDebug($"Toggling ShowOnlyMissingTracks to: {newValue}");
+                
+                ShowOnlyMissingTracks = newValue;
+                
+                _logger.LogInformation($"✅ Missing tracks filter toggled: {ShowOnlyMissingTracks}");
+                _logger.LogInformation("=== FilterMissingTracks COMMAND END ===");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"❌ FilterMissingTracks sırasında hata oluştu: {ex.Message}");
+                _logger.LogError(ex, $"Stack trace: {ex.StackTrace}");
+            }
+        }
+
+        /// <summary>
+        /// Track'e tıklanınca oynat (sadece bulunan track'ler için)
+        /// </summary>
+        private void PlayTrack(Track? track)
+        {
+            try
+            {
+                if (track == null)
+                {
+                    _logger.LogWarning("PlayTrack called with null track");
+                    return;
+                }
+
+                // Sadece bulunan track'leri oynat
+                if (track.Status != TrackStatus.Found)
+                {
+                    _logger.LogWarning($"Track is not found, cannot play: {track.FileName} (Status: {track.Status})");
+                    return;
+                }
+
+                if (!System.IO.File.Exists(track.Path))
+                {
+                    _logger.LogWarning($"Track file does not exist: {track.Path}");
+                    return;
+                }
+
+                _logger.LogInformation($"Playing track: {track.FileName}");
+                _mediaPlayerService.PlayFile(track.Path);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"PlayTrack sırasında hata oluştu: {track?.FileName}");
+            }
+        }
+
+        private void PlayTrackWithUI(Track? track)
+        {
+            try
+            {
+                if (track == null)
+                {
+                    _logger.LogWarning("PlayTrackWithUI called with null track");
+                    return;
+                }
+
+                if (track.Status != TrackStatus.Found)
+                {
+                    _logger.LogWarning($"Track is not found, cannot play: {track.FileName} (Status: {track.Status})");
+                    return;
+                }
+
+                if (!System.IO.File.Exists(track.Path))
+                {
+                    _logger.LogWarning($"Track file does not exist: {track.Path}");
+                    return;
+                }
+
+                _logger.LogInformation($"Playing track with UI: {track.FileName}");
+                
+                // Track'i set et ve çal
+                CurrentPlayingTrack = track;
+                IsPlaying = true;
+                
+                // Media player servisini kullan
+                _mediaPlayerService.PlayFile(track.Path);
+                
+                _logger.LogInformation($"✅ Track started playing: {track.FileName}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"PlayTrackWithUI sırasında hata oluştu: {track?.FileName}");
+            }
+        }
+
+        private void PauseTrack()
+        {
+            try
+            {
+                _logger.LogInformation("Pausing track...");
+                _mediaPlayerService.Pause();
+                IsPlaying = false;
+                _logger.LogInformation("✅ Track paused");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "PauseTrack sırasında hata oluştu");
+            }
+        }
+
+        private void StopTrack()
+        {
+            try
+            {
+                _logger.LogInformation("Stopping track...");
+                _mediaPlayerService.Stop();
+                IsPlaying = false;
+                _logger.LogInformation("✅ Track stopped");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "StopTrack sırasında hata oluştu");
+            }
+        }
+
+        private void ClosePlayer()
+        {
+            try
+            {
+                _logger.LogInformation("Closing player...");
+                StopTrack();
+                CurrentPlayingTrack = null;
+                _logger.LogInformation("✅ Player closed");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ClosePlayer sırasında hata oluştu");
             }
         }
 

@@ -6,14 +6,14 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/bin/Debug/net9.0/PlaylistOrganizerAvalonia.dll",
+            "program": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/bin/Debug/net10.0/PlaylistOrganizerAvalonia.dll",
             "args": [],
             "cwd": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia",
             "stopAtEntry": false,
             "console": "internalConsole",
             "env": {
-                "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
-                "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+                "DOTNET_ROOT": "/usr/local/share/dotnet",
+                "PATH": "/usr/local/share/dotnet:$PATH"
             }
         },
         {
@@ -21,14 +21,14 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "watch",
-            "program": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/bin/Debug/net9.0/PlaylistOrganizerAvalonia.dll",
+            "program": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia/bin/Debug/net10.0/PlaylistOrganizerAvalonia.dll",
             "args": [],
             "cwd": "${workspaceFolder}/apps/avalonia/PlaylistOrganizerAvalonia",
             "stopAtEntry": false,
             "console": "internalConsole",
             "env": {
-                "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
-                "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH",
+                "DOTNET_ROOT": "/usr/local/share/dotnet",
+                "PATH": "/usr/local/share/dotnet:$PATH",
                 "DOTNET_WATCH": "1"
             }
         },

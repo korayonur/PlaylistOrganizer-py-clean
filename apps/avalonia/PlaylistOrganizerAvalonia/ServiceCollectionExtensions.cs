@@ -84,6 +84,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<TrackService>();
         services.AddSingleton<TrackFixService>();
 
+        // Media Player
+        services.AddSingleton<MediaPlayerService>();
+
         return services;
     }
 

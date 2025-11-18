@@ -38,8 +38,10 @@
     "omnisharp.maxProjectFileCount": 2000,
     "omnisharp.projectLoadTimeout": 60,
     "terminal.integrated.env.osx": {
-        "DOTNET_ROOT": "/opt/homebrew/opt/dotnet/libexec",
-        "PATH": "/opt/homebrew/opt/dotnet/libexec:$PATH"
+        "DOTNET_ROOT": "/usr/local/share/dotnet",
+        "PATH": "/usr/local/share/dotnet:$PATH"
     },
+    "dotnet.server.dotnetPath": "/usr/local/share/dotnet/dotnet",
+    "omnisharp.dotNetCliPath": "/usr/local/share/dotnet/dotnet",
     "dotnet.formatting.organizeImportsOnFormat": true
 }

@@ -1,321 +1,460 @@
-# 🎵 Playlist Organizer - Multi-Platform Project
+# 🎵 Playlist Organizer - Desktop Application
 
-**Version:** 2.0 (Clean Architecture + Avalonia Migration)  
+**Version:** 2.0 (Avalonia Desktop App)  
 **Last Update:** 30 Ekim 2025  
-**Status:** 🔄 Migration In Progress
+**Status:** 🚧 Active Development
 
 ## 📋 Overview
 
-Modern music management system with multiple implementations:
+Modern, cross-platform desktop application for managing music playlists and tracks. Built with Avalonia UI framework for Windows, macOS, and Linux support.
 
-- **Old System**: Node.js API + Angular Frontend (Clean Architecture)
-- **New System**: Avalonia Desktop App (Cross-platform .NET)
-
-Both systems share the same SQLite database for seamless migration.
+**Current Focus:** Desktop-first experience with advanced playlist management, track search, and missing file detection.
 
 ## 🏗️ Project Structure
 
 ```
 PlaylistOrganizer-py-backup/
 ├── apps/
-│   ├── old-nodejs-api/          # Angular + Node.js (legacy)
-│   │   ├── api/                 # Backend (Clean Architecture)
-│   │   └── frontend/            # Angular 18 UI
-│   └── avalonia/                # Avalonia Desktop App (new)
-│       └── PlaylistOrganizerAvalonia/
-├── shared/
-│   ├── database/                # Shared SQLite database
-│   ├── logs/                    # Shared logs
-│   └── scripts/                 # Build & start scripts
-├── docs/                        # Documentation
-├── openspec/                    # Specification-driven development
-└── PlaylistOrganizer.code-workspace  # VS Code workspace
+│   ├── avalonia/                    # Avalonia Desktop App (Active)
+│   │   └── PlaylistOrganizerAvalonia/
+│   │       ├── Application/          # Business logic & services
+│   │       │   ├── Models/           # Data models
+│   │       │   └── Services/        # PlaylistTreeService, VDJFolderParser, etc.
+│   │       ├── Domain/               # Domain entities & enums
+│   │       ├── Infrastructure/       # Database, file system, logging
+│   │       ├── ViewModels/           # MVVM view models
+│   │       └── Views/                # Avalonia UI views
+│   └── old-nodejs-api/              # Legacy Node.js + Angular (Deprecated)
+├── data/                            # Application data & cache
+│   └── playlist-tree.json          # Playlist tree cache
+├── docs/                           # Documentation
+├── openspec/                       # Specification-driven development
+└── PlaylistOrganizer.code-workspace # VS Code workspace
 ```
 
 ## 🚀 Quick Start
 
-### Option 1: Old Node.js API + Angular (Legacy)
+### Prerequisites
 
-**Backend:** Node.js + Clean Architecture (Domain, Application, Infrastructure, Presentation)  
-**Frontend:** Angular 18 (Standalone Components)  
-**Database:** SQLite3 (better-sqlite3 + Repository Pattern)  
-**CLI:** Commander.js (7 commands)
+- .NET 9.0 SDK or later
+- SQLite3 (usually included with .NET)
 
-#### Clean Architecture Layers
-
-```
-apps/old-nodejs-api/api/src/
-├── domain/              # Business entities & repository interfaces
-│   ├── entities/        # BaseEntity, Track, Playlist, MusicFile, etc.
-│   └── repositories/    # IRepository, ITrackRepository, etc.
-├── application/         # Business logic & use cases
-│   ├── services/        # WordIndexService, ImportService
-│   └── use-cases/       # SearchTracks, GetPlaylists, StartImport, etc.
-├── infrastructure/      # External concerns
-│   ├── database/        # Connection, Schema, Repositories
-│   └── persistence/     # DatabaseManager
-├── presentation/        # User interfaces
-│   ├── http/            # Controllers, Routes, Middleware
-│   └── cli/             # Commands, Output utilities
-└── shared/              # Cross-cutting concerns
-    ├── config.js        # Configuration
-    ├── logger.js        # Logging system
-    ├── utils.js         # Utilities (normalize, etc.)
-    └── version.js       # Version manager
-```
-
-## 🚀 Quick Start
-
-### Option 1: Old Node.js API + Angular (Legacy)
-
-```bash
-./shared/scripts/start-nodejs-api.sh
-```
-
-**What it does:**
-
-- ✅ Starts backend API (Port 50001, hot reload with nodemon)
-- ✅ Starts frontend (Port 4200, Angular HMR)
-- ✅ Opens browser automatically
-- ✅ Monitors file changes
-
-**Access:**
-
-- Backend API: http://localhost:50001
-- Frontend: http://localhost:4200
-- Health Check: http://localhost:50001/api/health
-
-### Option 2: Avalonia Desktop App (New)
+### Running the Application
 
 ```bash
 cd apps/avalonia/PlaylistOrganizerAvalonia
 dotnet run
-
-# Or use the script:
-./shared/scripts/test-avalonia-import.sh    # Import test with progress monitoring
 ```
 
-### Manual Start (Legacy System)
-
-**Backend:**
+### Building for Production
 
 ```bash
-cd apps/old-nodejs-api/api
-npm run dev
-# or
-npm start
+# Windows
+dotnet publish -c Release -r win-x64 --self-contained
+
+# macOS
+dotnet publish -c Release -r osx-x64 --self-contained
+
+# Linux
+dotnet publish -c Release -r linux-x64 --self-contained
 ```
 
-**Frontend:**
+## ✨ Current Features
 
-```bash
-cd apps/old-nodejs-api/frontend
-npm start
-# or
-ng serve --open
-```
+### ✅ Implemented Features
 
-## 💻 CLI Commands
+- **📁 Playlist Management**
 
-The CLI provides powerful tools for managing your music library without starting the HTTP server.
+  - VirtualDJ folder structure support (`.vdjfolder` files)
+  - M3U/M3U8 playlist support
+  - Hierarchical tree view with folder navigation
+  - Playlist track count tracking
+  - Empty playlist filtering
 
-```bash
-cd apps/old-nodejs-api/api
+- **🔍 Track Search & Discovery**
 
-# Import & Session Management
-node cli.js import <path>                    # Import music files and playlists
-node cli.js sessions --limit 10              # List import sessions
+  - File system-based track loading
+  - Missing track detection
+  - Track status tracking (Found/Missing)
+  - Real-time file existence checking
 
-# Search & Indexing
-node cli.js search "query" --limit 10        # Search tracks by keywords
-node cli.js rebuild-index                    # Rebuild word indexes (long operation)
+- **🌳 Tree View**
 
-# Database Management
-node cli.js db:stats                         # Show database statistics
-node cli.js db:analyze                       # Analyze orphan tracks
-node cli.js db:update-track-counts           # Update playlist track counts
-```
+  - Hierarchical playlist structure
+  - Expandable/collapsible folders
+  - Alphabetical sorting (case-insensitive)
+  - JSON cache for fast loading (`data/playlist-tree.json`)
+  - Manual refresh capability
 
-### CLI Examples
+- **📊 Statistics**
 
-```bash
-# Import VirtualDJ library
-node cli.js import "/Users/username/Music/VirtualDJ"
+  - Total playlists count
+  - Total tracks count
+  - Found tracks count
+  - Missing tracks count
+  - Per-playlist statistics
 
-# Search for remixes
-node cli.js search "remix" --limit 20
+- **🎯 Filtering**
 
-# View recent import sessions
-node cli.js sessions --limit 5
+  - Filter playlists containing missing tracks
+  - Hide empty playlists (0 tracks)
+  - Recursive folder filtering
 
-# Get database stats
-node cli.js db:stats
-```
+- **💾 Data Management**
+  - SQLite database for tracks and playlists
+  - JSON cache for tree structure
+  - File system scanning
+  - Lazy loading of track details
 
-## 🌐 API Endpoints (8 total)
+### 🚧 Planned Features (Not Yet Implemented)
 
-### Health (1 endpoint)
+- **🔧 Fix System**
 
-- `GET /api/health` - Server status and uptime
+  - Automatic track path correction
+  - Batch rename operations
+  - Missing file recovery suggestions
+  - Duplicate detection and removal
 
-### Search (3 endpoints)
+- **💳 Payment System**
+  - License management
+  - Subscription handling
+  - Payment gateway integration
+  - User account management
 
-- `GET /api/search?q=query&limit=10` - Search tracks by keywords
-- `GET /api/search/stats` - Database statistics
-- `POST /api/search/rebuild` - Rebuild word indexes
+## 🎯 Architecture
 
-### Playlist (2 endpoints)
+### MVVM Pattern
 
-- `GET /api/playlist?limit=50&offset=0` - List all playlists
-- `GET /api/playlist/:id` - Get playlist details and tracks
+The application follows Model-View-ViewModel (MVVM) architecture:
 
-### Import (2 endpoints)
+- **Models:** Domain entities (`Playlist`, `Track`, `PlaylistTree`)
+- **Views:** Avalonia XAML UI definitions
+- **ViewModels:** Business logic and UI state management (`MainWindowViewModel`)
+- **Services:** Application services (`PlaylistTreeService`, `VDJFolderParserService`, `M3UParserService`)
 
-- `POST /api/import/start` - Start import operation (body: `{path: "/path/to/music"}`)
-- `GET /api/import/status` - Get current or last import status
+### Key Services
 
-### API Testing
+- **PlaylistTreeService:** Builds and caches playlist tree from file system
+- **VDJFolderParserService:** Parses VirtualDJ `.vdjfolder` files
+- **M3UParserService:** Parses M3U/M3U8 playlist files
+- **FileScannerService:** Scans file system for playlist files
+- **DatabaseManager:** SQLite database operations
 
-Use the included Insomnia collection: `insomnia-modular-api-collection.json`
+### Data Flow
 
-Import to Insomnia/Postman and start testing all endpoints immediately!
+1. **Tree Loading:**
 
-## ⚙️ Installation
+   - Check JSON cache (`data/playlist-tree.json`)
+   - If cache missing/invalid, scan file system
+   - Parse playlist files and build hierarchical tree
+   - Save to cache for next launch
 
-### Prerequisites
+2. **Track Loading:**
 
-- Node.js 18+ and npm 8+
-- SQLite3
+   - User selects playlist
+   - Parse playlist file (`.vdjfolder` or `.m3u`)
+   - Check file existence for each track
+   - Display tracks with status (Found/Missing)
 
-### Setup
-
-```bash
-# Clone repository
-git clone <repository-url>
-cd PlaylistOrganizer-py-backup
-
-# Install dependencies
-cd apps/old-nodejs-api/api && npm install
-cd ../frontend && npm install
-```
-
-### First Run
-
-```bash
-# Start in development mode
-./shared/scripts/start-nodejs-api.sh
-```
+3. **Filtering:**
+   - Scan all playlists for missing tracks
+   - Build filtered tree showing only playlists with missing tracks
+   - Recursively filter parent folders
 
 ## 📊 Database
 
-**Locations:**
-- **Old Node.js API:** `apps/old-nodejs-api/musicfiles.db` 
-- **Avalonia App:** `apps/avalonia/PlaylistOrganizerAvalonia/playlistorganizer.db`
+**Location:** `apps/avalonia/PlaylistOrganizerAvalonia/playlistorganizer.db`
 
-**Schema Files:**
-- **Old Node.js API:** `apps/old-nodejs-api/schema.sql` (relational with junction tables)
-- **Avalonia App:** `apps/avalonia/.../Database/schema.sql` (flat denormalized)
-
-Each system has its own database with compatible schemas for independent operation.
+**Schema:** Flat denormalized structure optimized for desktop app performance
 
 **Tables:**
 
+- `playlists` - Playlist metadata
+- `tracks` - Track information with file paths
 - `music_files` - Physical music files on disk
-- `tracks` - Tracks from playlists
-- `playlists` - M3U/VPL playlist files
-- `playlist_tracks` - Many-to-many relationship
-- `track_words` - Word index for tracks
-- `music_words` - Word index for music files
-- `import_sessions` - Session tracking and audit trail
 
-**Views:**
+## 🛠️ Development
 
-- `v_unmatched_tracks` - Tracks without matching music files
-- `v_exact_path_matches` - Exact path matches
-- `v_filename_matches` - Filename-based matches
+### Project Structure
 
-## 🎯 Features
+```
+PlaylistOrganizerAvalonia/
+├── Application/
+│   ├── Models/              # Data transfer objects
+│   └── Services/            # Business logic services
+├── Domain/
+│   ├── Entities/            # Domain entities
+│   └── Enums/               # Enumerations
+├── Infrastructure/
+│   ├── Database/            # Database schema & migrations
+│   └── Services/            # Infrastructure services
+├── ViewModels/              # MVVM view models
+└── Views/                   # Avalonia XAML views
+```
 
-### Clean Architecture Benefits
+### Key Technologies
 
-- ✅ **Separation of Concerns** - Each layer has a single responsibility
-- ✅ **Testability** - Business logic independent of external concerns
-- ✅ **Maintainability** - Easy to understand and modify
-- ✅ **Scalability** - Easy to add new features
+- **.NET 9.0** - Runtime and framework
+- **Avalonia UI** - Cross-platform UI framework
+- **SQLite** - Embedded database
+- **Dapper** - Lightweight ORM
+- **System.Text.Json** - JSON serialization
+- **Microsoft.Extensions.Logging** - Logging framework
 
-### Core Features
+## 📈 Roadmap
 
-- ✅ **Word-based Search** - Normalized text search with multi-language support (Turkish, English, etc.)
-- ✅ **Session Tracking** - Complete audit trail for import/rebuild operations
-- ✅ **Repository Pattern** - Database abstraction for easier testing and migration
-- ✅ **Console + File Logging** - All operations logged to console and rotating log files
-- ✅ **CLI + HTTP API** - Use the tool that fits your workflow
-- ✅ **Hot Reload** - Development mode with automatic reload
+> **Development Speed:** Bu proje Cursor IDE ve GenAI modeli kullanılarak geliştirilmektedir. Geleneksel yazılım geliştirme sürelerinden çok daha hızlı ilerlemektedir.
 
-## 📚 Tech Stack
+### Phase 1: Core Features ✅ (Tamamlandı)
 
-**Backend:**
+**Süre (GenAI Destekli):** ~25-30 saat (3-4 gün)  
+**Süre (Geleneksel):** ~40-50 saat (5-6 gün)  
+**Durum:** ✅ Tamamlandı
 
-- Node.js 18+
-- Express.js (HTTP server)
-- Better-sqlite3 (Database driver)
-- Commander.js (CLI framework)
+- [x] Playlist tree view (~8 saat)
+- [x] Track loading and display (~6 saat)
+- [x] Missing track detection (~8 saat)
+- [x] File system scanning (~6 saat)
+- [x] JSON cache system (~4 saat)
+- [x] Alphabetical sorting (~3 saat)
+- [x] Filtering system (~5 saat)
 
-**Frontend:**
+### Phase 2: Fix System 🚧 (Planlandı)
 
-- Angular 18 (Standalone Components)
-- RxJS (Reactive programming)
-- Angular Material (UI components)
+**Tahmini Süre (GenAI Destekli):** ~10-15 saat (1.5-2 gün)  
+**Tahmini Süre (Geleneksel):** ~18-25 saat (2.5-3 gün)  
+**Başlangıç:** Phase 1 tamamlandıktan sonra  
+**Tahmini Bitiş:** 1-2 hafta içinde
 
-**Database:**
+- [ ] Automatic path correction (~4-6 saat)
+  - Fuzzy path matching algoritması
+  - Dosya sistemi tarama ve eşleştirme
+  - Otomatik düzeltme önerileri
 
-- SQLite3 (File-based database)
+- [ ] Batch operations (~3-4 saat)
+  - Toplu path düzeltme
+  - Toplu silme/taşıma işlemleri
+  - Progress tracking
 
-**Development:**
+- [ ] Duplicate detection (~4-6 saat)
+  - Hash-based duplicate detection
+  - Similarity matching
+  - Duplicate removal UI
 
-- Nodemon (Hot reload)
-- Angular CLI (HMR)
-- Concurrently (Multi-process management)
+- [ ] File recovery suggestions (~2-3 saat)
+  - Missing file için alternatif path önerileri
+  - Dosya adı benzerliği analizi
+  - Kullanıcı onayı ile otomatik düzeltme
+
+- [ ] Undo/Redo support (~3-4 saat)
+  - Command pattern implementation
+  - Action history management
+  - UI integration
+
+### Phase 3: Payment & Licensing 🚧 (Planlandı)
+
+**Tahmini Süre (GenAI Destekli):** ~20-30 saat (2.5-3.5 gün)  
+**Tahmini Süre (Geleneksel):** ~35-50 saat (4.5-6 gün)  
+**Başlangıç:** Phase 2 tamamlandıktan sonra  
+**Tahmini Bitiş:** 2-3 hafta içinde
+
+- [ ] License key management (~6-8 saat)
+  - License key generation ve validation
+  - Local license storage
+  - License activation/deactivation
+
+- [ ] Subscription system (~8-12 saat)
+  - Subscription plan management
+  - Trial period handling
+  - Feature gating based on subscription
+
+- [ ] Payment gateway integration (~8-12 saat)
+  - Stripe/PayPal integration
+  - Payment processing
+  - Receipt generation
+
+- [ ] User authentication (~4-6 saat)
+  - User registration/login
+  - Session management
+  - Password reset flow
+
+- [ ] Cloud sync (optional) (~12-16 saat)
+  - Cloud storage integration (Dropbox/Google Drive)
+  - Sync conflict resolution
+  - Offline mode support
+
+### Phase 4: Advanced Features 📋 (Gelecek)
+
+**Tahmini Süre (GenAI Destekli):** ~12-18 saat (1.5-2.5 gün)  
+**Tahmini Süre (Geleneksel):** ~20-30 saat (2.5-4 gün)  
+**Başlangıç:** Phase 3 tamamlandıktan sonra  
+**Tahmini Bitiş:** 3-4 hafta içinde
+
+- [ ] Playlist editing (~4-6 saat)
+  - Drag & drop track reordering
+  - Add/remove tracks
+  - Playlist metadata editing
+
+- [ ] Track metadata editing (~3-4 saat)
+  - ID3 tag editing
+  - Batch metadata updates
+  - Metadata validation
+
+- [ ] Export/Import functionality (~4-6 saat)
+  - Export to M3U/VirtualDJ format
+  - Import from various formats
+  - Format conversion
+
+- [ ] Backup and restore (~3-4 saat)
+  - Automatic backup scheduling
+  - Manual backup/restore
+  - Backup file management
+
+- [ ] Multi-language support (~6-8 saat)
+  - i18n implementation
+  - Language switching
+  - Translation management
+
+## ⏱️ Proje Tamamlanma Tahmini
+
+**Toplam Tahmini Süre (GenAI Destekli):** ~67-93 saat (8-12 gün, günde 8 saat çalışma ile)  
+**Toplam Tahmini Süre (Geleneksel):** ~113-155 saat (14-19 gün, günde 8 saat çalışma ile)  
+**Tasarruf (GenAI ile):** ~46-62 saat (%40-50 daha hızlı)
+
+**Gerçekçi Tamamlanma Tarihi (GenAI Destekli):**
+- **Minimum (yoğun çalışma):** 1.5-2 hafta
+- **Ortalama (normal tempo):** 2-3 hafta
+- **Maksimum (part-time çalışma):** 4-5 hafta
+
+**Gerçekçi Tamamlanma Tarihi (Geleneksel):**
+- **Minimum (yoğun çalışma):** 2-3 hafta
+- **Ortalama (normal tempo):** 3-4 hafta
+- **Maksimum (part-time çalışma):** 6-8 hafta
+
+**Not:** GenAI destekli geliştirme (Cursor IDE) ile bu süreler geleneksel yöntemlere göre %40-50 daha hızlıdır. Test, debugging ve kullanıcı geri bildirimleri süreleri etkileyebilir.
+
+**Öncelik Sırası:**
+1. ✅ Phase 1: Core Features (Tamamlandı)
+2. 🚧 Phase 2: Fix System (Yüksek öncelik - kullanıcı değeri yüksek)
+3. 🚧 Phase 3: Payment & Licensing (Orta öncelik - monetization için gerekli)
+4. 📋 Phase 4: Advanced Features (Düşük öncelik - nice-to-have)
+
+## 💡 Marketing Strategy Recommendations
+
+### Target Audience
+
+1. **DJs & Music Professionals**
+
+   - VirtualDJ users managing large music libraries
+   - Need to track missing files and organize playlists
+   - Value: Time-saving, reliability
+
+2. **Music Enthusiasts**
+
+   - Large personal music collections
+   - Multiple playlist formats (M3U, VirtualDJ)
+   - Value: Organization, discovery
+
+3. **Music Libraries & Collections**
+   - Radio stations, clubs, venues
+   - Need centralized playlist management
+   - Value: Professional tools, bulk operations
+
+### Pricing Strategy
+
+**Freemium Model:**
+
+- **Free Tier:**
+
+  - Basic playlist viewing
+  - Missing track detection (limited to 100 playlists)
+  - Community support
+
+- **Pro Tier ($9.99/month or $99/year):**
+
+  - Unlimited playlists
+  - Advanced filtering
+  - Fix system (automatic corrections)
+  - Priority support
+  - Cloud backup
+
+- **Enterprise Tier (Custom pricing):**
+  - Multi-user licenses
+  - API access
+  - Custom integrations
+  - Dedicated support
+
+### Marketing Channels
+
+1. **Content Marketing**
+
+   - Blog posts about playlist management
+   - YouTube tutorials for DJs
+   - Case studies from music professionals
+
+2. **Community Building**
+
+   - Discord/Slack community
+   - User forums
+   - Feature request voting
+
+3. **Partnerships**
+
+   - VirtualDJ plugin marketplace
+   - Music software review sites
+   - DJ equipment retailers
+
+4. **Social Media**
+
+   - Twitter/X for updates
+   - Instagram for visual content
+   - LinkedIn for B2B outreach
+
+5. **Product Hunt Launch**
+   - Launch on Product Hunt
+   - Engage with early adopters
+   - Collect feedback and testimonials
+
+### Go-to-Market Strategy
+
+**Phase 1: Beta Launch (Months 1-2)**
+
+- Invite-only beta with 50-100 users
+- Collect feedback and fix critical issues
+- Build case studies and testimonials
+
+**Phase 2: Public Launch (Month 3)**
+
+- Product Hunt launch
+- Free tier available
+- Content marketing campaign
+- Social media presence
+
+**Phase 3: Growth (Months 4-6)**
+
+- Paid tier launch
+- Partnership development
+- Community building
+- Feature expansion based on feedback
+
+**Phase 4: Scale (Months 7-12)**
+
+- Enterprise features
+- API development
+- International expansion
+- Advanced features (fix system, cloud sync)
+
+## 🐛 Known Limitations
+
+- Fix system not yet implemented
+- Payment system not yet implemented
+- No cloud sync capability
+- Limited to local file system
+- No playlist editing (view-only)
 
 ## 📝 Migration Note
 
-This project is currently in transition:
-
-- **Legacy System:** Node.js API + Angular Frontend (Clean Architecture) in `apps/old-nodejs-api/`
-- **New System:** Avalonia Desktop App in `apps/avalonia/`
-
-Each system has its own database with compatible schemas for independent operation.
-
-**Project Structure Reorganization:**
-
-- ✅ Organized into `apps/` for different implementations
-- ✅ Each app has its own database file
-- ✅ Shared resources in `shared/` (schemas, logs, scripts)
-- ✅ Clean separation between legacy and new systems
-
-## 🛠️ Scripts & Commands
-
-```bash
-# Development (from project root)
-./shared/scripts/start-nodejs-api.sh   # Start old Node.js API + Angular frontend
-./shared/scripts/test-avalonia-import.sh   # Test Avalonia import with progress
-
-# Individual services
-cd apps/old-nodejs-api/api
-npm run dev                             # Backend with hot reload (nodemon)
-cd ../frontend
-npm start                               # Frontend with HMR
-
-# Build
-cd apps/old-nodejs-api/frontend
-npm run build                           # Build frontend for production
-
-# CLI commands
-cd apps/old-nodejs-api/api
-node cli.js db:stats                    # Database statistics
-node cli.js search "query"              # Search tracks
-node cli.js import <path>               # Import files
-```
+**Legacy System:** The old Node.js API + Angular frontend in `apps/old-nodejs-api/` is deprecated and no longer maintained. The project has fully migrated to the Avalonia desktop application.
 
 ## 📖 Documentation
 
@@ -323,9 +462,13 @@ node cli.js import <path>               # Import files
 - **Migration Plans:** `docs/current/` - Current migration plans
 - **Avalonia Migration:** `openspec/changes/api-to-avalonia-migration/`
 
+## 🤝 Contributing
+
+This is currently a private project. Contributions and feedback are welcome through issues and discussions.
+
 ## 🔒 License
 
-MIT
+MIT (or specify your license)
 
 ## 👤 Author
 
@@ -333,4 +476,13 @@ Koray
 
 ## 🎉 Acknowledgments
 
-Built with Clean Architecture principles and modern JavaScript best practices.
+Built with:
+
+- Clean Architecture principles
+- MVVM pattern
+- Modern .NET best practices
+- Avalonia UI framework
+
+---
+
+**Note:** This project is actively under development. Features marked as "Planned" are not yet implemented but are on the roadmap.
