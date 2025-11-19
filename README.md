@@ -1,14 +1,14 @@
 # 🎵 Playlist Organizer - Desktop Application
 
-**Version:** 2.0 (Avalonia Desktop App)  
-**Last Update:** 19 Kasım 2025  
-**Status:** 🚧 Active Development (Phase 2: Fix System)
+**Versiyon:** 2.0 (Avalonia Desktop App)  
+**Son Güncelleme:** 19 Kasım 2025  
+**Durum:** 🚧 Aktif Geliştirme (Phase 2: Fix System)
 
-## 📋 Overview
+## 📋 Genel Bakış
 
-Modern, cross-platform desktop application for managing music playlists and tracks. Built with Avalonia UI framework for Windows, macOS, and Linux support.
+Müzik playlist'lerini ve track'leri yönetmek için modern, çapraz platform masaüstü uygulaması. Windows, macOS ve Linux desteği için Avalonia UI framework ile geliştirilmiştir.
 
-**Current Focus:** Desktop-first experience with advanced playlist management, track search, and missing file detection.
+**Güncel Odak:** Gelişmiş playlist yönetimi, track arama ve eksik dosya tespiti ile masaüstü öncelikli deneyim.
 
 ## 🏗️ Project Structure
 
@@ -32,21 +32,21 @@ PlaylistOrganizer-py-backup/
 └── PlaylistOrganizer.code-workspace # VS Code workspace
 ```
 
-## 🚀 Quick Start
+## 🚀 Hızlı Başlangıç
 
-### Prerequisites
+### Gereksinimler
 
-- .NET 9.0 SDK or later
-- SQLite3 (usually included with .NET)
+- .NET 10.0 SDK veya üzeri
+- Windows, macOS veya Linux işletim sistemi
 
-### Running the Application
+### Uygulamayı Çalıştırma
 
 ```bash
 cd apps/avalonia/PlaylistOrganizerAvalonia
 dotnet run
 ```
 
-### Building for Production
+### Production Build
 
 ```bash
 # Windows
@@ -59,54 +59,54 @@ dotnet publish -c Release -r osx-x64 --self-contained
 dotnet publish -c Release -r linux-x64 --self-contained
 ```
 
-## ✨ Current Features
+## ✨ Mevcut Özellikler
 
-### ✅ Implemented Features
+### ✅ Tamamlanan Özellikler
 
-- **📁 Playlist Management**
+- **📁 Playlist Yönetimi**
 
-  - VirtualDJ folder structure support (`.vdjfolder` files)
-  - M3U/M3U8 playlist support
-  - Hierarchical tree view with folder navigation
-  - Playlist track count tracking
-  - Empty playlist filtering
+  - VirtualDJ klasör yapısı desteği (`.vdjfolder` dosyaları)
+  - M3U/M3U8 playlist desteği
+  - Klasör navigasyonu ile hiyerarşik tree view
+  - Playlist track sayısı takibi
+  - Boş playlist filtreleme
 
-- **🔍 Track Search & Discovery**
+- **🔍 Track Arama ve Keşif**
 
-  - File system-based track loading
-  - Missing track detection
-  - Track status tracking (Found/Missing)
-  - Real-time file existence checking
+  - Dosya sistemi tabanlı track yükleme
+  - Eksik track tespiti
+  - Track durum takibi (Bulundu/Eksik)
+  - Gerçek zamanlı dosya varlık kontrolü
 
 - **🌳 Tree View**
 
-  - Hierarchical playlist structure
-  - Expandable/collapsible folders
-  - Alphabetical sorting (case-insensitive)
-  - JSON cache for fast loading (`data/playlist-tree.json`)
-  - Manual refresh capability
+  - Hiyerarşik playlist yapısı
+  - Genişletilebilir/daraltılabilir klasörler
+  - Alfabetik sıralama (büyük/küçük harf duyarsız)
+  - Hızlı yükleme için JSON cache (`data/playlist-tree.json`)
+  - Manuel yenileme özelliği
 
-- **📊 Statistics**
+- **📊 İstatistikler**
 
-  - Total playlists count
-  - Total tracks count
-  - Found tracks count
-  - Missing tracks count
-  - Per-playlist statistics
+  - Toplam playlist sayısı
+  - Toplam track sayısı
+  - Bulunan track sayısı
+  - Eksik track sayısı
+  - Playlist bazlı istatistikler
 
-- **🎯 Filtering**
+- **🎯 Filtreleme**
 
-  - Filter playlists containing missing tracks
-  - Hide empty playlists (0 tracks)
-  - Recursive folder filtering
+  - Eksik track içeren playlist'leri filtreleme
+  - Boş playlist'leri gizleme (0 track)
+  - Özyinelemeli klasör filtreleme
 
-- **💾 Data Management**
+- **💾 Veri Yönetimi**
 
-  - File system-based (veritabanı kaldırıldı)
-  - JSON cache for tree structure (`data/playlist-tree.json`)
+  - Dosya sistemi tabanlı (veritabanı kaldırıldı - 19 Kasım 2025)
+  - Tree yapısı için JSON cache (`data/playlist-tree.json`)
   - JSON + Memory Cache arama indexi (`word-index.json`)
-  - File system scanning
-  - Lazy loading of track details
+  - Dosya sistemi tarama
+  - Track detaylarının lazy loading ile yüklenmesi
 
 - **🔍 Advanced Search System** ✅ (Yeni - 19 Kasım 2025)
 
@@ -126,75 +126,75 @@ dotnet publish -c Release -r linux-x64 --self-contained
   - Playlist dosyalarını direkt güncelleme (VDJFolder, M3U)
   - UI otomatik güncelleme (track düzeltildiğinde)
 
-### 🚧 Planned Features (Not Yet Implemented)
+### 🚧 Planlanan Özellikler (Henüz Uygulanmadı)
 
-- **🔧 Fix System (Devam Ediyor)**
+- **🔧 Fix Sistemi (Devam Ediyor)**
 
   - ✅ Tek tek fix önerileri (Tamamlandı)
   - ❌ Toplu fix işlemi (Yapılacak)
   - ❌ Filtrede sadece eksik dosya unique gösterim (Yapılacak)
-  - ❌ Batch operations (Yapılacak)
-  - ❌ Duplicate detection and removal (Yapılacak)
+  - ❌ Toplu işlemler (Yapılacak)
+  - ❌ Duplicate tespiti ve kaldırma (Yapılacak)
 
-- **💳 Payment & Licensing System**
+- **💳 Ödeme ve Lisanslama Sistemi**
 
   - ❌ Ödeme linki entegrasyonu (Stripe/PayPal link)
   - ❌ Manuel lisans verme sistemi
-  - ❌ License key generation ve validation
-  - ❌ Local license storage
-  - ❌ Feature gating based on license
+  - ❌ Lisans anahtarı oluşturma ve doğrulama
+  - ❌ Yerel lisans depolama
+  - ❌ Lisansa göre özellik kilitleme
 
-- **📦 Build & Distribution**
+- **📦 Build ve Dağıtım**
 
   - ❌ Mac build ve test
   - ❌ Windows build ve test
   - ❌ Test dağıtımı (beta testers)
-  - ❌ Auto-update sistemi
+  - ❌ Otomatik güncelleme sistemi
 
-## 🎯 Architecture
+## 🎯 Mimari
 
 ### MVVM Pattern
 
-The application follows Model-View-ViewModel (MVVM) architecture:
+Uygulama Model-View-ViewModel (MVVM) mimarisini takip eder:
 
-- **Models:** Domain entities (`Playlist`, `Track`, `PlaylistTree`)
-- **Views:** Avalonia XAML UI definitions
-- **ViewModels:** Business logic and UI state management (`MainWindowViewModel`)
-- **Services:** Application services (`PlaylistTreeService`, `VDJFolderParserService`, `M3UParserService`)
+- **Models:** Domain entity'leri (`Playlist`, `Track`, `PlaylistTree`)
+- **Views:** Avalonia XAML UI tanımları
+- **ViewModels:** İş mantığı ve UI durum yönetimi (`MainWindowViewModel`)
+- **Services:** Uygulama servisleri (`PlaylistTreeService`, `VDJFolderParserService`, `M3UParserService`)
 
-### Key Services
+### Ana Servisler
 
-- **PlaylistTreeService:** Builds and caches playlist tree from file system
-- **VDJFolderParserService:** Parses VirtualDJ `.vdjfolder` files
-- **M3UParserService:** Parses M3U/M3U8 playlist files
-- **FileScannerService:** Scans file system for playlist files
+- **PlaylistTreeService:** Dosya sisteminden playlist tree oluşturur ve cache'ler
+- **VDJFolderParserService:** VirtualDJ `.vdjfolder` dosyalarını parse eder
+- **M3UParserService:** M3U/M3U8 playlist dosyalarını parse eder
+- **FileScannerService:** Dosya sisteminde playlist dosyalarını tarar
 - **JsonWordIndexService:** JSON + Memory Cache arama servisi
 - **HybridSimilarityCalculator:** Benzerlik skoru hesaplama (kelime + harf bazlı)
 - **TrackFixService:** Fix önerileri ve playlist güncelleme
 - **StringNormalizationService:** Dosya isimlerini normalize etme
 
-### Data Flow
+### Veri Akışı
 
-1. **Tree Loading:**
+1. **Tree Yükleme:**
 
-   - Check JSON cache (`data/playlist-tree.json`)
-   - If cache missing/invalid, scan file system
-   - Parse playlist files and build hierarchical tree
-   - Save to cache for next launch
+   - JSON cache kontrolü (`data/playlist-tree.json`)
+   - Cache yoksa/geçersizse, dosya sistemini tara
+   - Playlist dosyalarını parse et ve hiyerarşik tree oluştur
+   - Bir sonraki başlatma için cache'e kaydet
 
-2. **Track Loading:**
+2. **Track Yükleme:**
 
-   - User selects playlist
-   - Parse playlist file (`.vdjfolder` or `.m3u`)
-   - Check file existence for each track
-   - Display tracks with status (Found/Missing)
+   - Kullanıcı playlist seçer
+   - Playlist dosyasını parse et (`.vdjfolder` veya `.m3u`)
+   - Her track için dosya varlığını kontrol et
+   - Track'leri durum ile göster (Bulundu/Eksik)
 
-3. **Filtering:**
-   - Scan all playlists for missing tracks
-   - Build filtered tree showing only playlists with missing tracks
-   - Recursively filter parent folders
+3. **Filtreleme:**
+   - Tüm playlist'lerde eksik track'leri tara
+   - Sadece eksik track içeren playlist'leri gösteren filtrelenmiş tree oluştur
+   - Üst klasörleri özyinelemeli olarak filtrele
 
-## 📊 Data Storage
+## 📊 Veri Depolama
 
 **Veritabanı:** ❌ Kaldırıldı (19 Kasım 2025) - Artık dosya sistemi tabanlı çalışıyor
 
@@ -209,38 +209,37 @@ The application follows Model-View-ViewModel (MVVM) architecture:
 - Track bilgileri playlist dosyalarından parse ediliyor
 - Fix işlemleri playlist dosyalarını direkt güncelliyor
 
-## 🛠️ Development
+## 🛠️ Geliştirme
 
-### Project Structure
+### Proje Yapısı
 
 ```
 PlaylistOrganizerAvalonia/
 ├── Application/
-│   ├── Models/              # Data transfer objects
-│   └── Services/            # Business logic services
+│   ├── Models/              # Veri transfer objeleri
+│   └── Services/            # İş mantığı servisleri
 ├── Domain/
-│   ├── Entities/            # Domain entities
-│   └── Enums/               # Enumerations
+│   ├── Entities/            # Domain entity'leri
+│   └── Enums/               # Enum'lar
 ├── Infrastructure/
-│   ├── Database/            # Database schema & migrations
-│   └── Services/            # Infrastructure services
-├── ViewModels/              # MVVM view models
-└── Views/                   # Avalonia XAML views
+│   └── Services/            # Altyapı servisleri
+├── ViewModels/              # MVVM view model'leri
+└── Views/                   # Avalonia XAML view'ları
 ```
 
-### Key Technologies
+### Ana Teknolojiler
 
-- **.NET 10.0** - Runtime and framework
-- **Avalonia UI** - Cross-platform UI framework
-- **System.Text.Json** - JSON serialization
+- **.NET 10.0** - Runtime ve framework
+- **Avalonia UI** - Çapraz platform UI framework
+- **System.Text.Json** - JSON serileştirme
 - **Microsoft.Extensions.Logging** - Logging framework
 - **HashSet<string>** - O(1) lookup için memory cache
 
-## 📈 Roadmap
+## 📈 Yol Haritası
 
-> **Development Speed:** Bu proje Cursor IDE ve GenAI modeli kullanılarak geliştirilmektedir. Geleneksel yazılım geliştirme sürelerinden çok daha hızlı ilerlemektedir.
+> **Geliştirme Hızı:** Bu proje Cursor IDE ve GenAI modeli kullanılarak geliştirilmektedir. Geleneksel yazılım geliştirme sürelerinden çok daha hızlı ilerlemektedir.
 
-### Phase 1: Core Features ✅ (Tamamlandı)
+### Phase 1: Temel Özellikler ✅ (Tamamlandı)
 
 **Süre (GenAI Destekli):** ~25-30 saat (3-4 gün)  
 **Süre (Geleneksel):** ~40-50 saat (5-6 gün)  
@@ -254,7 +253,7 @@ PlaylistOrganizerAvalonia/
 - [x] Alphabetical sorting (~3 saat)
 - [x] Filtering system (~5 saat)
 
-### Phase 2: Fix System 🚧 (Devam Ediyor - %40 Tamamlandı)
+### Phase 2: Fix Sistemi 🚧 (Devam Ediyor - %40 Tamamlandı)
 
 **Başlangıç:** 30 Ekim 2025  
 **Durum:** 🚧 Aktif Geliştirme  
@@ -296,7 +295,7 @@ PlaylistOrganizerAvalonia/
   - Installer oluşturma (Mac/Windows)
   - Test senaryoları dokümantasyonu
 
-### Phase 3: Payment & Licensing 🚧 (Planlandı)
+### Phase 3: Ödeme ve Lisanslama 🚧 (Planlandı)
 
 **Tahmini Süre (GenAI Destekli):** ~12-18 saat (1.5-2.5 gün)  
 **Tahmini Süre (Geleneksel):** ~20-30 saat (2.5-4 gün)  
@@ -307,65 +306,65 @@ PlaylistOrganizerAvalonia/
 
 - [ ] **Ödeme Linki Entegrasyonu** (~4-6 saat)
 
-  - Stripe/PayPal payment link oluşturma
+  - Stripe/PayPal ödeme linki oluşturma
   - Ödeme tamamlandığında webhook/email bildirimi
   - Ödeme durumu takibi
 
 - [ ] **Manuel Lisans Verme Sistemi** (~4-6 saat)
 
-  - Ödeme tamamlandıktan sonra manuel lisans key oluşturma
-  - Lisans key generation (unique, güvenli)
-  - Email ile lisans key gönderme
-  - Lisans key validation sistemi
+  - Ödeme tamamlandıktan sonra manuel lisans anahtarı oluşturma
+  - Lisans anahtarı oluşturma (benzersiz, güvenli)
+  - Email ile lisans anahtarı gönderme
+  - Lisans anahtarı doğrulama sistemi
 
-- [ ] **License Management** (~3-4 saat)
+- [ ] **Lisans Yönetimi** (~3-4 saat)
 
-  - Local license storage (encrypted)
-  - License activation/deactivation
-  - License expiration kontrolü
-  - Feature gating based on license
+  - Yerel lisans depolama (şifreli)
+  - Lisans aktivasyonu/deaktivasyonu
+  - Lisans sona erme kontrolü
+  - Lisansa göre özellik kilitleme
 
-- [ ] **UI Integration** (~1-2 saat)
-  - License activation dialog
-  - Payment link butonu
-  - License status gösterimi
-  - Feature unlock/lock mekanizması
+- [ ] **UI Entegrasyonu** (~1-2 saat)
+  - Lisans aktivasyon dialog'u
+  - Ödeme linki butonu
+  - Lisans durumu gösterimi
+  - Özellik açma/kilit mekanizması
 
-### Phase 4: Advanced Features 📋 (Gelecek)
+### Phase 4: Gelişmiş Özellikler 📋 (Gelecek)
 
 **Tahmini Süre (GenAI Destekli):** ~12-18 saat (1.5-2.5 gün)  
 **Tahmini Süre (Geleneksel):** ~20-30 saat (2.5-4 gün)  
 **Başlangıç:** Phase 3 tamamlandıktan sonra  
 **Tahmini Bitiş:** 3-4 hafta içinde
 
-- [ ] Playlist editing (~4-6 saat)
+- [ ] Playlist düzenleme (~4-6 saat)
 
-  - Drag & drop track reordering
-  - Add/remove tracks
-  - Playlist metadata editing
+  - Sürükle-bırak track yeniden sıralama
+  - Track ekleme/çıkarma
+  - Playlist metadata düzenleme
 
-- [ ] Track metadata editing (~3-4 saat)
+- [ ] Track metadata düzenleme (~3-4 saat)
 
-  - ID3 tag editing
-  - Batch metadata updates
-  - Metadata validation
+  - ID3 tag düzenleme
+  - Toplu metadata güncellemeleri
+  - Metadata doğrulama
 
-- [ ] Export/Import functionality (~4-6 saat)
+- [ ] Export/Import işlevselliği (~4-6 saat)
 
-  - Export to M3U/VirtualDJ format
-  - Import from various formats
-  - Format conversion
+  - M3U/VirtualDJ formatına export
+  - Çeşitli formatlardan import
+  - Format dönüştürme
 
-- [ ] Backup and restore (~3-4 saat)
+- [ ] Yedekleme ve geri yükleme (~3-4 saat)
 
-  - Automatic backup scheduling
-  - Manual backup/restore
-  - Backup file management
+  - Otomatik yedekleme zamanlama
+  - Manuel yedekleme/geri yükleme
+  - Yedek dosya yönetimi
 
-- [ ] Multi-language support (~6-8 saat)
-  - i18n implementation
-  - Language switching
-  - Translation management
+- [ ] Çoklu dil desteği (~6-8 saat)
+  - i18n implementasyonu
+  - Dil değiştirme
+  - Çeviri yönetimi
 
 ## 📅 Proje Takvimi ve İlerleme
 
@@ -385,23 +384,23 @@ PlaylistOrganizerAvalonia/
 - Build & test: 4-6 saat
 - Test dağıtımı: 2-3 saat
 
-**Phase 3 (Payment & Licensing):** ~12-18 saat (1.5-2.5 gün)
+**Phase 3 (Ödeme ve Lisanslama):** ~12-18 saat (1.5-2.5 gün)
 
 - Ödeme linki entegrasyonu: 4-6 saat
 - Manuel lisans verme: 4-6 saat
-- License management: 3-4 saat
-- UI integration: 1-2 saat
+- Lisans yönetimi: 3-4 saat
+- UI entegrasyonu: 1-2 saat
 
 **Toplam Kalan Süre:** ~24-36 saat (3-4.5 gün, günde 8 saat çalışma ile)
 
 ### 📈 İlerleme Durumu
 
-| Phase                        | Durum           | Tamamlanma | Kalan Süre | Tahmini Bitiş    |
-| ---------------------------- | --------------- | ---------- | ---------- | ---------------- |
-| Phase 1: Core Features       | ✅ Tamamlandı   | 100%       | -          | 30 Ekim 2025     |
-| Phase 2: Fix System          | 🚧 Devam Ediyor | ~40%       | 12-18 saat | 21-22 Kasım 2025 |
-| Phase 3: Payment & Licensing | 📋 Planlandı    | 0%         | 12-18 saat | 23-24 Kasım 2025 |
-| Phase 4: Advanced Features   | 📋 Gelecek      | 0%         | -          | -                |
+| Phase                              | Durum           | Tamamlanma | Kalan Süre | Tahmini Bitiş    |
+| ---------------------------------- | --------------- | ---------- | ---------- | ---------------- |
+| Phase 1: Temel Özellikler         | ✅ Tamamlandı   | 100%       | -          | 30 Ekim 2025     |
+| Phase 2: Fix Sistemi               | 🚧 Devam Ediyor | ~40%       | 12-18 saat | 21-22 Kasım 2025 |
+| Phase 3: Ödeme ve Lisanslama       | 📋 Planlandı    | 0%         | 12-18 saat | 23-24 Kasım 2025 |
+| Phase 4: Gelişmiş Özellikler       | 📋 Gelecek      | 0%         | -          | -                |
 
 ### 🎯 Tahmini Bitiş Tarihi
 
@@ -411,7 +410,7 @@ PlaylistOrganizerAvalonia/
 - **Ortalama (normal tempo):** 23-24 Kasım 2025 (4-5 gün)
 - **Maksimum (part-time çalışma):** 27-28 Kasım 2025 (8-9 gün)
 
-**Not:** Bu tahminler Phase 2 ve Phase 3 için geçerlidir. Phase 4 (Advanced Features) ayrı planlanacaktır.
+**Not:** Bu tahminler Phase 2 ve Phase 3 için geçerlidir. Phase 4 (Gelişmiş Özellikler) ayrı planlanacaktır.
 
 ### 📝 Yapılacak Ana Maddeler (Öncelik Sırasına Göre)
 
@@ -444,24 +443,24 @@ PlaylistOrganizerAvalonia/
 
 5. **Ödeme Linki Entegrasyonu** (~4-6 saat)
 
-   - Stripe/PayPal payment link
+   - Stripe/PayPal ödeme linki
    - Webhook/email bildirimi
 
 6. **Manuel Lisans Verme** (~4-6 saat)
 
-   - Lisans key generation
+   - Lisans anahtarı oluşturma
    - Email ile lisans gönderme
 
-7. **License Management** (~3-4 saat)
-   - Local license storage
-   - Feature gating
+7. **Lisans Yönetimi** (~3-4 saat)
+   - Yerel lisans depolama
+   - Özellik kilitleme
 
 #### 🟢 Düşük Öncelik (Phase 4 - Gelecek)
 
-8. Playlist editing
-9. Track metadata editing
-10. Export/Import functionality
-11. Multi-language support
+8. Playlist düzenleme
+9. Track metadata düzenleme
+10. Export/Import işlevselliği
+11. Çoklu dil desteği
 
 ### 💡 Önemli Notlar
 
@@ -470,153 +469,153 @@ PlaylistOrganizerAvalonia/
 - **Beklenmedik Durumlar:** Debugging ve kullanıcı geri bildirimleri süreleri etkileyebilir
 - **Ödeme Modeli:** Basitleştirilmiş yaklaşım (link + manuel lisans) ile süre kısaldı
 
-## 💡 Marketing Strategy Recommendations
+## 💡 Pazarlama Stratejisi Önerileri
 
-### Target Audience
+### Hedef Kitle
 
-1. **DJs & Music Professionals**
+1. **DJ'ler ve Müzik Profesyonelleri**
 
-   - VirtualDJ users managing large music libraries
-   - Need to track missing files and organize playlists
-   - Value: Time-saving, reliability
+   - Büyük müzik kütüphanelerini yöneten VirtualDJ kullanıcıları
+   - Eksik dosyaları takip etme ve playlist'leri organize etme ihtiyacı
+   - Değer: Zaman tasarrufu, güvenilirlik
 
-2. **Music Enthusiasts**
+2. **Müzik Tutkunları**
 
-   - Large personal music collections
-   - Multiple playlist formats (M3U, VirtualDJ)
-   - Value: Organization, discovery
+   - Büyük kişisel müzik koleksiyonları
+   - Çoklu playlist formatları (M3U, VirtualDJ)
+   - Değer: Organizasyon, keşif
 
-3. **Music Libraries & Collections**
-   - Radio stations, clubs, venues
-   - Need centralized playlist management
-   - Value: Professional tools, bulk operations
+3. **Müzik Kütüphaneleri ve Koleksiyonlar**
+   - Radyo istasyonları, kulüpler, mekanlar
+   - Merkezi playlist yönetimi ihtiyacı
+   - Değer: Profesyonel araçlar, toplu işlemler
 
-### Pricing Strategy
+### Fiyatlandırma Stratejisi
 
 **Freemium Model:**
 
-- **Free Tier:**
+- **Ücretsiz Seviye:**
 
-  - Basic playlist viewing
-  - Missing track detection (limited to 100 playlists)
-  - Community support
+  - Temel playlist görüntüleme
+  - Eksik track tespiti (100 playlist ile sınırlı)
+  - Topluluk desteği
 
-- **Pro Tier ($9.99/month or $99/year):**
+- **Pro Seviye ($9.99/ay veya $99/yıl):**
 
-  - Unlimited playlists
-  - Advanced filtering
-  - Fix system (automatic corrections)
-  - Priority support
-  - Cloud backup
+  - Sınırsız playlist
+  - Gelişmiş filtreleme
+  - Fix sistemi (otomatik düzeltmeler)
+  - Öncelikli destek
+  - Bulut yedekleme
 
-- **Enterprise Tier (Custom pricing):**
-  - Multi-user licenses
-  - API access
-  - Custom integrations
-  - Dedicated support
+- **Kurumsal Seviye (Özel fiyatlandırma):**
+  - Çoklu kullanıcı lisansları
+  - API erişimi
+  - Özel entegrasyonlar
+  - Özel destek
 
-### Marketing Channels
+### Pazarlama Kanalları
 
-1. **Content Marketing**
+1. **İçerik Pazarlama**
 
-   - Blog posts about playlist management
-   - YouTube tutorials for DJs
-   - Case studies from music professionals
+   - Playlist yönetimi hakkında blog yazıları
+   - DJ'ler için YouTube eğitimleri
+   - Müzik profesyonellerinden vaka çalışmaları
 
-2. **Community Building**
+2. **Topluluk Oluşturma**
 
-   - Discord/Slack community
-   - User forums
-   - Feature request voting
+   - Discord/Slack topluluğu
+   - Kullanıcı forumları
+   - Özellik isteği oylama
 
-3. **Partnerships**
+3. **Ortaklıklar**
 
    - VirtualDJ plugin marketplace
-   - Music software review sites
-   - DJ equipment retailers
+   - Müzik yazılımı inceleme siteleri
+   - DJ ekipman perakendecileri
 
-4. **Social Media**
+4. **Sosyal Medya**
 
-   - Twitter/X for updates
-   - Instagram for visual content
-   - LinkedIn for B2B outreach
+   - Güncellemeler için Twitter/X
+   - Görsel içerik için Instagram
+   - B2B iletişim için LinkedIn
 
-5. **Product Hunt Launch**
-   - Launch on Product Hunt
-   - Engage with early adopters
-   - Collect feedback and testimonials
+5. **Product Hunt Lansmanı**
+   - Product Hunt'ta lansman
+   - Erken benimseyenlerle etkileşim
+   - Geri bildirim ve referanslar toplama
 
-### Go-to-Market Strategy
+### Piyasaya Çıkış Stratejisi
 
-**Phase 1: Beta Launch (Months 1-2)**
+**Faz 1: Beta Lansman (1-2. Aylar)**
 
-- Invite-only beta with 50-100 users
-- Collect feedback and fix critical issues
-- Build case studies and testimonials
+- Sadece davetli beta (50-100 kullanıcı)
+- Geri bildirim toplama ve kritik sorunları düzeltme
+- Vaka çalışmaları ve referanslar oluşturma
 
-**Phase 2: Public Launch (Month 3)**
+**Faz 2: Halka Açık Lansman (3. Ay)**
 
-- Product Hunt launch
-- Free tier available
-- Content marketing campaign
-- Social media presence
+- Product Hunt lansmanı
+- Ücretsiz seviye mevcut
+- İçerik pazarlama kampanyası
+- Sosyal medya varlığı
 
-**Phase 3: Growth (Months 4-6)**
+**Faz 3: Büyüme (4-6. Aylar)**
 
-- Paid tier launch
-- Partnership development
-- Community building
-- Feature expansion based on feedback
+- Ücretli seviye lansmanı
+- Ortaklık geliştirme
+- Topluluk oluşturma
+- Geri bildirime göre özellik genişletme
 
-**Phase 4: Scale (Months 7-12)**
+**Faz 4: Ölçeklendirme (7-12. Aylar)**
 
-- Enterprise features
-- API development
-- International expansion
-- Advanced features (fix system, cloud sync)
+- Kurumsal özellikler
+- API geliştirme
+- Uluslararası genişleme
+- Gelişmiş özellikler (fix sistemi, bulut senkronizasyonu)
 
-## 🐛 Known Limitations
+## 🐛 Bilinen Sınırlamalar
 
-- ✅ Fix system kısmen tamamlandı (tek tek fix var, toplu fix yok)
-- ❌ Payment system not yet implemented
-- ❌ No cloud sync capability
-- ✅ Limited to local file system (by design)
-- ❌ No playlist editing (view-only)
-- ❌ Mac/Windows build not yet tested
-- ❌ No auto-update system
+- ✅ Fix sistemi kısmen tamamlandı (tek tek fix var, toplu fix yok)
+- ❌ Ödeme sistemi henüz uygulanmadı
+- ❌ Bulut senkronizasyonu yok
+- ✅ Yerel dosya sistemi ile sınırlı (tasarım gereği)
+- ❌ Playlist düzenleme yok (sadece görüntüleme)
+- ❌ Mac/Windows build henüz test edilmedi
+- ❌ Otomatik güncelleme sistemi yok
 
-## 📝 Migration Note
+## 📝 Geçiş Notu
 
-**Legacy System:** The old Node.js API + Angular frontend in `apps/old-nodejs-api/` is deprecated and no longer maintained. The project has fully migrated to the Avalonia desktop application.
+**Eski Sistem:** `apps/old-nodejs-api/` klasöründeki eski Node.js API + Angular frontend kullanımdan kaldırıldı ve artık bakımı yapılmıyor. Proje tamamen Avalonia masaüstü uygulamasına geçti.
 
-## 📖 Documentation
+## 📖 Dokümantasyon
 
-- **OpenSpec:** `openspec/` - Specification-driven development
-- **Search System:** `apps/avalonia/PlaylistOrganizerAvalonia/SEARCH_SYSTEM.md` - Arama sistemi dokümantasyonu
-- **Migration Plans:** `docs/current/` - Current migration plans
-- **Avalonia Migration:** `openspec/changes/api-to-avalonia-migration/`
+- **OpenSpec:** `openspec/` - Spesifikasyon odaklı geliştirme
+- **Arama Sistemi:** `apps/avalonia/PlaylistOrganizerAvalonia/SEARCH_SYSTEM.md` - Arama sistemi dokümantasyonu
+- **Geçiş Planları:** `docs/current/` - Mevcut geçiş planları
+- **Avalonia Geçişi:** `openspec/changes/api-to-avalonia-migration/`
 
-## 🤝 Contributing
+## 🤝 Katkıda Bulunma
 
-This is currently a private project. Contributions and feedback are welcome through issues and discussions.
+Bu şu anda özel bir projedir. Katkılar ve geri bildirimler issue'lar ve tartışmalar aracılığıyla memnuniyetle karşılanır.
 
-## 🔒 License
+## 🔒 Lisans
 
-MIT (or specify your license)
+MIT (veya lisansınızı belirtin)
 
-## 👤 Author
+## 👤 Yazar
 
 Koray
 
-## 🎉 Acknowledgments
+## 🎉 Teşekkürler
 
-Built with:
+Şunlarla geliştirildi:
 
-- Clean Architecture principles
+- Clean Architecture prensipleri
 - MVVM pattern
-- Modern .NET best practices
+- Modern .NET en iyi uygulamaları
 - Avalonia UI framework
 
 ---
 
-**Note:** This project is actively under development. Features marked as "Planned" are not yet implemented but are on the roadmap.
+**Not:** Bu proje aktif olarak geliştirilmektedir. "Planlandı" olarak işaretlenen özellikler henüz uygulanmadı ancak yol haritasında yer almaktadır.
