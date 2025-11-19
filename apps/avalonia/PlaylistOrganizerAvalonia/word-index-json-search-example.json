@@ -1,0 +1,161 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "totalFiles": 42419,
+    "exportDate": "2025-11-19T12:00:00.000000Z",
+    "musicFolderPath": "/Users/koray/Music/KorayMusics",
+    "description": "JSON tabanlı arama için index - Her dosya için path ve normalized kelimeler"
+  },
+  "files": [
+    {
+      "path": "/Users/koray/Music/KorayMusics/Dimitri Vegas & Like Mike, Kimberly Loaiza - Fuego.mp3",
+      "fileName": "Dimitri Vegas & Like Mike, Kimberly Loaiza - Fuego.mp3",
+      "normalizedFileName": "dimitri vegas like mike kimberly loaiza fuego",
+      "words": [
+        "dimitri",
+        "vegas",
+        "like",
+        "mike",
+        "kimberly",
+        "loaiza",
+        "fuego"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/Dimitri Vegas & Like Mike, Kimberly Loaiza - Fuego (Extended Mix).mp3",
+      "fileName": "Dimitri Vegas & Like Mike, Kimberly Loaiza - Fuego (Extended Mix).mp3",
+      "normalizedFileName": "dimitri vegas like mike kimberly loaiza fuego extended mix",
+      "words": [
+        "dimitri",
+        "vegas",
+        "like",
+        "mike",
+        "kimberly",
+        "loaiza",
+        "fuego",
+        "extended",
+        "mix"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/2024_4k/Dimitri Vegas & Vin Diesel & Zion - Don't Stop The Music (Official video).m4a",
+      "fileName": "Dimitri Vegas & Vin Diesel & Zion - Don't Stop The Music (Official video).m4a",
+      "normalizedFileName": "dimitri vegas vin diesel zion dont stop the music official video",
+      "words": [
+        "dimitri",
+        "vegas",
+        "vin",
+        "diesel",
+        "zion",
+        "dont",
+        "stop",
+        "the",
+        "music",
+        "official",
+        "video"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/Kadir Öcal & Burak Körklü - Happy New Year Pack '2022/Davut Guloglu & L. Ketchup - Asere Katula (Burak Körklü Special).mp3",
+      "fileName": "Davut Guloglu & L. Ketchup - Asere Katula (Burak Körklü Special).mp3",
+      "normalizedFileName": "davut guloglu l ketchup asere katula burak korklu special",
+      "words": [
+        "davut",
+        "guloglu",
+        "ketchup",
+        "asere",
+        "katula",
+        "burak",
+        "korklu",
+        "special"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/MovedOrganized/Davut Güloğlu - Nurcanım.mp3",
+      "fileName": "Davut Güloğlu - Nurcanım.mp3",
+      "normalizedFileName": "davut guloglu nurcanim",
+      "words": [
+        "davut",
+        "guloglu",
+        "nurcanim"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/MovedOrganized/Martin Garrix - Animals.mp3",
+      "fileName": "Martin Garrix - Animals.mp3",
+      "normalizedFileName": "martin garrix animals",
+      "words": [
+        "martin",
+        "garrix",
+        "animals"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/Clubberism Prime Time vol.43/MashUp & Remix (405 tracks)/128 - 4A - Dimitri Vegas & Like Mike - Wakanda Theme [DREZZ Edit] [Dirty] 4A 128.mp3",
+      "fileName": "128 - 4A - Dimitri Vegas & Like Mike - Wakanda Theme [DREZZ Edit] [Dirty] 4A 128.mp3",
+      "normalizedFileName": "128 4a dimitri vegas like mike wakanda theme drez edit dirty 4a 128",
+      "words": [
+        "128",
+        "4a",
+        "dimitri",
+        "vegas",
+        "like",
+        "mike",
+        "wakanda",
+        "theme",
+        "drez",
+        "edit",
+        "dirty"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/2024 clubberism/Mashup Top 40 - September 2024/27 - Artemas x Vini Vici - i like the way you kiss me x Played-A-Live (Rudeejay & Da Brozz x Mo27Da Bootleg) [Intro Clean] - 9A - 138.mp3",
+      "fileName": "27 - Artemas x Vini Vici - i like the way you kiss me x Played-A-Live (Rudeejay & Da Brozz x Mo27Da Bootleg) [Intro Clean] - 9A - 138.mp3",
+      "normalizedFileName": "27 artemas vini vici like the way you kiss me played alive rudeejay da brozz mo27da bootleg intro clean 9a 138",
+      "words": [
+        "27",
+        "artemas",
+        "vini",
+        "vici",
+        "like",
+        "the",
+        "way",
+        "you",
+        "kiss",
+        "me",
+        "played",
+        "alive",
+        "rudeejay",
+        "da",
+        "brozz",
+        "mo27da",
+        "bootleg",
+        "intro",
+        "clean",
+        "9a",
+        "138"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/TuneFab/Düğün/Davut Güloğlu - Katula Katula.m4a",
+      "fileName": "Davut Güloğlu - Katula Katula.m4a",
+      "normalizedFileName": "davut guloglu katula katula",
+      "words": [
+        "davut",
+        "guloglu",
+        "katula"
+      ]
+    },
+    {
+      "path": "/Users/koray/Music/KorayMusics/spotify/Karadeniz oyun havasi/Katula Katula - Davut Güloğlu.m4a",
+      "fileName": "Katula Katula - Davut Güloğlu.m4a",
+      "normalizedFileName": "katula katula davut guloglu",
+      "words": [
+        "katula",
+        "davut",
+        "guloglu"
+      ]
+    }
+  ]
+}
+

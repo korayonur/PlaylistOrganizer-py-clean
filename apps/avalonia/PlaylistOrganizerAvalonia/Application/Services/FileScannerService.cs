@@ -106,8 +106,8 @@ namespace PlaylistOrganizerAvalonia.Application.Services
                 }
 
                 // Dosyaları tara
-                var fileInfos = directory.GetFiles();
-                foreach (var fileInfo in fileInfos)
+                System.IO.FileInfo[] fileInfos = directory.GetFiles();
+                foreach (System.IO.FileInfo fileInfo in fileInfos)
                 {
                     if (ShouldIncludeFile(fileInfo, isMusicScan))
                     {
@@ -143,7 +143,7 @@ namespace PlaylistOrganizerAvalonia.Application.Services
         /// <summary>
         /// Dosya dahil edilmeli mi kontrol et
         /// </summary>
-        private bool ShouldIncludeFile(FileInfo fileInfo, bool isMusicScan)
+        private bool ShouldIncludeFile(System.IO.FileInfo fileInfo, bool isMusicScan)
         {
             var extension = fileInfo.Extension.ToLowerInvariant();
 
@@ -201,7 +201,7 @@ namespace PlaylistOrganizerAvalonia.Application.Services
         {
             try
             {
-                var fileInfo = new FileInfo(filePath);
+                var fileInfo = new System.IO.FileInfo(filePath);
                 return fileInfo.Exists ? fileInfo.Length : 0;
             }
             catch
@@ -217,7 +217,7 @@ namespace PlaylistOrganizerAvalonia.Application.Services
         {
             try
             {
-                var fileInfo = new FileInfo(filePath);
+                var fileInfo = new System.IO.FileInfo(filePath);
                 return fileInfo.Exists ? fileInfo.LastWriteTime : DateTime.MinValue;
             }
             catch

@@ -7,7 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using PlaylistOrganizerAvalonia.Infrastructure.Database;
+// using PlaylistOrganizerAvalonia.Infrastructure.Database; // KALDIRILDI - artık veritabanı kullanılmıyor
 
 namespace PlaylistOrganizerAvalonia.ViewModels
 {
@@ -15,7 +15,6 @@ namespace PlaylistOrganizerAvalonia.ViewModels
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<SettingsViewModel> _logger;
-        private readonly DatabaseMigrationService _migrationService;
 
         [ObservableProperty]
         private string _databasePath = string.Empty;
@@ -70,8 +69,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 .Build();
 
             _logger = new LoggerFactory().CreateLogger<SettingsViewModel>();
-            _migrationService = new DatabaseMigrationService(_configuration, 
-                new LoggerFactory().CreateLogger<DatabaseMigrationService>());
+            // DatabaseMigrationService kaldırıldı - artık veritabanı kullanılmıyor
 
             LoadSettings();
         }
@@ -214,36 +212,19 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         [RelayCommand]
         private async Task CreateNewDatabase()
         {
-            try
-            {
-                await _migrationService.InitializeDatabaseAsync();
-                _logger.LogInformation("New database created successfully");
+            // Artık veritabanı kullanılmıyor - bu özellik devre dışı
+            _logger.LogInformation("CreateNewDatabase çağrıldı ama artık veritabanı kullanılmıyor");
                 
-                // Show success message
-                var successWindow = new Window
+            // Kullanıcıya bilgi ver
+            var infoWindow = new Window
                 {
-                    Title = "Başarılı",
-                    Content = new TextBlock { Text = "Yeni veritabanı başarıyla oluşturuldu!" },
-                    Width = 300,
+                Title = "Bilgi",
+                Content = new TextBlock { Text = "Artık veritabanı kullanılmıyor. Uygulama dosya sistemi tabanlı çalışıyor." },
+                Width = 400,
                     Height = 150,
                     WindowStartupLocation = WindowStartupLocation.CenterScreen
                 };
-                await successWindow.ShowDialog(GetTopLevel() as Window);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to create new database");
-                
-                var errorWindow = new Window
-                {
-                    Title = "Hata",
-                    Content = new TextBlock { Text = $"Veritabanı oluşturulurken hata: {ex.Message}" },
-                    Width = 400,
-                    Height = 200,
-                    WindowStartupLocation = WindowStartupLocation.CenterScreen
-                };
-                await errorWindow.ShowDialog(GetTopLevel() as Window);
-            }
+            await infoWindow.ShowDialog(null);
         }
 
         [RelayCommand]

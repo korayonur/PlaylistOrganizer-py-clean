@@ -1,32 +1,28 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Controls;
-using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PlaylistOrganizerAvalonia.Application.Services;
 using PlaylistOrganizerAvalonia.Domain.Entities;
 using PlaylistOrganizerAvalonia.Domain.Enums;
-using PlaylistOrganizerAvalonia.Infrastructure.Services;
 using PlaylistOrganizerAvalonia.Views;
 
 namespace PlaylistOrganizerAvalonia.ViewModels
 {
     public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
-        private readonly IDatabaseManager _databaseManager;
-        private readonly SearchService _searchService;
         private readonly PlaylistTreeService _playlistTreeService;
         private readonly VDJFolderParserService _vdjFolderParserService;
         private readonly M3UParserService _m3uParserService;
         private readonly MediaPlayerService _mediaPlayerService;
         private readonly ILogger<MainWindowViewModel> _logger;
         private Playlist? _selectedPlaylist;
+        private Track? _selectedTrack;
         private string _searchQuery = string.Empty;
         private string _currentFilter = "all";
         private bool _showOnlyMissingTracks;
@@ -69,8 +65,6 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         {
             var serviceProvider = App.ServiceProvider;
             _logger = serviceProvider.GetRequiredService<ILogger<MainWindowViewModel>>();
-            _searchService = serviceProvider.GetRequiredService<SearchService>();
-            _databaseManager = serviceProvider.GetRequiredService<IDatabaseManager>();
             _playlistTreeService = serviceProvider.GetRequiredService<PlaylistTreeService>();
             _vdjFolderParserService = serviceProvider.GetRequiredService<VDJFolderParserService>();
             _m3uParserService = serviceProvider.GetRequiredService<M3UParserService>();
@@ -88,7 +82,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             SearchCommand = new RelayCommand(PerformSearch);
             ClearSearchCommand = new RelayCommand(ClearSearch);
             FilterMissingTracksCommand = new RelayCommand(FilterMissingTracks);
-            
+
             // Media Player Commands
             PlayTrackCommand = new RelayCommand<Track>(PlayTrackWithUI);
             PauseTrackCommand = new RelayCommand(PauseTrack);
@@ -131,6 +125,12 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     }
                 }
             }
+        }
+
+        public Track? SelectedTrack
+        {
+            get => _selectedTrack;
+            set => SetProperty(ref _selectedTrack, value);
         }
 
         public string SearchQuery
@@ -242,7 +242,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     }
 
                     _logger.LogDebug($"✅ LoadDataAsync complete. Playlists count: {Playlists.Count}");
-                    
+
                     // Her bir root folder'ı listele
                     for (int i = 0; i < Playlists.Count; i++)
                     {
@@ -376,12 +376,18 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         {
             try
             {
+                _logger.LogDebug("ShowFixSuggestions called. SelectedTrack: {SelectedTrack}",
+                    SelectedTrack?.FileName ?? "null");
+
                 // Seçili track var mı ve eksik mi kontrol et
                 if (SelectedTrack == null)
                 {
                     _logger.LogWarning("No track selected for fix suggestions");
                     return;
                 }
+
+                _logger.LogDebug("Selected track: {FileName}, IsMissing: {IsMissing}",
+                    SelectedTrack.FileName, SelectedTrack.IsMissing);
 
                 if (!SelectedTrack.IsMissing)
                 {
@@ -391,7 +397,9 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
                 // FixSuggestionsDialog'u aç
                 var trackFixService = App.ServiceProvider.GetRequiredService<TrackFixService>();
-                var viewModel = new FixSuggestionsViewModel(trackFixService, _logger)
+                var loggerFactory = App.ServiceProvider.GetRequiredService<ILoggerFactory>();
+                var fixLogger = loggerFactory.CreateLogger<FixSuggestionsViewModel>();
+                var viewModel = new FixSuggestionsViewModel(trackFixService, fixLogger)
                 {
                     SelectedTrack = SelectedTrack
                 };
@@ -399,6 +407,33 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 var dialog = new FixSuggestionsDialog(viewModel)
                 {
                     WindowStartupLocation = WindowStartupLocation.CenterOwner
+                };
+
+                // TrackFixed event'ini dinle - track düzeltildiğinde playlist'i yeniden yükle
+                viewModel.TrackFixed += (sender, trackId) =>
+                {
+                    _logger.LogDebug($"Track fixed event received - reloading playlist");
+
+                    // Playlist dosyası güncellendi, track'leri yeniden yükle
+                    if (SelectedPlaylist != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+                                {
+                                    // Playlist'i yeniden yükle
+                                    LoadTracksForPlaylistAsync(SelectedPlaylist.Path);
+                                    _logger.LogDebug($"Playlist reloaded after track fix");
+                                });
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, $"Error reloading playlist after track fix");
+                            }
+                        });
+                    }
                 };
 
                 // Önerileri yükle
@@ -442,12 +477,12 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         {
             _logger.LogInformation("=== FilterPlaylists START ===");
             _logger.LogDebug($"ShowOnlyMissingTracks value: {ShowOnlyMissingTracks}");
-            
+
             if (!ShowOnlyMissingTracks)
             {
                 // Filtre kapalıysa orijinal veriyi geri yükle (YENILEME YAPMA)
                 _logger.LogInformation("Filter is OFF, restoring original playlists WITHOUT reloading from file system");
-                
+
                 // Eğer orijinal veri varsa, onu geri yükle
                 if (_originalPlaylists != null && _originalPlaylists.Count > 0)
                 {
@@ -456,15 +491,15 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                         _logger.LogDebug("=== RESTORING ORIGINAL PLAYLISTS ===");
                         _logger.LogDebug($"Clearing current playlists. Count: {Playlists.Count}");
                         Playlists.Clear();
-                        
+
                         _logger.LogDebug($"Restoring {_originalPlaylists.Count} original root folders");
                         foreach (var root in _originalPlaylists)
                         {
                             Playlists.Add(root);
                         }
-                        
+
                         _filteredPlaylistPaths = null;
-                        
+
                         _logger.LogInformation($"✅ Original playlists restored. Count: {Playlists.Count}");
                         OnPropertyChanged(nameof(TotalPlaylists));
                     });
@@ -545,7 +580,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
                 // Filtreleme için path set'ini kaydet
                 _filteredPlaylistPaths = playlistsWithMissingTracks;
-                
+
                 // UI thread'de güncelle
                 await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
                 {
@@ -553,7 +588,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     _logger.LogDebug($"Clearing Playlists collection. Current count: {Playlists.Count}");
                     Playlists.Clear();
                     _logger.LogDebug($"Playlists cleared. New count: {Playlists.Count}");
-                    
+
                     // Seçili playlist'i temizle (eğer eksik içermiyorsa)
                     if (SelectedPlaylist != null && !playlistsWithMissingTracks.Contains(SelectedPlaylist.Path))
                     {
@@ -564,20 +599,20 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                         OnPropertyChanged(nameof(FoundTracks));
                         OnPropertyChanged(nameof(MissingTracks));
                     }
-                    
+
                     // Filtrelenmiş ağaç yapısını oluştur
                     _logger.LogDebug("Calling FilterTreeByMissingTracks...");
                     FilterTreeByMissingTracks(allPlaylists, playlistsWithMissingTracks);
-                    
+
                     _logger.LogInformation($"✅ Filtered hierarchy complete. Playlists count: {Playlists.Count}");
-                    
+
                     // Her root folder'ı logla
                     for (int i = 0; i < Playlists.Count; i++)
                     {
                         var root = Playlists[i];
                         _logger.LogDebug($"  Filtered Root[{i}]: {root.Name} (Type: {root.Type}, Children: {root.Children.Count}, TrackCount: {root.TrackCount})");
                     }
-                    
+
                     OnPropertyChanged(nameof(TotalPlaylists));
                     _logger.LogInformation($"TotalPlaylists updated: {TotalPlaylists}");
                     _logger.LogInformation("=== UI THREAD UPDATE END ===");
@@ -894,7 +929,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     .ToList();
 
                 var playlistItems = rootFolder.Children
-                    .Where(c => 
+                    .Where(c =>
                     {
                         bool isFolder = IsFolderNode(c);
 
@@ -1072,7 +1107,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 .ToList();
 
             var filteredPlaylists = folder.Children
-                .Where(c => 
+                .Where(c =>
                 {
                     bool isFolder = IsFolderNode(c);
 
@@ -1082,21 +1117,21 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                         bool inFilteredSet = _filteredPlaylistPaths.Contains(c.Path);
                         bool hasTracks = c.TrackCount > 0;
                         bool isValid = !isFolder && hasTracks && inFilteredSet;
-                        
+
                         // ÖNEMLİ: Eğer playlist set'te yoksa, kesinlikle görünmemeli
                         if (!inFilteredSet && !isFolder)
                         {
                             _logger.LogDebug($"    ❌ REJECTED Playlist '{c.Name}' (Path={c.Path}): NOT in filtered set (InFilteredSet={inFilteredSet}, HasTracks={hasTracks})");
                             return false;
                         }
-                        
+
                         // ÖNEMLİ: Eğer playlist set'te varsa ama hasTracks=false ise, yine de görünmemeli
                         if (inFilteredSet && !hasTracks && !isFolder)
                         {
                             _logger.LogDebug($"    ❌ REJECTED Playlist '{c.Name}' (Path={c.Path}): In filtered set but no tracks (InFilteredSet={inFilteredSet}, HasTracks={hasTracks})");
                             return false;
                         }
-                        
+
                         _logger.LogDebug($"    ✅ ACCEPTED Playlist '{c.Name}' (Path={c.Path}): IsFolder={isFolder}, TrackCount={c.TrackCount}, InFilteredSet={inFilteredSet}, IsValid={isValid}");
                         return isValid;
                     }
@@ -1231,9 +1266,9 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
         private static Window? GetTopLevel()
         {
-            return Avalonia.Application.Current?.ApplicationLifetime is 
-                Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop 
-                ? desktop.MainWindow 
+            return Avalonia.Application.Current?.ApplicationLifetime is
+                Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                ? desktop.MainWindow
                 : null;
         }
 
@@ -1262,26 +1297,38 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
                 _logger.LogInformation($"Arama başlatıldı: '{SearchQuery}'");
 
-                // Playlist arama
-                var playlists = await _searchService.SearchPlaylistsAsync(SearchQuery);
+                // Basit filtreleme - SearchService artık kullanılmıyor
+                var query = SearchQuery.ToLowerInvariant();
 
-                // Track arama (seçili playlist varsa sadece o playlist'te)
-                var tracks = await _searchService.SearchTracksAsync(SearchQuery, SelectedPlaylist?.Id);
+                // Playlist isimlerinde arama yap
+                var allPlaylists = Playlists.ToList(); // Mevcut playlist'leri al
+                var filteredPlaylists = allPlaylists
+                    .Where(p => p.Name.ToLowerInvariant().Contains(query))
+                    .ToList();
 
-                // Sonuçları göster
                 Playlists.Clear();
-                foreach (var playlist in playlists)
+                foreach (var playlist in filteredPlaylists)
                 {
                     Playlists.Add(playlist);
                 }
 
-                Tracks.Clear();
-                foreach (var track in tracks)
+                // Track'lerde arama yap (sadece seçili playlist'te)
+                if (SelectedPlaylist != null)
                 {
-                    Tracks.Add(track);
+                    var allTracks = Tracks.ToList(); // Mevcut track'leri al
+                    var filteredTracks = allTracks
+                        .Where(t => t.FileName.ToLowerInvariant().Contains(query) ||
+                                   t.Path.ToLowerInvariant().Contains(query))
+                        .ToList();
+
+                    Tracks.Clear();
+                    foreach (var track in filteredTracks)
+                    {
+                        Tracks.Add(track);
+                    }
                 }
 
-                _logger.LogInformation($"Arama tamamlandı: {playlists.Count} playlist, {tracks.Count} track bulundu");
+                _logger.LogInformation($"Arama tamamlandı: {filteredPlaylists.Count} playlist, {(SelectedPlaylist != null ? Tracks.Count : 0)} track bulundu");
             }
             catch (Exception ex)
             {
@@ -1315,13 +1362,13 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             {
                 _logger.LogInformation("=== FilterMissingTracks COMMAND TRIGGERED ===");
                 _logger.LogDebug($"Current ShowOnlyMissingTracks value: {ShowOnlyMissingTracks}");
-                
+
                 // Filtreyi aç/kapat
                 var newValue = !ShowOnlyMissingTracks;
                 _logger.LogDebug($"Toggling ShowOnlyMissingTracks to: {newValue}");
-                
+
                 ShowOnlyMissingTracks = newValue;
-                
+
                 _logger.LogInformation($"✅ Missing tracks filter toggled: {ShowOnlyMissingTracks}");
                 _logger.LogInformation("=== FilterMissingTracks COMMAND END ===");
             }
@@ -1390,14 +1437,14 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                 }
 
                 _logger.LogInformation($"Playing track with UI: {track.FileName}");
-                
+
                 // Track'i set et ve çal
                 CurrentPlayingTrack = track;
                 IsPlaying = true;
-                
+
                 // Media player servisini kullan
                 _mediaPlayerService.PlayFile(track.Path);
-                
+
                 _logger.LogInformation($"✅ Track started playing: {track.FileName}");
             }
             catch (Exception ex)
@@ -1453,7 +1500,7 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
         public void Dispose()
         {
-            _databaseManager?.Dispose();
+            // Artık veritabanı kullanılmıyor, dispose gerekmiyor
         }
     }
 }

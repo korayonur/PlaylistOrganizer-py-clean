@@ -1,10 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Avalonia;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using PlaylistOrganizerAvalonia.Infrastructure.Database;
 
 namespace PlaylistOrganizerAvalonia;
 
@@ -55,44 +51,7 @@ sealed class Program
         return AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
-            .LogToTrace()
-            .AfterSetup(async app =>
-            {
-                // Initialize database after Avalonia setup
-                await InitializeDatabaseAsync();
-            });
-    }
-
-    private static async Task InitializeDatabaseAsync()
-    {
-        try
-        {
-            // Build configuration
-            var configuration = new ConfigurationBuilder()
-                .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .Build();
-
-            // Build service provider
-            var services = new ServiceCollection()
-                .AddSingleton<IConfiguration>(configuration)
-                .AddLogging(builder => builder
-                    .AddConsole()
-                    .SetMinimumLevel(LogLevel.Debug))
-                .AddPlaylistOrganizerServices()
-                .BuildServiceProvider();
-
-            // Get migration service and initialize database
-            var migrationService = services.GetRequiredService<DatabaseMigrationService>();
-            await migrationService.InitializeDatabaseAsync();
-
-            Console.WriteLine("✅ Database initialized successfully");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"❌ Failed to initialize database: {ex.Message}");
-            // Don't throw - let the app start without database initialization
-            Console.WriteLine("⚠️ Continuing without database initialization...");
-        }
+            .LogToTrace();
+            // Database initialization kaldırıldı - artık veritabanı kullanılmıyor
     }
 }

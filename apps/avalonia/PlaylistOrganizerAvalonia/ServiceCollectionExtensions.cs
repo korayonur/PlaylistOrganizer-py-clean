@@ -50,9 +50,9 @@ public static class ServiceCollectionExtensions
         services.AddMemoryCache();
         services.AddSingleton<ICacheService, CacheService>();
 
-        // Database Infrastructure
-        services.AddSingleton<IDatabaseManager, DatabaseManager>();
-        services.AddSingleton<DatabaseMigrationService>();
+        // Database Infrastructure - KALDIRILDI (artık veritabanı kullanılmıyor)
+        // services.AddSingleton<IDatabaseManager, DatabaseManager>();
+        // services.AddSingleton<DatabaseMigrationService>();
 
         return services;
     }
@@ -72,20 +72,21 @@ public static class ServiceCollectionExtensions
         // Playlist Tree
         services.AddSingleton<PlaylistTreeService>();
 
-        // Import
-        services.AddSingleton<DapperImportService>();
+        // Import - KALDIRILDI (artık kullanılmıyor)
+        // services.AddSingleton<DapperImportService>();
 
-        // Search & Index
-        services.AddSingleton<SearchService>();
-        services.AddSingleton<IWordIndexService, WordIndexService>();
+        // Search & Index - KALDIRILDI (artık kullanılmıyor)
+        // services.AddSingleton<SearchService>();
+        // services.AddSingleton<IWordIndexService, WordIndexService>();
         
-        // Fix Suggestions - Memory Index & Similarity
-        services.AddSingleton<InMemoryWordIndex>();
+        // Fix Suggestions - JSON Index & Similarity
+        services.AddSingleton<InMemoryWordIndex>(); // JSON export için (geçici)
         services.AddSingleton<HybridSimilarityCalculator>();
+        services.AddSingleton<JsonWordIndexService>(); // JSON + Memory Cache arama servisi
 
         // Business Logic
-        services.AddSingleton<PlaylistService>();
-        services.AddSingleton<TrackService>();
+        // services.AddSingleton<PlaylistService>(); // KALDIRILDI (artık kullanılmıyor)
+        // services.AddSingleton<TrackService>(); // KALDIRILDI (artık kullanılmıyor)
         services.AddSingleton<TrackFixService>();
 
         // Media Player
@@ -102,16 +103,16 @@ public static class ServiceCollectionExtensions
         // ViewModels
         services.AddTransient<MainWindowViewModel>();
         services.AddTransient<SettingsViewModel>();
-        services.AddTransient<ImportProgressViewModel>();
+        // services.AddTransient<ImportProgressViewModel>(); // KALDIRILDI (artık kullanılmıyor)
 
         // Cross-Cutting Concerns
         services.AddSingleton<IExceptionHandler, ExceptionHandler>();
         services.AddSingleton<IValidationService, ValidationService>();
         services.AddSingleton<IHealthCheckService, HealthCheckService>();
 
-        // Repositories
-        services.AddScoped<IPlaylistRepository, PlaylistRepository>();
-        services.AddScoped<ITrackRepository, TrackRepository>();
+        // Repositories - KALDIRILDI (artık veritabanı kullanılmıyor)
+        // services.AddScoped<IPlaylistRepository, PlaylistRepository>();
+        // services.AddScoped<ITrackRepository, TrackRepository>();
 
         return services;
     }

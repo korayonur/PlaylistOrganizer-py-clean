@@ -22,6 +22,15 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         [ObservableProperty]
         private Track? _selectedTrack;
 
+        partial void OnSelectedTrackChanged(Track? value)
+        {
+            // Track seçildiğinde otomatik olarak önerileri yükle
+            if (value != null)
+            {
+                _ = LoadSuggestionsAsync();
+            }
+        }
+
         [ObservableProperty]
         private ObservableCollection<TrackFixSuggestion> _suggestions = new();
 
@@ -59,7 +68,8 @@ namespace PlaylistOrganizerAvalonia.ViewModels
             {
                 _logger?.LogInformation($"Loading fix suggestions for track: {SelectedTrack.Id}");
 
-                var suggestions = await _trackFixService.GetFixSuggestionsAsync(SelectedTrack.Id);
+                // Track objesini direkt kullan, veritabanı sorgusu yapma
+                var suggestions = await _trackFixService.GetFixSuggestionsAsync(SelectedTrack);
 
                 foreach (var suggestion in suggestions)
                 {
@@ -99,9 +109,15 @@ namespace PlaylistOrganizerAvalonia.ViewModels
 
             try
             {
+                if (suggestion.Track == null)
+                {
+                    ErrorMessage = "Track bilgisi bulunamadı";
+                    return;
+                }
+
                 _logger?.LogInformation($"Applying fix suggestion: {suggestion.SuggestedPath}");
 
-                var success = await _trackFixService.FixTrackAsync(suggestion.TrackId, suggestion.SuggestedPath);
+                var success = await _trackFixService.FixTrackAsync(suggestion.Track, suggestion.SuggestedPath);
 
                 if (success)
                 {
@@ -110,6 +126,23 @@ namespace PlaylistOrganizerAvalonia.ViewModels
                     if (itemToRemove != null)
                     {
                         Suggestions.Remove(itemToRemove);
+                    }
+
+                    // SelectedTrack'i güncelle (eğer bu track ise)
+                    if (SelectedTrack != null && SelectedTrack == suggestion.Track)
+                    {
+                        SelectedTrack.Path = suggestion.SuggestedPath;
+                        SelectedTrack.FileName = System.IO.Path.GetFileName(suggestion.SuggestedPath);
+                        SelectedTrack.FileNameOnly = System.IO.Path.GetFileNameWithoutExtension(suggestion.SuggestedPath);
+                        SelectedTrack.Status = Domain.Enums.TrackStatus.Found;
+                    }
+
+                    // TrackFixed event'ini tetikle (MainWindowViewModel dinleyecek)
+                    // Track objesi artık ID'ye sahip olmayabilir, bu yüzden playlist path kullan
+                    if (suggestion.Track.PlaylistFilePath != null)
+                    {
+                        // Playlist'i yeniden yükle
+                        TrackFixed?.Invoke(this, 0); // 0 = playlist yeniden yüklensin
                     }
 
                     // Eğer tüm öneriler uygulandıysa, dialog'u kapat
@@ -138,6 +171,11 @@ namespace PlaylistOrganizerAvalonia.ViewModels
         /// Dialog kapatma eventi
         /// </summary>
         public event EventHandler? CloseRequested;
+
+        /// <summary>
+        /// Track düzeltildiğinde tetiklenen event (trackId parametresi ile)
+        /// </summary>
+        public event EventHandler<int>? TrackFixed;
 
         /// <summary>
         /// Dialog'u kapat

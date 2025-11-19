@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using PlaylistOrganizerAvalonia.Application.Services;
 
@@ -50,17 +51,44 @@ public partial class App : Avalonia.Application
             };
         }
 
-        // Word index'i background'da yükle
+        // Word index'i background'da yükle ve JSON'a export et
         _ = Task.Run(async () =>
         {
             try
             {
                 var wordIndex = ServiceProvider.GetRequiredService<InMemoryWordIndex>();
+                var jsonWordIndex = ServiceProvider.GetRequiredService<JsonWordIndexService>();
                 var logger = ServiceProvider.GetRequiredService<ILogger<App>>();
                 
-                logger.LogInformation("📦 Word index yükleniyor...");
+                logger.LogInformation("📦 Word index yükleniyor (dosya sisteminden)...");
                 await wordIndex.LoadFromFileSystemAsync();
                 logger.LogInformation("✅ Word index yüklendi");
+                
+                // JSON search formatına export et (word-index.json)
+                try
+                {
+                    var jsonPath = Path.Combine(AppContext.BaseDirectory, "word-index.json");
+                    await wordIndex.ExportToSearchJsonAsync(jsonPath);
+                    logger.LogInformation($"📄 Index search JSON'a export edildi: {jsonPath}");
+                    
+                    // JSON index'i yükle (JsonWordIndexService)
+                    logger.LogInformation("📦 JSON index yükleniyor (memory cache)...");
+                    await jsonWordIndex.LoadFromJsonAsync(jsonPath);
+                    logger.LogInformation($"✅ JSON index yüklendi: {jsonWordIndex.FileCount} dosya");
+                    
+                    // Debug export'lar (opsiyonel)
+                    var debugPath = Path.Combine(AppContext.BaseDirectory, "word-index-debug.json");
+                    await wordIndex.ExportToJsonAsync(debugPath);
+                    logger.LogInformation($"📄 Index debug dosyası oluşturuldu: {debugPath}");
+                    
+                    var fullDebugPath = Path.Combine(AppContext.BaseDirectory, "word-index-full-debug.json");
+                    await wordIndex.ExportFullToJsonAsync(fullDebugPath, maxRecords: 100);
+                    logger.LogInformation($"📄 Index FULL debug dosyası oluşturuldu: {fullDebugPath}");
+                }
+                catch (Exception exportEx)
+                {
+                    logger.LogWarning(exportEx, "Index export/yükleme hatası (devam ediliyor)");
+                }
             }
             catch (Exception ex)
             {

@@ -1,0 +1,57 @@
+{
+  "metadata": {
+    "isLoaded": true,
+    "wordCount": 40046,
+    "fileCount": 42419,
+    "musicFolderPath": "/Users/koray/Music/KorayMusics",
+    "exportDate": "2025-11-19T00:38:13.391879Z",
+    "exportVersion": "2.0"
+  },
+  "statistics": {
+    "totalWords": 40046,
+    "totalFiles": 42419,
+    "averageWordsPerFile": 8.5,
+    "indexSizeBytes": 0,
+    "loadTimeMs": 0
+  },
+  "wordIndex": {
+    "sample": [
+      { "word": "dimitri", "fileCount": 40 },
+      { "word": "vegas", "fileCount": 99 },
+      { "word": "like", "fileCount": 150 },
+      { "word": "mike", "fileCount": 45 }
+    ],
+    "topWords": [
+      { "word": "128", "fileCount": 573 },
+      { "word": "125", "fileCount": 590 },
+      { "word": "9a", "fileCount": 604 },
+      { "word": "2a", "fileCount": 650 }
+    ],
+    "testWords": [
+      { "word": "davut", "found": true, "fileCount": 23 },
+      { "word": "guloglu", "found": true, "fileCount": 2 },
+      { "word": "katula", "found": true, "fileCount": 5 }
+    ]
+  },
+  "fileIndex": {
+    "sample": [
+      {
+        "fileName": "Dimitri Vegas & Like Mike - Fuego.mp3",
+        "normalizedFileName": "dimitri vegas like mike fuego",
+        "wordCount": 5
+      },
+      {
+        "fileName": "Martin Garrix - Animals.mp3",
+        "normalizedFileName": "martin garrix animals",
+        "wordCount": 3
+      }
+    ],
+    "totalCount": 42419
+  },
+  "searchPerformance": {
+    "averageSearchTimeMs": 0.5,
+    "candidateLimit": 200,
+    "similarityThreshold": 0.0
+  }
+}
+

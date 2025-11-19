@@ -46,8 +46,34 @@ namespace PlaylistOrganizerAvalonia.Application.Services
             if (words1.Count == 0 || words2.Count == 0) return 0;
 
             // A. EXACT WORD MATCHES (tam eşleşen kelimeler)
-            var exactMatches = words1.Intersect(words2).Count();
-            var exactRatio = (double)exactMatches / Math.Max(words1.Count, words2.Count);
+            // Query'deki unique kelimeleri bul (arama sorgusu genelde kısa)
+            var uniqueWords1 = words1.Distinct().ToList();
+            var uniqueWords2 = words2.Distinct().ToList();
+            
+            // Query'deki unique kelimelerin ne kadarının dosyada olduğunu hesapla
+            var exactMatches = uniqueWords1.Intersect(uniqueWords2).Count();
+            
+            // Query'deki tüm unique kelimeler dosyada varsa, yüksek skor ver
+            // Eğer query kısa ise (1-3 kelime), tüm kelimelerin eşleşmesi çok önemli
+            var queryCoverage = uniqueWords1.Count > 0 
+                ? (double)exactMatches / uniqueWords1.Count 
+                : 0;
+            
+            // Dosyadaki kelimelerin ne kadarının query'de olduğunu da hesapla (daha az önemli)
+            var fileCoverage = uniqueWords2.Count > 0 
+                ? (double)exactMatches / uniqueWords2.Count 
+                : 0;
+            
+            // Query coverage daha önemli (query'deki kelimelerin hepsi dosyada olmalı)
+            // Ama dosya coverage de önemli (dosya çok uzunsa, query'deki kelimelerin oranı düşer)
+            var exactRatio = (queryCoverage * 0.7) + (fileCoverage * 0.3);
+            
+            // Eğer query'deki TÜM unique kelimeler dosyada varsa, yüksek bonus ver
+            // Bu çok önemli bir sinyal - query'deki her şey dosyada var!
+            if (queryCoverage >= 1.0 && uniqueWords1.Count >= 2)
+            {
+                exactRatio = Math.Min(1.0, exactRatio + 0.15); // %15 bonus
+            }
 
             // B. FUZZY WORD MATCHES (kelime içi harf benzerliği)
             var fuzzyMatches = 0;
