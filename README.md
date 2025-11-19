@@ -10,25 +10,25 @@ Müzik playlist'lerini ve track'leri yönetmek için modern, çapraz platform ma
 
 **Güncel Odak:** Gelişmiş playlist yönetimi, track arama ve eksik dosya tespiti ile masaüstü öncelikli deneyim.
 
-## 🏗️ Project Structure
+## 🏗️ Proje Yapısı
 
 ```
 PlaylistOrganizer-py-backup/
 ├── apps/
-│   ├── avalonia/                    # Avalonia Desktop App (Active)
+│   ├── avalonia/                    # Avalonia Desktop App (Aktif)
 │   │   └── PlaylistOrganizerAvalonia/
-│   │       ├── Application/          # Business logic & services
-│   │       │   ├── Models/           # Data models
-│   │       │   └── Services/        # PlaylistTreeService, VDJFolderParser, etc.
-│   │       ├── Domain/               # Domain entities & enums
-│   │       ├── Infrastructure/       # Database, file system, logging
-│   │       ├── ViewModels/           # MVVM view models
-│   │       └── Views/                # Avalonia UI views
-│   └── old-nodejs-api/              # Legacy Node.js + Angular (Deprecated)
-├── data/                            # Application data & cache
+│   │       ├── Application/          # İş mantığı ve servisler
+│   │       │   ├── Models/           # Veri modelleri
+│   │       │   └── Services/        # PlaylistTreeService, VDJFolderParser, vb.
+│   │       ├── Domain/               # Domain entity'leri ve enum'lar
+│   │       ├── Infrastructure/       # Altyapı servisleri (dosya sistemi, logging)
+│   │       ├── ViewModels/           # MVVM view model'leri
+│   │       └── Views/                # Avalonia UI view'ları
+│   └── old-nodejs-api/              # Eski Node.js + Angular (Kullanımdan Kaldırıldı)
+├── data/                            # Uygulama verileri ve cache
 │   └── playlist-tree.json          # Playlist tree cache
-├── docs/                           # Documentation
-├── openspec/                       # Specification-driven development
+├── docs/                           # Dokümantasyon
+├── openspec/                       # Spesifikasyon odaklı geliştirme
 └── PlaylistOrganizer.code-workspace # VS Code workspace
 ```
 
@@ -46,7 +46,7 @@ cd apps/avalonia/PlaylistOrganizerAvalonia
 dotnet run
 ```
 
-### Production Build
+### Production Build (Üretim Derlemesi)
 
 ```bash
 # Windows
@@ -108,7 +108,7 @@ dotnet publish -c Release -r linux-x64 --self-contained
   - Dosya sistemi tarama
   - Track detaylarının lazy loading ile yüklenmesi
 
-- **🔍 Advanced Search System** ✅ (Yeni - 19 Kasım 2025)
+- **🔍 Gelişmiş Arama Sistemi** ✅ (Yeni - 19 Kasım 2025)
 
   - JSON + Memory Cache tabanlı arama sistemi
   - Tam eşleşme araması (normalize edilmiş dosya isimleri)
@@ -117,7 +117,7 @@ dotnet publish -c Release -r linux-x64 --self-contained
   - 42,000+ dosya için 10-200ms arama süresi
   - Kısa kelime desteği (arama kalitesi için)
 
-- **🔧 Fix Suggestions System** ✅ (Kısmen Tamamlandı - 19 Kasım 2025)
+- **🔧 Fix Önerileri Sistemi** ✅ (Kısmen Tamamlandı - 19 Kasım 2025)
 
   - Eksik track'ler için fix önerileri
   - Benzer dosya adlarına göre arama
@@ -153,7 +153,7 @@ dotnet publish -c Release -r linux-x64 --self-contained
 
 ## 🎯 Mimari
 
-### MVVM Pattern
+### MVVM Deseni
 
 Uygulama Model-View-ViewModel (MVVM) mimarisini takip eder:
 
@@ -395,12 +395,12 @@ PlaylistOrganizerAvalonia/
 
 ### 📈 İlerleme Durumu
 
-| Phase                              | Durum           | Tamamlanma | Kalan Süre | Tahmini Bitiş    |
-| ---------------------------------- | --------------- | ---------- | ---------- | ---------------- |
-| Phase 1: Temel Özellikler         | ✅ Tamamlandı   | 100%       | -          | 30 Ekim 2025     |
-| Phase 2: Fix Sistemi               | 🚧 Devam Ediyor | ~40%       | 12-18 saat | 21-22 Kasım 2025 |
-| Phase 3: Ödeme ve Lisanslama       | 📋 Planlandı    | 0%         | 12-18 saat | 23-24 Kasım 2025 |
-| Phase 4: Gelişmiş Özellikler       | 📋 Gelecek      | 0%         | -          | -                |
+| Phase                        | Durum           | Tamamlanma | Kalan Süre | Tahmini Bitiş    |
+| ---------------------------- | --------------- | ---------- | ---------- | ---------------- |
+| Phase 1: Temel Özellikler    | ✅ Tamamlandı   | 100%       | -          | 30 Ekim 2025     |
+| Phase 2: Fix Sistemi         | 🚧 Devam Ediyor | ~40%       | 12-18 saat | 21-22 Kasım 2025 |
+| Phase 3: Ödeme ve Lisanslama | 📋 Planlandı    | 0%         | 12-18 saat | 23-24 Kasım 2025 |
+| Phase 4: Gelişmiş Özellikler | 📋 Gelecek      | 0%         | -          | -                |
 
 ### 🎯 Tahmini Bitiş Tarihi
 
