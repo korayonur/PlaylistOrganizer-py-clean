@@ -1,8 +1,8 @@
 # 🎵 Playlist Organizer - Desktop Application
 
 **Version:** 2.0 (Avalonia Desktop App)  
-**Last Update:** 30 Ekim 2025  
-**Status:** 🚧 Active Development
+**Last Update:** 19 Kasım 2025  
+**Status:** 🚧 Active Development (Phase 2: Fix System)
 
 ## 📋 Overview
 
@@ -101,25 +101,55 @@ dotnet publish -c Release -r linux-x64 --self-contained
   - Recursive folder filtering
 
 - **💾 Data Management**
-  - SQLite database for tracks and playlists
-  - JSON cache for tree structure
+
+  - File system-based (veritabanı kaldırıldı)
+  - JSON cache for tree structure (`data/playlist-tree.json`)
+  - JSON + Memory Cache arama indexi (`word-index.json`)
   - File system scanning
   - Lazy loading of track details
 
+- **🔍 Advanced Search System** ✅ (Yeni - 19 Kasım 2025)
+
+  - JSON + Memory Cache tabanlı arama sistemi
+  - Tam eşleşme araması (normalize edilmiş dosya isimleri)
+  - Benzerlik araması (hibrit algoritma: kelime + harf bazlı)
+  - Geliştirilmiş puanlama sistemi (query coverage öncelikli)
+  - 42,000+ dosya için 10-200ms arama süresi
+  - Kısa kelime desteği (arama kalitesi için)
+
+- **🔧 Fix Suggestions System** ✅ (Kısmen Tamamlandı - 19 Kasım 2025)
+
+  - Eksik track'ler için fix önerileri
+  - Benzer dosya adlarına göre arama
+  - Confidence skoru ile sıralama
+  - Tek tek fix uygulama
+  - Playlist dosyalarını direkt güncelleme (VDJFolder, M3U)
+  - UI otomatik güncelleme (track düzeltildiğinde)
+
 ### 🚧 Planned Features (Not Yet Implemented)
 
-- **🔧 Fix System**
+- **🔧 Fix System (Devam Ediyor)**
 
-  - Automatic track path correction
-  - Batch rename operations
-  - Missing file recovery suggestions
-  - Duplicate detection and removal
+  - ✅ Tek tek fix önerileri (Tamamlandı)
+  - ❌ Toplu fix işlemi (Yapılacak)
+  - ❌ Filtrede sadece eksik dosya unique gösterim (Yapılacak)
+  - ❌ Batch operations (Yapılacak)
+  - ❌ Duplicate detection and removal (Yapılacak)
 
-- **💳 Payment System**
-  - License management
-  - Subscription handling
-  - Payment gateway integration
-  - User account management
+- **💳 Payment & Licensing System**
+
+  - ❌ Ödeme linki entegrasyonu (Stripe/PayPal link)
+  - ❌ Manuel lisans verme sistemi
+  - ❌ License key generation ve validation
+  - ❌ Local license storage
+  - ❌ Feature gating based on license
+
+- **📦 Build & Distribution**
+
+  - ❌ Mac build ve test
+  - ❌ Windows build ve test
+  - ❌ Test dağıtımı (beta testers)
+  - ❌ Auto-update sistemi
 
 ## 🎯 Architecture
 
@@ -138,7 +168,10 @@ The application follows Model-View-ViewModel (MVVM) architecture:
 - **VDJFolderParserService:** Parses VirtualDJ `.vdjfolder` files
 - **M3UParserService:** Parses M3U/M3U8 playlist files
 - **FileScannerService:** Scans file system for playlist files
-- **DatabaseManager:** SQLite database operations
+- **JsonWordIndexService:** JSON + Memory Cache arama servisi
+- **HybridSimilarityCalculator:** Benzerlik skoru hesaplama (kelime + harf bazlı)
+- **TrackFixService:** Fix önerileri ve playlist güncelleme
+- **StringNormalizationService:** Dosya isimlerini normalize etme
 
 ### Data Flow
 
@@ -161,17 +194,20 @@ The application follows Model-View-ViewModel (MVVM) architecture:
    - Build filtered tree showing only playlists with missing tracks
    - Recursively filter parent folders
 
-## 📊 Database
+## 📊 Data Storage
 
-**Location:** `apps/avalonia/PlaylistOrganizerAvalonia/playlistorganizer.db`
+**Veritabanı:** ❌ Kaldırıldı (19 Kasım 2025) - Artık dosya sistemi tabanlı çalışıyor
 
-**Schema:** Flat denormalized structure optimized for desktop app performance
+**JSON Cache:**
 
-**Tables:**
+- `data/playlist-tree.json` - Playlist tree cache
+- `word-index.json` - Arama indexi (42,000+ dosya için)
 
-- `playlists` - Playlist metadata
-- `tracks` - Track information with file paths
-- `music_files` - Physical music files on disk
+**Dosya Sistemi:**
+
+- Playlist dosyaları direkt okunuyor (`.vdjfolder`, `.m3u`)
+- Track bilgileri playlist dosyalarından parse ediliyor
+- Fix işlemleri playlist dosyalarını direkt güncelliyor
 
 ## 🛠️ Development
 
@@ -194,12 +230,11 @@ PlaylistOrganizerAvalonia/
 
 ### Key Technologies
 
-- **.NET 9.0** - Runtime and framework
+- **.NET 10.0** - Runtime and framework
 - **Avalonia UI** - Cross-platform UI framework
-- **SQLite** - Embedded database
-- **Dapper** - Lightweight ORM
 - **System.Text.Json** - JSON serialization
 - **Microsoft.Extensions.Logging** - Logging framework
+- **HashSet<string>** - O(1) lookup için memory cache
 
 ## 📈 Roadmap
 
@@ -219,69 +254,82 @@ PlaylistOrganizerAvalonia/
 - [x] Alphabetical sorting (~3 saat)
 - [x] Filtering system (~5 saat)
 
-### Phase 2: Fix System 🚧 (Planlandı)
+### Phase 2: Fix System 🚧 (Devam Ediyor - %40 Tamamlandı)
 
-**Tahmini Süre (GenAI Destekli):** ~10-15 saat (1.5-2 gün)  
-**Tahmini Süre (Geleneksel):** ~18-25 saat (2.5-3 gün)  
-**Başlangıç:** Phase 1 tamamlandıktan sonra  
-**Tahmini Bitiş:** 1-2 hafta içinde
+**Başlangıç:** 30 Ekim 2025  
+**Durum:** 🚧 Aktif Geliştirme  
+**Tamamlanan:** Tek tek fix önerileri ve uygulama  
+**Kalan:** Toplu fix, unique gösterim, build & test
 
-- [ ] Automatic path correction (~4-6 saat)
-  - Fuzzy path matching algoritması
-  - Dosya sistemi tarama ve eşleştirme
-  - Otomatik düzeltme önerileri
+**Tamamlanan Özellikler:**
 
-- [ ] Batch operations (~3-4 saat)
-  - Toplu path düzeltme
-  - Toplu silme/taşıma işlemleri
-  - Progress tracking
+- ✅ JSON + Memory Cache arama sistemi (~8 saat)
+- ✅ Fix önerileri sistemi (~6 saat)
+- ✅ Tek tek fix uygulama (~4 saat)
+- ✅ Playlist dosyalarını direkt güncelleme (~3 saat)
+- ✅ Geliştirilmiş puanlama sistemi (~2 saat)
 
-- [ ] Duplicate detection (~4-6 saat)
-  - Hash-based duplicate detection
-  - Similarity matching
-  - Duplicate removal UI
+**Yapılacak Özellikler:**
 
-- [ ] File recovery suggestions (~2-3 saat)
-  - Missing file için alternatif path önerileri
-  - Dosya adı benzerliği analizi
-  - Kullanıcı onayı ile otomatik düzeltme
+- [ ] **Toplu Fix İşlemi** (~4-6 saat)
 
-- [ ] Undo/Redo support (~3-4 saat)
-  - Command pattern implementation
-  - Action history management
-  - UI integration
+  - Tüm eksik track'leri toplu olarak düzeltme
+  - Progress tracking ve cancel desteği
+  - Batch fix UI (seçili track'ler için)
+  - Success/failure raporlama
+
+- [ ] **Unique Gösterim** (~2-3 saat)
+
+  - Filtrede sadece eksik dosya unique gösterim
+  - Aynı dosya birden fazla playlist'te varsa tek gösterim
+  - Toplu fix için seçim yapılabilir liste
+
+- [ ] **Build & Test** (~4-6 saat)
+
+  - Mac build ve test
+  - Windows build ve test
+  - Cross-platform test senaryoları
+  - Build otomasyonu
+
+- [ ] **Test Dağıtımı** (~2-3 saat)
+  - Beta testers için dağıtım hazırlığı
+  - Installer oluşturma (Mac/Windows)
+  - Test senaryoları dokümantasyonu
 
 ### Phase 3: Payment & Licensing 🚧 (Planlandı)
 
-**Tahmini Süre (GenAI Destekli):** ~20-30 saat (2.5-3.5 gün)  
-**Tahmini Süre (Geleneksel):** ~35-50 saat (4.5-6 gün)  
+**Tahmini Süre (GenAI Destekli):** ~12-18 saat (1.5-2.5 gün)  
+**Tahmini Süre (Geleneksel):** ~20-30 saat (2.5-4 gün)  
 **Başlangıç:** Phase 2 tamamlandıktan sonra  
-**Tahmini Bitiş:** 2-3 hafta içinde
+**Yaklaşım:** Link ile ödeme + Manuel lisans verme (basitleştirilmiş)
 
-- [ ] License key management (~6-8 saat)
-  - License key generation ve validation
-  - Local license storage
+**Yapılacak Özellikler:**
+
+- [ ] **Ödeme Linki Entegrasyonu** (~4-6 saat)
+
+  - Stripe/PayPal payment link oluşturma
+  - Ödeme tamamlandığında webhook/email bildirimi
+  - Ödeme durumu takibi
+
+- [ ] **Manuel Lisans Verme Sistemi** (~4-6 saat)
+
+  - Ödeme tamamlandıktan sonra manuel lisans key oluşturma
+  - Lisans key generation (unique, güvenli)
+  - Email ile lisans key gönderme
+  - Lisans key validation sistemi
+
+- [ ] **License Management** (~3-4 saat)
+
+  - Local license storage (encrypted)
   - License activation/deactivation
+  - License expiration kontrolü
+  - Feature gating based on license
 
-- [ ] Subscription system (~8-12 saat)
-  - Subscription plan management
-  - Trial period handling
-  - Feature gating based on subscription
-
-- [ ] Payment gateway integration (~8-12 saat)
-  - Stripe/PayPal integration
-  - Payment processing
-  - Receipt generation
-
-- [ ] User authentication (~4-6 saat)
-  - User registration/login
-  - Session management
-  - Password reset flow
-
-- [ ] Cloud sync (optional) (~12-16 saat)
-  - Cloud storage integration (Dropbox/Google Drive)
-  - Sync conflict resolution
-  - Offline mode support
+- [ ] **UI Integration** (~1-2 saat)
+  - License activation dialog
+  - Payment link butonu
+  - License status gösterimi
+  - Feature unlock/lock mekanizması
 
 ### Phase 4: Advanced Features 📋 (Gelecek)
 
@@ -291,21 +339,25 @@ PlaylistOrganizerAvalonia/
 **Tahmini Bitiş:** 3-4 hafta içinde
 
 - [ ] Playlist editing (~4-6 saat)
+
   - Drag & drop track reordering
   - Add/remove tracks
   - Playlist metadata editing
 
 - [ ] Track metadata editing (~3-4 saat)
+
   - ID3 tag editing
   - Batch metadata updates
   - Metadata validation
 
 - [ ] Export/Import functionality (~4-6 saat)
+
   - Export to M3U/VirtualDJ format
   - Import from various formats
   - Format conversion
 
 - [ ] Backup and restore (~3-4 saat)
+
   - Automatic backup scheduling
   - Manual backup/restore
   - Backup file management
@@ -315,29 +367,108 @@ PlaylistOrganizerAvalonia/
   - Language switching
   - Translation management
 
-## ⏱️ Proje Tamamlanma Tahmini
+## 📅 Proje Takvimi ve İlerleme
 
-**Toplam Tahmini Süre (GenAI Destekli):** ~67-93 saat (8-12 gün, günde 8 saat çalışma ile)  
-**Toplam Tahmini Süre (Geleneksel):** ~113-155 saat (14-19 gün, günde 8 saat çalışma ile)  
-**Tasarruf (GenAI ile):** ~46-62 saat (%40-50 daha hızlı)
+### 📊 Genel Durum
 
-**Gerçekçi Tamamlanma Tarihi (GenAI Destekli):**
-- **Minimum (yoğun çalışma):** 1.5-2 hafta
-- **Ortalama (normal tempo):** 2-3 hafta
-- **Maksimum (part-time çalışma):** 4-5 hafta
+**Proje Başlangıç:** 30 Ekim 2025  
+**Son Güncelleme:** 19 Kasım 2025  
+**Geçen Süre:** ~20 gün  
+**GenAI Destekli Geliştirme:** ✅ Aktif (Cursor IDE)
 
-**Gerçekçi Tamamlanma Tarihi (Geleneksel):**
-- **Minimum (yoğun çalışma):** 2-3 hafta
-- **Ortalama (normal tempo):** 3-4 hafta
-- **Maksimum (part-time çalışma):** 6-8 hafta
+### ⏱️ Tamamlanma Tahmini (GenAI Destekli)
 
-**Not:** GenAI destekli geliştirme (Cursor IDE) ile bu süreler geleneksel yöntemlere göre %40-50 daha hızlıdır. Test, debugging ve kullanıcı geri bildirimleri süreleri etkileyebilir.
+**Phase 2 (Kalan İşler):** ~12-18 saat (1.5-2.5 gün)
 
-**Öncelik Sırası:**
-1. ✅ Phase 1: Core Features (Tamamlandı)
-2. 🚧 Phase 2: Fix System (Yüksek öncelik - kullanıcı değeri yüksek)
-3. 🚧 Phase 3: Payment & Licensing (Orta öncelik - monetization için gerekli)
-4. 📋 Phase 4: Advanced Features (Düşük öncelik - nice-to-have)
+- Toplu fix işlemi: 4-6 saat
+- Unique gösterim: 2-3 saat
+- Build & test: 4-6 saat
+- Test dağıtımı: 2-3 saat
+
+**Phase 3 (Payment & Licensing):** ~12-18 saat (1.5-2.5 gün)
+
+- Ödeme linki entegrasyonu: 4-6 saat
+- Manuel lisans verme: 4-6 saat
+- License management: 3-4 saat
+- UI integration: 1-2 saat
+
+**Toplam Kalan Süre:** ~24-36 saat (3-4.5 gün, günde 8 saat çalışma ile)
+
+### 📈 İlerleme Durumu
+
+| Phase                        | Durum           | Tamamlanma | Kalan Süre | Tahmini Bitiş    |
+| ---------------------------- | --------------- | ---------- | ---------- | ---------------- |
+| Phase 1: Core Features       | ✅ Tamamlandı   | 100%       | -          | 30 Ekim 2025     |
+| Phase 2: Fix System          | 🚧 Devam Ediyor | ~40%       | 12-18 saat | 21-22 Kasım 2025 |
+| Phase 3: Payment & Licensing | 📋 Planlandı    | 0%         | 12-18 saat | 23-24 Kasım 2025 |
+| Phase 4: Advanced Features   | 📋 Gelecek      | 0%         | -          | -                |
+
+### 🎯 Tahmini Bitiş Tarihi
+
+**GenAI Destekli (Günde 8 saat çalışma ile):**
+
+- **Minimum (yoğun çalışma):** 21-22 Kasım 2025 (2-3 gün)
+- **Ortalama (normal tempo):** 23-24 Kasım 2025 (4-5 gün)
+- **Maksimum (part-time çalışma):** 27-28 Kasım 2025 (8-9 gün)
+
+**Not:** Bu tahminler Phase 2 ve Phase 3 için geçerlidir. Phase 4 (Advanced Features) ayrı planlanacaktır.
+
+### 📝 Yapılacak Ana Maddeler (Öncelik Sırasına Göre)
+
+#### 🔴 Yüksek Öncelik (Phase 2 - Devam Ediyor)
+
+1. **Toplu Fix İşlemi** (~4-6 saat)
+
+   - Tüm eksik track'leri toplu olarak düzeltme
+   - Progress tracking ve cancel desteği
+   - Batch fix UI
+   - Success/failure raporlama
+
+2. **Unique Gösterim** (~2-3 saat)
+
+   - Filtrede sadece eksik dosya unique gösterim
+   - Aynı dosya birden fazla playlist'te varsa tek gösterim
+   - Toplu fix için seçim yapılabilir liste
+
+3. **Build & Test** (~4-6 saat)
+
+   - Mac build ve test
+   - Windows build ve test
+   - Cross-platform test senaryoları
+
+4. **Test Dağıtımı** (~2-3 saat)
+   - Beta testers için dağıtım hazırlığı
+   - Installer oluşturma (Mac/Windows)
+
+#### 🟡 Orta Öncelik (Phase 3 - Planlandı)
+
+5. **Ödeme Linki Entegrasyonu** (~4-6 saat)
+
+   - Stripe/PayPal payment link
+   - Webhook/email bildirimi
+
+6. **Manuel Lisans Verme** (~4-6 saat)
+
+   - Lisans key generation
+   - Email ile lisans gönderme
+
+7. **License Management** (~3-4 saat)
+   - Local license storage
+   - Feature gating
+
+#### 🟢 Düşük Öncelik (Phase 4 - Gelecek)
+
+8. Playlist editing
+9. Track metadata editing
+10. Export/Import functionality
+11. Multi-language support
+
+### 💡 Önemli Notlar
+
+- **GenAI Tasarrufu:** Geleneksel yöntemlere göre %40-50 daha hızlı
+- **Test Süresi:** Build ve test süreleri tahminlere dahil
+- **Beklenmedik Durumlar:** Debugging ve kullanıcı geri bildirimleri süreleri etkileyebilir
+- **Ödeme Modeli:** Basitleştirilmiş yaklaşım (link + manuel lisans) ile süre kısaldı
 
 ## 💡 Marketing Strategy Recommendations
 
@@ -446,11 +577,13 @@ PlaylistOrganizerAvalonia/
 
 ## 🐛 Known Limitations
 
-- Fix system not yet implemented
-- Payment system not yet implemented
-- No cloud sync capability
-- Limited to local file system
-- No playlist editing (view-only)
+- ✅ Fix system kısmen tamamlandı (tek tek fix var, toplu fix yok)
+- ❌ Payment system not yet implemented
+- ❌ No cloud sync capability
+- ✅ Limited to local file system (by design)
+- ❌ No playlist editing (view-only)
+- ❌ Mac/Windows build not yet tested
+- ❌ No auto-update system
 
 ## 📝 Migration Note
 
@@ -459,6 +592,7 @@ PlaylistOrganizerAvalonia/
 ## 📖 Documentation
 
 - **OpenSpec:** `openspec/` - Specification-driven development
+- **Search System:** `apps/avalonia/PlaylistOrganizerAvalonia/SEARCH_SYSTEM.md` - Arama sistemi dokümantasyonu
 - **Migration Plans:** `docs/current/` - Current migration plans
 - **Avalonia Migration:** `openspec/changes/api-to-avalonia-migration/`
 
