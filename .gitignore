@@ -83,6 +83,11 @@ extensions.json
 .env.*
 !.env.example
 
+# Configuration files with secrets (güvenlik: API key'ler içerir)
+apps/avalonia/PlaylistOrganizerAvalonia/appsettings.json
+!apps/avalonia/PlaylistOrganizerAvalonia/appsettings.Example.json
+!apps/avalonia/PlaylistOrganizerAvalonia/appsettings.Production.json
+
 # Derleme ve paket dosyaları
 *.tgz
 *.zip
